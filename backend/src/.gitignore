@@ -1,0 +1,14 @@
+# Ignore all volume directories and their contents
+volumes/
+uploads/
+.idea/
+node_modules/
+.env
+backend/.env
+frontend/node_modules/
+node_modules/
+# Ignore all log files
+*.log
+# Ignore all test files
+*.test.js
+# Ignore all coverage reports

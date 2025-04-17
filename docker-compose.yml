@@ -1,0 +1,105 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # Adatbázis (PostgreSQL)
+  db:
+    image: postgres:16-alpine 
+    container_name: ${COMPOSE_PROJECT_NAME}_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Perzisztens tárolás Docker volume-mal
+      # Alternatíva: - ./database/data:/var/lib/postgresql/data # Mappa csatolása
+    ports:
+      - "5433:5432"
+    networks:
+      - kalandjatek-network
+    healthcheck: # Egyszerű monitoring: megvárja, amíg a DB készen áll
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend (NestJS API)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_backend
+    restart: unless-stopped
+    depends_on:
+      db: # Várja meg, amíg az adatbázis elindul és "healthy" lesz
+        condition: service_healthy
+    volumes:
+      - ./backend:/usr/src/app # Kód csatolása a hot-reloadhoz
+      - /usr/src/app/node_modules # Ne csatolja a helyi node_modules-t
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}" # Port mapping a host és konténer között
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=${BACKEND_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_TIME=${JWT_EXPIRATION_TIME}
+      # Egyéb környezeti változók...
+    networks:
+      - kalandjatek-network
+    command: npm run start:dev # Fejlesztői indítás
+
+  # Frontend (Vue.js SPA)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_frontend
+    restart: unless-stopped
+    depends_on: # Opcionális, de hasznos lehet, ha a frontend induláskor API-t hív
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      # Ha Vite-ot használsz és kell az API URL:.env fájlból:
+      # VITE_API_URL=${VITE_API_URL}
+    networks:
+      - kalandjatek-network
+    command: npm run dev -- --host # Vite fejlesztői szerver indítása
+
+  # Knex Migrációs/Seeder konténer
+  migrate:
+    build:
+      context: ./backend # Ugyanazt a környezetet használja, mint a backend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_migrate
+    profiles: ["tools"] # Csak akkor induljon, ha explicit kérjük (pl. docker compose --profile tools run migrate)
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - NODE_ENV=development # Vagy production, ha éles migrációt futtatsz
+    volumes:
+      - ./backend:/usr/src/app # Hozzáférés a knexfile-hoz és a migrációs fájlokhoz
+    networks:
+      - kalandjatek-network
+    # Az alapértelmezett parancs futtatja a legfrissebb migrációkat.
+    # Seedeléshez külön parancs kell (lásd lent).
+    command: ["npx", "knex", "migrate:latest", "--knexfile", "/usr/src/app/knexfile.js"]
+
+# Hálózat definiálása
+networks:
+  kalandjatek-network:
+    driver: bridge
+
+# Volume definiálása az adatbázis adatoknak
+volumes:
+  postgres_data:
+    driver: local
