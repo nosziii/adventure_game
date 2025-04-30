@@ -5,4 +5,5 @@ export class EnemyDataDto {
     health: number
     skill?: number
     currentHealth: number
+   
 }

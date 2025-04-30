@@ -40,10 +40,11 @@ export class GameService {
       };
   }
 
-  // --- getCurrentGameState JAVÍTVA ---
+  // --- getCurrentGameState ---
   async getCurrentGameState(userId: number): Promise<GameStateDto> {
     this.logger.log(`Workspaceing game state for user ID: ${userId}`);
     const character = await this.characterService.findOrCreateByUserId(userId);
+    this.logger.debug('Character data fetched/created:', JSON.stringify(character, null, 2))
 
     // Ellenőrizzük az aktív harcot
     const activeCombat = await this.knex('active_combats')
@@ -51,6 +52,8 @@ export class GameService {
                                 .first()
 
     let inventory: InventoryItemDto[] | null = null
+
+    this.logger.debug(`Workspaceing inventory for character ID: ${character.id}`)
 
     if (activeCombat) {
       // --- HARCBAN VAN ---
@@ -66,6 +69,7 @@ export class GameService {
       }
 
       inventory = await this.characterService.getInventory(character.id)
+      this.logger.debug('Inventory data fetched:', JSON.stringify(inventory, null, 2))
 
       // EnemyDataDto összeállítása
       const enemyData: EnemyDataDto = {
@@ -89,6 +93,7 @@ export class GameService {
       // --- NINCS HARCBAN ---
       this.logger.log(`User ${userId} is not in combat. Current node: ${character.current_node_id}`);
       let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
+      inventory = await this.characterService.getInventory(character.id)
 
       if (character.current_node_id !== currentNodeId) {
            this.logger.warn(`Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`);
@@ -121,6 +126,7 @@ export class GameService {
             id: choice.id,
             text: choice.text,
             isAvailable: isAvailable
+            
         };
     });
 
@@ -135,7 +141,7 @@ export class GameService {
         character: this.mapCharacterToDto(character), // Használjuk a segédfüggvényt
         combat: null,
         inventory: inventory,
-        messages: [] 
+        messages: [],
       }
     } // if (activeCombat) vége
   } // getCurrentGameState vége
@@ -261,11 +267,17 @@ export class GameService {
        // HARC KEZDŐDIK (a cél node alapján)
        this.logger.log(`Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`);
        // Karakter HP frissítése az esetleges forrás node effekt miatt
-       await this.characterService.updateCharacter(character.id, { health: healthUpdate });
+       if (healthUpdate !== character.health) {
+           await this.characterService.updateCharacter(character.id, { health: healthUpdate })
+       }
        // Harc rekord létrehozása (változatlan)
        const enemy = await this.knex<EnemyRecord>('enemies').where({ id: targetNode.enemy_id }).first();
        if (!enemy) { throw new InternalServerErrorException('Enemy data missing for combat.'); }
-       await this.knex('active_combats').insert({ /* ... */ });
+       await this.knex('active_combats').insert({
+           character_id: character.id,         // A karakter ID-ja
+           enemy_id: enemy.id,                 // Az ellenfél ID-ja
+           enemy_current_health: enemy.health, // Kezdő HP = Max HP az enemies táblából
+       });
        // Node ID NEM változik még
 
     } else {

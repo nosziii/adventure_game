@@ -39,10 +39,12 @@ let GameService = GameService_1 = class GameService {
     async getCurrentGameState(userId) {
         this.logger.log(`Workspaceing game state for user ID: ${userId}`);
         const character = await this.characterService.findOrCreateByUserId(userId);
+        this.logger.debug('Character data fetched/created:', JSON.stringify(character, null, 2));
         const activeCombat = await this.knex('active_combats')
             .where({ character_id: character.id })
             .first();
         let inventory = null;
+        this.logger.debug(`Workspaceing inventory for character ID: ${character.id}`);
         if (activeCombat) {
             this.logger.log(`User ${userId} is in active combat (Combat ID: ${activeCombat.id}, Enemy ID: ${activeCombat.enemy_id})`);
             const enemyBaseData = await this.knex('enemies')
@@ -54,6 +56,7 @@ let GameService = GameService_1 = class GameService {
                 throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found.');
             }
             inventory = await this.characterService.getInventory(character.id);
+            this.logger.debug('Inventory data fetched:', JSON.stringify(inventory, null, 2));
             const enemyData = {
                 id: enemyBaseData.id,
                 name: enemyBaseData.name,
@@ -73,6 +76,7 @@ let GameService = GameService_1 = class GameService {
         else {
             this.logger.log(`User ${userId} is not in combat. Current node: ${character.current_node_id}`);
             let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
+            inventory = await this.characterService.getInventory(character.id);
             if (character.current_node_id !== currentNodeId) {
                 this.logger.warn(`Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`);
                 const updatedCharacter = await this.characterService.updateCharacter(character.id, { current_node_id: currentNodeId });
@@ -107,7 +111,7 @@ let GameService = GameService_1 = class GameService {
                 character: this.mapCharacterToDto(character),
                 combat: null,
                 inventory: inventory,
-                messages: []
+                messages: [],
             };
         }
     }
@@ -232,12 +236,18 @@ let GameService = GameService_1 = class GameService {
         }
         if (targetNode.enemy_id) {
             this.logger.log(`Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`);
-            await this.characterService.updateCharacter(character.id, { health: healthUpdate });
+            if (healthUpdate !== character.health) {
+                await this.characterService.updateCharacter(character.id, { health: healthUpdate });
+            }
             const enemy = await this.knex('enemies').where({ id: targetNode.enemy_id }).first();
             if (!enemy) {
                 throw new common_1.InternalServerErrorException('Enemy data missing for combat.');
             }
-            await this.knex('active_combats').insert({});
+            await this.knex('active_combats').insert({
+                character_id: character.id,
+                enemy_id: enemy.id,
+                enemy_current_health: enemy.health,
+            });
         }
         else {
             this.logger.log(`Choice leads to non-combat node ${targetNodeId}`);

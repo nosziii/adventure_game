@@ -1,1 +1,1 @@
-{"version":3,"file":"enemy-data.dto.js","sourceRoot":"","sources":["../../../src/game/dto/enemy-data.dto.ts"],"names":[],"mappings":";;;AACA,MAAa,YAAY;IACrB,EAAE,CAAQ;IACV,IAAI,CAAQ;IACZ,MAAM,CAAQ;IACd,KAAK,CAAS;IACd,aAAa,CAAQ;CACxB;AAND,oCAMC"}
+{"version":3,"file":"enemy-data.dto.js","sourceRoot":"","sources":["../../../src/game/dto/enemy-data.dto.ts"],"names":[],"mappings":";;;AACA,MAAa,YAAY;IACrB,EAAE,CAAQ;IACV,IAAI,CAAQ;IACZ,MAAM,CAAQ;IACd,KAAK,CAAS;IACd,aAAa,CAAQ;CAExB;AAPD,oCAOC"}
