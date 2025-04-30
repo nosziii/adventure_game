@@ -75,6 +75,103 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.debug(`Character ${characterId} updated successfully.`);
         return updatedCharacter;
     }
+    async findOrCreateByUserId(userId) {
+        let character = await this.findByUserId(userId);
+        if (!character) {
+            this.logger.log(`Character not found for user ${userId} in findOrCreate, creating new one.`);
+            character = await this.createCharacter(userId);
+        }
+        return character;
+    }
+    async getInventory(characterId) {
+        this.logger.debug(`Workspaceing inventory for character ID: ${characterId}`);
+        try {
+            const inventory = await this.knex('character_inventory as ci')
+                .join('items as i', 'ci.item_id', '=', 'i.id')
+                .select('ci.item_id as itemId', 'ci.quantity', 'i.name', 'i.description', 'i.type', 'i.effect', 'i.usable')
+                .where('ci.character_id', characterId);
+            return inventory;
+        }
+        catch (error) {
+            this.logger.error(`Failed to fetch inventory for character ${characterId}: ${error}`, error.stack);
+            throw new common_1.InternalServerErrorException('Could not retrieve inventory.');
+        }
+    }
+    async hasItem(characterId, itemId) {
+        this.logger.debug(`Checking if character ${characterId} has item ${itemId}`);
+        const itemEntry = await this.knex('character_inventory')
+            .where({
+            character_id: characterId,
+            item_id: itemId,
+        })
+            .andWhere('quantity', '>', 0)
+            .first();
+        return !!itemEntry;
+    }
+    async addItemToInventory(characterId, itemId, quantityToAdd = 1) {
+        if (quantityToAdd <= 0) {
+            this.logger.warn(`Attempted to add non-positive quantity (${quantityToAdd}) of item ${itemId} for character ${characterId}`);
+            return;
+        }
+        this.logger.log(`Adding item ${itemId} (quantity: ${quantityToAdd}) to inventory for character ${characterId}`);
+        await this.knex.transaction(async (trx) => {
+            const existingEntry = await trx('character_inventory')
+                .where({ character_id: characterId, item_id: itemId })
+                .first();
+            if (existingEntry) {
+                this.logger.debug(`Item ${itemId} exists, incrementing quantity by ${quantityToAdd}.`);
+                const affectedRows = await trx('character_inventory')
+                    .where({ character_id: characterId, item_id: itemId })
+                    .increment('quantity', quantityToAdd);
+                if (affectedRows === 0) {
+                    throw new Error('Failed to increment item quantity.');
+                }
+            }
+            else {
+                this.logger.debug(`Item ${itemId} not found, inserting new entry.`);
+                await trx('character_inventory')
+                    .insert({
+                    character_id: characterId,
+                    item_id: itemId,
+                    quantity: quantityToAdd,
+                });
+            }
+        });
+        this.logger.log(`Item ${itemId} successfully added/updated for character ${characterId}`);
+    }
+    async removeItemFromInventory(characterId, itemId, quantityToRemove = 1) {
+        if (quantityToRemove <= 0)
+            return true;
+        this.logger.log(`Removing item ${itemId} (quantity: ${quantityToRemove}) from inventory for character ${characterId}`);
+        let success = false;
+        await this.knex.transaction(async (trx) => {
+            const existingEntry = await trx('character_inventory')
+                .where({ character_id: characterId, item_id: itemId })
+                .forUpdate()
+                .first();
+            if (existingEntry && existingEntry.quantity >= quantityToRemove) {
+                const newQuantity = existingEntry.quantity - quantityToRemove;
+                if (newQuantity > 0) {
+                    this.logger.debug(`Decreasing quantity of item ${itemId} to ${newQuantity}`);
+                    await trx('character_inventory')
+                        .where({ character_id: characterId, item_id: itemId })
+                        .update({ quantity: newQuantity });
+                }
+                else {
+                    this.logger.debug(`Removing item ${itemId} completely (quantity reached zero).`);
+                    await trx('character_inventory')
+                        .where({ character_id: characterId, item_id: itemId })
+                        .del();
+                }
+                success = true;
+            }
+            else {
+                this.logger.warn(`Failed to remove item ${itemId}: Not found or insufficient quantity for character ${characterId}.`);
+                success = false;
+            }
+        });
+        return success;
+    }
 };
 exports.CharacterService = CharacterService;
 exports.CharacterService = CharacterService = CharacterService_1 = __decorate([

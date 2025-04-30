@@ -1,4 +1,5 @@
 import { Knex } from 'knex';
+import { InventoryItemDto } from './game/dto/inventory-item.dto';
 export interface Character {
     id: number;
     user_id: number;
@@ -19,4 +20,9 @@ export declare class CharacterService {
     findById(id: number): Promise<Character | undefined>;
     createCharacter(userId: number): Promise<Character>;
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
+    findOrCreateByUserId(userId: number): Promise<Character>;
+    getInventory(characterId: number): Promise<InventoryItemDto[]>;
+    hasItem(characterId: number, itemId: number): Promise<boolean>;
+    addItemToInventory(characterId: number, itemId: number, quantityToAdd?: number): Promise<void>;
+    removeItemFromInventory(characterId: number, itemId: number, quantityToRemove?: number): Promise<boolean>;
 }

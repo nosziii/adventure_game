@@ -27,86 +27,104 @@ let GameService = GameService_1 = class GameService {
         this.knex = knex;
         this.characterService = characterService;
     }
+    mapCharacterToDto(character) {
+        return {
+            health: character.health,
+            skill: character.skill,
+            luck: character.luck,
+            stamina: character.stamina,
+            name: character.name
+        };
+    }
     async getCurrentGameState(userId) {
         this.logger.log(`Workspaceing game state for user ID: ${userId}`);
-        let character = await this.characterService.findByUserId(userId);
-        if (!character) {
-            character = await this.characterService.createCharacter(userId);
-        }
-        let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
-        if (character.current_node_id !== currentNodeId) {
-            this.logger.warn(`Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`);
-            character = await this.characterService.updateCharacter(character.id, { current_node_id: currentNodeId });
-        }
-        this.logger.debug(`Workspaceing story node with ID: ${currentNodeId}`);
-        const currentNode = await this.knex('story_nodes')
-            .where({ id: currentNodeId })
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        const activeCombat = await this.knex('active_combats')
+            .where({ character_id: character.id })
             .first();
-        if (!currentNode) {
-            this.logger.error(`Story node with ID ${currentNodeId} not found for character ${character.id}!`);
-            throw new common_1.NotFoundException(`Story node ${currentNodeId} not found.`);
+        let inventory = null;
+        if (activeCombat) {
+            this.logger.log(`User ${userId} is in active combat (Combat ID: ${activeCombat.id}, Enemy ID: ${activeCombat.enemy_id})`);
+            const enemyBaseData = await this.knex('enemies')
+                .where({ id: activeCombat.enemy_id })
+                .first();
+            if (!enemyBaseData) {
+                this.logger.error(`Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`);
+                await this.knex('active_combats').where({ id: activeCombat.id }).del();
+                throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found.');
+            }
+            inventory = await this.characterService.getInventory(character.id);
+            const enemyData = {
+                id: enemyBaseData.id,
+                name: enemyBaseData.name,
+                health: enemyBaseData.health,
+                currentHealth: activeCombat.enemy_current_health,
+                skill: enemyBaseData.skill,
+            };
+            return {
+                node: null,
+                choices: [],
+                character: this.mapCharacterToDto(character),
+                combat: enemyData,
+                inventory: inventory,
+                messages: []
+            };
         }
-        this.logger.debug(`Found story node: ${currentNode.id}`);
-        this.logger.debug(`Workspaceing and evaluating choices for source node ID: ${currentNodeId}`);
-        const potentialChoices = await this.knex('choices')
-            .where({ source_node_id: currentNodeId });
-        const availableChoices = [];
-        for (const choice of potentialChoices) {
-            const isAvailable = this.checkChoiceAvailability(choice, character);
-            this.logger.debug(`Choice <span class="math-inline">\{choice\.id\} \(</span>{choice.text}) - Available: ${isAvailable}`);
-            availableChoices.push({
-                id: choice.id,
-                text: choice.text,
-                isAvailable: isAvailable
-            });
-        }
-        this.logger.debug(`Evaluated ${availableChoices.length} choices.`);
-        let enemyData = null;
-        if (currentNode.enemy_id) {
-            const enemy = await this.knex('enemies').where({ id: currentNode.enemy_id }).first();
-            if (enemy) {
-                enemyData = {
-                    name: enemy.name,
-                    health: enemy.health,
-                    skill: enemy.skill
+        else {
+            this.logger.log(`User ${userId} is not in combat. Current node: ${character.current_node_id}`);
+            let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
+            if (character.current_node_id !== currentNodeId) {
+                this.logger.warn(`Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`);
+                const updatedCharacter = await this.characterService.updateCharacter(character.id, { current_node_id: currentNodeId });
+                Object.assign(character, updatedCharacter);
+            }
+            this.logger.debug(`Workspaceing story node with ID: ${currentNodeId}`);
+            const currentNode = await this.knex('story_nodes')
+                .where({ id: currentNodeId })
+                .first();
+            if (!currentNode) {
+                this.logger.error(`Story node ${currentNodeId} not found!`);
+                throw new common_1.NotFoundException(`Story node ${currentNodeId} not found.`);
+            }
+            this.logger.debug(`Found story node: ${currentNode.id}`);
+            this.logger.debug(`Workspaceing and evaluating choices for source node ID: ${currentNodeId}`);
+            const potentialChoices = await this.knex('choices')
+                .where({ source_node_id: currentNodeId });
+            const availableChoicesPromises = potentialChoices.map(async (choice) => {
+                const isAvailable = await this.checkChoiceAvailability(choice, character);
+                this.logger.debug(`Choice ${choice.id} (${choice.text}) - Evaluated Availability: ${isAvailable}`);
+                return {
+                    id: choice.id,
+                    text: choice.text,
+                    isAvailable: isAvailable
                 };
-            }
-            else {
-                this.logger.error(`Enemy with ID ${currentNode.enemy_id} not found!`);
-            }
+            });
+            const availableChoices = await Promise.all(availableChoicesPromises);
+            this.logger.debug(`Evaluated ${availableChoices.length} choices.`);
+            return {
+                node: { id: currentNode.id, text: currentNode.text, image: currentNode.image },
+                choices: availableChoices,
+                character: this.mapCharacterToDto(character),
+                combat: null,
+                inventory: inventory,
+                messages: []
+            };
         }
-        const gameState = {
-            node: {
-                id: currentNode.id,
-                text: currentNode.text,
-                image: currentNode.image,
-            },
-            choices: availableChoices,
-            character: {
-                health: character.health,
-                skill: character.skill,
-                luck: character.luck,
-                stamina: character.stamina,
-                name: character.name
-            },
-            combat: enemyData
-        };
-        return gameState;
     }
-    checkChoiceAvailability(choice, character) {
-        const reqStatCheck = choice.required_stat_check;
-        if (typeof reqStatCheck === 'string') {
-            const parts = reqStatCheck.match(/(\w+)\s*(>=|<=|>|<|==|!=)\s*(\d+)/);
-            if (parts) {
-            }
-            else {
-                this.logger.warn(`Could not parse stat requirement: ${reqStatCheck}`);
+    async checkChoiceAvailability(choice, character) {
+        if (choice.required_item_id !== null && choice.required_item_id !== undefined) {
+            this.logger.debug(`Checking required item ID: ${choice.required_item_id}`);
+            const hasRequiredItem = await this.characterService.hasItem(character.id, choice.required_item_id);
+            if (!hasRequiredItem) {
+                this.logger.debug(`Choice ${choice.id} unavailable: Missing required item ${choice.required_item_id}`);
                 return false;
             }
-            return true;
+            this.logger.debug(`Required item ${choice.required_item_id} found in inventory.`);
         }
-        if (choice.required_stat_check) {
-            const parts = choice.required_stat_check.match(/(\w+)\s*(>=|<=|>|<|==|!=)\s*(\d+)/);
+        const reqStatCheck = choice.required_stat_check;
+        if (typeof reqStatCheck === 'string') {
+            this.logger.debug(`Evaluating stat requirement: "${reqStatCheck}"`);
+            const parts = reqStatCheck.match(/(\w+)\s*(>=|<=|>|<|==|!=)\s*(\d+)/);
             if (parts) {
                 const [, stat, operator, valueStr] = parts;
                 const requiredValue = parseInt(valueStr, 10);
@@ -128,39 +146,42 @@ let GameService = GameService_1 = class GameService {
                         this.logger.warn(`Unknown stat in requirement: ${stat}`);
                         return false;
                 }
-                if (characterValue === null || characterValue === undefined)
+                if (characterValue === null || characterValue === undefined) {
+                    this.logger.debug(`Stat ${stat} is null/undefined for character ${character.id}`);
                     return false;
-                this.logger.debug(`Checking stat requirement: <span class="math-inline">\{stat\} \(</span>{characterValue}) ${operator} ${requiredValue}`);
+                }
+                this.logger.debug(`Checking: <span class="math-inline">\{stat\} \(</span>{characterValue}) ${operator} ${requiredValue}`);
+                let conditionMet = false;
                 switch (operator) {
                     case '>=':
-                        if (!(characterValue >= requiredValue))
-                            return false;
+                        conditionMet = characterValue >= requiredValue;
                         break;
                     case '<=':
-                        if (!(characterValue <= requiredValue))
-                            return false;
+                        conditionMet = characterValue <= requiredValue;
                         break;
                     case '>':
-                        if (!(characterValue > requiredValue))
-                            return false;
+                        conditionMet = characterValue > requiredValue;
                         break;
                     case '<':
-                        if (!(characterValue < requiredValue))
-                            return false;
+                        conditionMet = characterValue < requiredValue;
                         break;
                     case '==':
-                        if (!(characterValue == requiredValue))
-                            return false;
+                        conditionMet = characterValue == requiredValue;
                         break;
                     case '!=':
-                        if (!(characterValue != requiredValue))
-                            return false;
+                        conditionMet = characterValue != requiredValue;
                         break;
-                    default: return false;
+                    default:
+                        this.logger.warn(`Unknown operator in requirement: ${operator}`);
+                        return false;
+                }
+                this.logger.debug(`Requirement ${reqStatCheck} result: ${conditionMet}`);
+                if (!conditionMet) {
+                    return false;
                 }
             }
             else {
-                this.logger.warn(`Could not parse stat requirement: ${choice.required_stat_check}`);
+                this.logger.warn(`Could not parse stat requirement string: ${reqStatCheck}`);
                 return false;
             }
         }
@@ -168,55 +189,228 @@ let GameService = GameService_1 = class GameService {
     }
     async makeChoice(userId, choiceId) {
         this.logger.log(`Processing choice ID: ${choiceId} for user ID: ${userId}`);
-        const character = await this.characterService.findByUserId(userId);
-        if (!character) {
-            throw new common_1.NotFoundException('Character not found.');
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        const existingCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        if (existingCombat) {
+            throw new common_1.ForbiddenException('Cannot make choices while in combat.');
         }
         const currentNodeId = character.current_node_id;
         if (!currentNodeId) {
             throw new common_1.BadRequestException('Cannot make a choice without being at a node.');
         }
-        const choice = await this.knex('choices')
-            .where({ id: choiceId, source_node_id: currentNodeId })
-            .first();
+        const currentNode = await this.knex('story_nodes').where({ id: currentNodeId }).first();
+        if (!currentNode) {
+            throw new common_1.NotFoundException(`Current node ${currentNodeId} not found!`);
+        }
+        const choice = await this.knex('choices').where({ id: choiceId, source_node_id: currentNodeId }).first();
         if (!choice) {
             throw new common_1.BadRequestException(`Invalid choice ID: ${choiceId}`);
         }
-        if (!this.checkChoiceAvailability(choice, character)) {
-            this.logger.warn(`Choice requirement not met for choice ${choiceId} by user ${userId}.`);
+        if (!await this.checkChoiceAvailability(choice, character)) {
             throw new common_1.ForbiddenException('You do not meet the requirements for this choice.');
         }
         const targetNodeId = choice.target_node_id;
-        this.logger.debug(`Choice ${choiceId} is valid and requirements met. Target node ID: ${targetNodeId}`);
-        let newHealth = character.health;
-        let newSkill = character.skill;
-        let newLuck = character.luck ?? undefined;
-        let newStamina = character.stamina ?? undefined;
-        let itemsToAdd = [];
-        const targetNode = await this.knex('story_nodes')
-            .where({ id: targetNodeId })
-            .first();
+        this.logger.debug(`Choice ${choiceId} valid. Target node ID: ${targetNodeId}`);
+        const targetNode = await this.knex('story_nodes').where({ id: targetNodeId }).first();
         if (!targetNode) {
-            this.logger.error(`Target node ${targetNodeId} not found!`);
             throw new common_1.InternalServerErrorException('Target node missing.');
         }
-        if (targetNode.health_effect !== null && targetNode.health_effect !== undefined) {
-            this.logger.log(`Applying health effect ${targetNode.health_effect} from node ${targetNodeId}`);
-            newHealth = Math.max(0, newHealth + targetNode.health_effect);
-            this.logger.log(`Character new health calculated: ${newHealth}`);
+        let healthUpdate = character.health;
+        if (currentNode.health_effect !== null && currentNode.health_effect !== undefined) {
+            this.logger.log(`Applying health effect ${currentNode.health_effect} from current node ${currentNodeId}`);
+            healthUpdate = Math.max(0, character.health + currentNode.health_effect);
         }
-        if (targetNode.item_reward_id !== null && targetNode.item_reward_id !== undefined) {
-            this.logger.log(`Applying item reward ID ${targetNode.item_reward_id} from node ${targetNodeId}`);
-            this.logger.warn(`Inventory system not implemented. Would add item: ${targetNode.item_reward_id}`);
+        if (currentNode.item_reward_id !== null && currentNode.item_reward_id !== undefined) {
+            this.logger.log(`Current node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id}`);
+            try {
+                await this.characterService.addItemToInventory(character.id, currentNode.item_reward_id, 1);
+                this.logger.log(`Item ${currentNode.item_reward_id} added to inventory.`);
+            }
+            catch (itemError) {
+                this.logger.error(`Failed to add item reward ${currentNode.item_reward_id}: ${itemError}`);
+            }
         }
-        const updates = {
-            current_node_id: targetNodeId,
-            health: newHealth,
-        };
-        this.logger.debug(`Updating character ${character.id} with data: ${JSON.stringify(updates)}`);
-        await this.characterService.updateCharacter(character.id, updates);
-        this.logger.log(`Choice processed successfully for user ${userId}. Fetching new game state.`);
+        if (targetNode.enemy_id) {
+            this.logger.log(`Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`);
+            await this.characterService.updateCharacter(character.id, { health: healthUpdate });
+            const enemy = await this.knex('enemies').where({ id: targetNode.enemy_id }).first();
+            if (!enemy) {
+                throw new common_1.InternalServerErrorException('Enemy data missing for combat.');
+            }
+            await this.knex('active_combats').insert({});
+        }
+        else {
+            this.logger.log(`Choice leads to non-combat node ${targetNodeId}`);
+            await this.characterService.updateCharacter(character.id, {
+                current_node_id: targetNodeId,
+                health: healthUpdate,
+            });
+        }
+        this.logger.log(`Choice processed for user ${userId}. Fetching new game state.`);
         return this.getCurrentGameState(userId);
+    }
+    async handleCombatAction(userId, actionDto) {
+        this.logger.log(`Handling combat action '${actionDto.action}' for user ID: ${userId}`);
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        const activeCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        if (!activeCombat) {
+            this.logger.warn(`User ${userId} tried combat action but is not in combat.`);
+            throw new common_1.ForbiddenException('You are not currently in combat.');
+        }
+        const enemyBaseData = await this.knex('enemies').where({ id: activeCombat.enemy_id }).first();
+        if (!enemyBaseData) {
+            this.logger.error(`Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`);
+            await this.knex('active_combats').where({ id: activeCombat.id }).del();
+            throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found.');
+        }
+        let enemyCurrentHealth = activeCombat.enemy_current_health;
+        let playerCurrentHealth = character.health;
+        const combatLogMessages = [];
+        let playerActionSuccessful = false;
+        if (actionDto.action === 'attack') {
+            combatLogMessages.push(`Megtámadod (${enemyBaseData.name})!`);
+            const playerDice = Math.floor(Math.random() * 6) + 1;
+            const enemyDice = Math.floor(Math.random() * 6) + 1;
+            const playerAttack = (character.skill ?? 0) + playerDice;
+            const enemyDefense = (enemyBaseData.skill ?? 0) + enemyDice;
+            if (playerAttack > enemyDefense) {
+                const damage = 10;
+                enemyCurrentHealth = Math.max(0, enemyCurrentHealth - damage);
+                combatLogMessages.push(`Eltaláltad! Sebzés: ${damage}. Ellenfél HP: ${enemyCurrentHealth}/${enemyBaseData.health}`);
+                await this.knex('active_combats').where({ id: activeCombat.id }).update({ enemy_current_health: enemyCurrentHealth, last_action_time: new Date() });
+            }
+            else {
+                combatLogMessages.push(`Támadásod célt tévesztett!`);
+            }
+            playerActionSuccessful = true;
+            this.logger.debug(`Checking enemy defeat after attack. Current Health: ${enemyCurrentHealth}`);
+            if (enemyCurrentHealth <= 0) {
+                this.logger.log(`>>> ENEMY DEFEATED BLOCK ENTERED (After Attack) <<< Health: ${enemyCurrentHealth}`);
+                combatLogMessages.push(`Legyőzted: ${enemyBaseData.name}! ${enemyBaseData.defeat_text ?? ''}`);
+                await this.knex('active_combats').where({ id: activeCombat.id }).del();
+                const victoryNodeId = 8;
+                this.logger.log(`Moving character ${character.id} to victory node ${victoryNodeId}`);
+                if (enemyBaseData.item_drop_id !== null && enemyBaseData.item_drop_id !== undefined) {
+                    combatLogMessages.push(`Az ellenfél eldobott valamit! (Tárgy ID: ${enemyBaseData.item_drop_id})`);
+                    try {
+                        await this.characterService.addItemToInventory(character.id, enemyBaseData.item_drop_id, 1);
+                        this.logger.log(`Item ${enemyBaseData.item_drop_id} added to inventory.`);
+                    }
+                    catch (itemDropError) {
+                        this.logger.error(`Failed to add item drop ${enemyBaseData.item_drop_id}: ${itemDropError}`);
+                    }
+                }
+                await this.characterService.updateCharacter(character.id, { current_node_id: victoryNodeId });
+                const finalState = await this.getCurrentGameState(userId);
+                finalState.messages = combatLogMessages;
+                this.logger.log('>>> RETURNING FINAL STATE FROM VICTORY BLOCK (After Attack) <<<');
+                return finalState;
+            }
+        }
+        else if (actionDto.action === 'use_item') {
+            const itemIdToUse = actionDto.itemId;
+            if (!itemIdToUse) {
+                throw new common_1.BadRequestException('No itemId provided for use_item action.');
+            }
+            combatLogMessages.push(`Megpróbálsz használni egy tárgyat (ID: ${itemIdToUse}).`);
+            const hasItem = await this.characterService.hasItem(character.id, itemIdToUse);
+            if (!hasItem) {
+                combatLogMessages.push(`Nincs ilyen tárgyad!`);
+                playerActionSuccessful = true;
+            }
+            else {
+                const item = await this.knex('items').where({ id: itemIdToUse }).first();
+                if (!item) {
+                    throw new common_1.InternalServerErrorException('Item data inconsistency.');
+                }
+                if (!item.usable) {
+                    combatLogMessages.push(`Ez a tárgy (${item.name}) nem használható így.`);
+                    playerActionSuccessful = true;
+                }
+                else if (item.effect && item.effect.startsWith('heal+')) {
+                    const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
+                    if (healAmount > 0) {
+                        const maxHp = 100;
+                        const previousPlayerHealth = playerCurrentHealth;
+                        playerCurrentHealth = Math.min(maxHp, playerCurrentHealth + healAmount);
+                        const healedAmount = playerCurrentHealth - previousPlayerHealth;
+                        if (healedAmount > 0) {
+                            combatLogMessages.push(`Gyógyító italt használtál (${item.name}). Visszatöltöttél ${healedAmount} életerőt! HP: ${playerCurrentHealth}`);
+                            const updatedCharacterData = await this.characterService.updateCharacter(character.id, { health: playerCurrentHealth });
+                            playerCurrentHealth = updatedCharacterData.health;
+                            const removed = await this.characterService.removeItemFromInventory(character.id, itemIdToUse, 1);
+                            if (!removed) {
+                                this.logger.error(`Failed to remove item ${itemIdToUse} after use`);
+                            }
+                            playerActionSuccessful = true;
+                        }
+                        else {
+                            combatLogMessages.push(`Már így is maximum életerőn vagy.`);
+                            playerActionSuccessful = true;
+                        }
+                    }
+                    else {
+                        combatLogMessages.push(`Ez a tárgy (${item.name}) nem gyógyít.`);
+                        playerActionSuccessful = true;
+                    }
+                }
+                else {
+                    combatLogMessages.push(`Ezt a tárgyat (${item.name}) most nem tudod használni.`);
+                    playerActionSuccessful = true;
+                }
+            }
+        }
+        else {
+            this.logger.error(`Unknown combat action received: ${actionDto.action}`);
+            throw new common_1.BadRequestException('Invalid combat action.');
+        }
+        if (enemyCurrentHealth > 0 && playerActionSuccessful) {
+            combatLogMessages.push(`${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''})!`);
+            const playerDiceDef = Math.floor(Math.random() * 6) + 1;
+            const enemyDiceAtk = Math.floor(Math.random() * 6) + 1;
+            const enemyAttack = (enemyBaseData.skill ?? 0) + enemyDiceAtk;
+            const playerDefense = (character.skill ?? 0) + playerDiceDef;
+            if (enemyAttack > playerDefense) {
+                const enemyDamage = 5;
+                playerCurrentHealth = Math.max(0, playerCurrentHealth - enemyDamage);
+                combatLogMessages.push(`Eltalált! Sebzés: ${enemyDamage}. Életerőd: ${playerCurrentHealth}`);
+                await this.characterService.updateCharacter(character.id, { health: playerCurrentHealth });
+            }
+            else {
+                combatLogMessages.push(`Sikeresen kivédted a támadást!`);
+            }
+            if (playerCurrentHealth <= 0) {
+                combatLogMessages.push(`Leestél a lábadról... Vége a kalandnak.`);
+                this.logger.log(`Character ${character.id} defeated by enemy ${enemyBaseData.id}.`);
+                await this.knex('active_combats').where({ id: activeCombat.id }).del();
+                const defeatNodeId = 3;
+                await this.characterService.updateCharacter(character.id, { current_node_id: defeatNodeId, health: 0 });
+                const finalState = await this.getCurrentGameState(userId);
+                finalState.messages = combatLogMessages;
+                return finalState;
+            }
+        }
+        this.logger.log(`Combat continues for user ${userId}. Round finished.`);
+        const updatedCharacter = await this.characterService.findById(character.id);
+        if (!updatedCharacter)
+            throw new common_1.InternalServerErrorException('Character vanished after combat round!');
+        const currentInventory = await this.characterService.getInventory(updatedCharacter.id);
+        const currentCombatState = {
+            id: enemyBaseData.id,
+            name: enemyBaseData.name,
+            health: enemyBaseData.health,
+            currentHealth: enemyCurrentHealth,
+            skill: enemyBaseData.skill
+        };
+        const resultState = {
+            node: null,
+            choices: [],
+            character: this.mapCharacterToDto(updatedCharacter),
+            combat: currentCombatState,
+            inventory: currentInventory,
+            messages: combatLogMessages,
+        };
+        return resultState;
     }
 };
 exports.GameService = GameService;

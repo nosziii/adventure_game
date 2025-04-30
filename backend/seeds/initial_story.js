@@ -111,7 +111,7 @@ exports.seed = async function (knex) {
     { source_node_id: 4, target_node_id: 1, text: 'Felveszed a kardot és visszamész.' }, // -> Erdőszél
 
     // Node 6 választásai
-    { source_node_id: 6, target_node_id: 7, text: 'Bemész a kunyhóba.', required_stat_check: 'skill >= 10' }, // -> Ogre Harc (feltétellel)
+    { source_node_id: 6, target_node_id: 7, text: 'Bemész a kunyhóba.', required_stat_check: 'skill >= 10',required_item_id: 1 }, // -> Ogre Harc (feltétellel)
     { source_node_id: 6, target_node_id: 2, text: 'Inkább elsunnyogsz az ösvény felé.' }, // -> Manó
 
     // Node 8 választása (Győzelem után)

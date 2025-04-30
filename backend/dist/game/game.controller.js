@@ -18,6 +18,7 @@ const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const game_service_1 = require("./game.service");
 const make_choice_dto_1 = require("./dto/make-choice.dto");
+const combat_action_dto_1 = require("./dto/combat-action.dto");
 let GameController = GameController_1 = class GameController {
     gameService;
     logger = new common_1.Logger(GameController_1.name);
@@ -41,6 +42,11 @@ let GameController = GameController_1 = class GameController {
         this.logger.log(`Received request to make choice ID: ${choiceId} from user ID: ${userId}`);
         return this.gameService.makeChoice(userId, choiceId);
     }
+    async handleCombatAction(req, combatActionDto) {
+        const userId = req.user.id;
+        this.logger.log(`Received combat action: ${combatActionDto.action} from user ID: ${userId}`);
+        return this.gameService.handleCombatAction(userId, combatActionDto);
+    }
 };
 exports.GameController = GameController;
 __decorate([
@@ -60,6 +66,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, make_choice_dto_1.MakeChoiceDto]),
     __metadata("design:returntype", Promise)
 ], GameController.prototype, "makeChoice", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Post)('combat/action'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, combat_action_dto_1.CombatActionDto]),
+    __metadata("design:returntype", Promise)
+], GameController.prototype, "handleCombatAction", null);
 exports.GameController = GameController = GameController_1 = __decorate([
     (0, common_1.Controller)('game'),
     __metadata("design:paramtypes", [game_service_1.GameService])

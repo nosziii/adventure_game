@@ -6,6 +6,8 @@ class GameStateDto {
     choices;
     character;
     combat;
+    messages;
+    inventory;
 }
 exports.GameStateDto = GameStateDto;
 //# sourceMappingURL=game-state.dto.js.map

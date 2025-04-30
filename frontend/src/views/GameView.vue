@@ -1,133 +1,140 @@
 <template>
-    <div class="game-view">
-        <div class="stats-bar" v-if="gameStore.getCharacterStats">
-      <span>Életerő: {{ gameStore.getCharacterStats.health }}</span>
-      <span> | </span>
-      <span>Ügyesség: {{ gameStore.getCharacterStats.skill }}</span>
-      </div>
-    <hr v-if="gameStore.getCharacterStats" />
-      <div v-if="gameStore.isLoading" class="loading">
-        Játékállapot töltése...
-      </div>
-      <div v-else-if="gameStore.getError" class="error">
-        Hiba történt: {{ gameStore.getError }}
-      </div>
-      <div v-else-if="gameStore.currentNode" class="game-content">
-        <h2>Aktuális helyszín (Node {{ gameStore.currentNode.id }})</h2>
-        <img
-          v-if="gameStore.getNodeImage"
-          :src="gameStore.getNodeImage"
-          alt="Helyszín illusztráció"
-          class="node-image"
-        />
-        <p class="node-text">{{ gameStore.getNodeText }}</p>
-  
-        <div v-if="gameStore.getChoices.length > 0" class="choices">
-          <h3>Válassz:</h3>
+  <div class="game-view">
+    <StatsBar :stats="gameStore.getCharacterStats" />
+
+    <div v-if="gameStore.isLoading && !gameStore.isInCombat" class="loading"> Töltés...
+    </div>
+    <div v-else-if="gameStore.getError" class="error">
+      Hiba történt: {{ gameStore.getError }}
+    </div>
+
+    <div v-else>
+      <div v-if="gameStore.isInCombat && gameStore.getCombatState" class="combat-view">
+        <h2>HARC!</h2>
+        <div class="enemy-info">
+          <h3>Ellenfél: {{ gameStore.getCombatState.name }}</h3>
+          <p>Életerő: {{ gameStore.getCombatState.currentHealth }} / {{ gameStore.getCombatState.health }}</p>
+          </div>
+        <div class="combat-actions">
           <button
-            v-for="choice in gameStore.getChoices"
-            :key="choice.id"
-            @click="() => {
-                console.log('[GameView] Button Data:', choice)
-                handleChoice(choice.id)
-            }"
-            class="choice-button"
-          >
-            {{ choice.text }}
-          </button>
+            @click="handleAttack"
+            class="action-button attack-button"
+            :disabled="gameStore.isLoading" >
+            {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }} </button>
+          <button class="action-button item-button" disabled>Tárgyak (TODO)</button>
         </div>
-        <div v-else class="no-choices">
-          Úgy tűnik, nincs több választásod itt... (Vége a jelenetnek?)
-           </div>
-      </div>
-      <div v-else>
-          Nem található játékállapot. Indíts új játékot? (Ezt majd később kezeljük)
+        <div class="combat-log">
+            <div v-if="gameStore.isInCombat && gameStore.getCombatState" class="combat-view">
+      <div class="combat-log">
+         <h4>Harc Napló:</h4>
+         <p v-for="(message, index) in gameStore.getCombatLog" :key="index">
+             {{ message }}
+         </p>
+         <p v-if="gameStore.getCombatLog.length === 0"><i>A harc elkezdődött...</i></p>
       </div>
     </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { onMounted } from 'vue'
-  import { useGameStore } from '../stores/game'
-  
-  const gameStore = useGameStore()
-  
-  // Komponens betöltésekor lekérjük a játék állapotát
-  onMounted(() => {
-    gameStore.fetchGameState();
-  })
-  
-  const handleChoice = async (choiceId: number) => {
-    console.log(`[GameView] handleChoice called with ID: ${choiceId}`)
-  console.log(`Choice button clicked, calling store action with ID: ${choiceId}`)
-  // Meghívjuk a store makeChoice akcióját
-  await gameStore.makeChoice(choiceId)
+           </div>
+      </div>
+
+      <div v-else-if="gameStore.currentNode" class="game-content">
+        <NodeDisplay :node="gameStore.currentNode" />
+        <InventoryDisplay :inventory="gameStore.getInventory" />
+        <hr />
+        <ChoiceList
+          :choices="gameStore.getChoices"
+          @choice-selected="handleChoiceSelection"
+        />
+      </div>
+
+      <div v-else>
+          Nem található játékállapot.
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted } from 'vue';
+import { useGameStore } from '../stores/game' // Vagy relatív útvonal
+// Importáljuk az új komponenseket
+import StatsBar from '../components/StatsBar.vue'
+import NodeDisplay from '../components/NodeDisplay.vue'
+import ChoiceList from '../components/ChoiceList.vue'
+import InventoryDisplay from '../components/InventoryDisplay.vue'
+// import CombatDisplay from '@/components/CombatDisplay.vue'; // Később kell majd
+
+const gameStore = useGameStore()
+
+onMounted(() => {
+  gameStore.fetchGameState();
+});
+
+// Ez a metódus fogadja az eseményt a ChoiceList-től
+const handleChoiceSelection = async (choiceId: number) => {
+  console.log(`[GameView] Choice selected event received with ID: ${choiceId}`);
+  await gameStore.makeChoice(choiceId);
+};
+
+// Harci támadás kezelő (változatlan placeholder)
+const handleAttack = async () => { // Legyen async
+  console.log('[GameView] Attack button clicked! Calling store action...');
+  // Meghívjuk a store attackEnemy akcióját
+  await gameStore.attackEnemy()
+  // A view a store állapotának változása miatt automatikusan frissül
 }
-  
-  </script>
-  
-  <style scoped>
-  .game-view {
-    padding: 20px;
-    font-family: sans-serif;
-  }
-  .loading, .error {
-    text-align: center;
-    padding: 40px;
-    font-size: 1.2em;
-  }
-  .error {
-    color: red;
-  }
-  .node-image {
-    max-width: 100%;
-    height: auto;
-    margin-bottom: 15px;
-    border: 1px solid #eee;
-  }
-  .node-text {
-    line-height: 1.6;
-    margin-bottom: 25px;
-    white-space: pre-wrap;
-  }
-  .choices h3 {
-    margin-bottom: 10px;
-  }
-  .choice-button {
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    margin-bottom: 10px;
-    font-size: 1em;
-    text-align: left;
-    cursor: pointer;
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-  }
-  .choice-button:hover {
-    background-color: #e0e0e0;
-  }
-  .no-choices {
+</script>
+
+<style scoped>
+/* A GameView saját stílusai itt maradhatnak vagy törölhetők,
+   ha a komponensek stílusai elegendőek */
+ hr { /* Stílus az elválasztóhoz */
     margin-top: 20px;
-    font-style: italic;
-    color: #666;
-  }
-  .stats-bar {
-  padding: 10px;
-  background-color: #eee;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  text-align: center;
-}
-.stats-bar span {
-  margin: 0 10px;
-  font-weight: bold;
-}
-hr {
     margin-bottom: 20px;
     border: 0;
-    border-top: 1px solid #ccc;
+    border-top: 1px solid #eee;
 }
-  </style>
+
+.game-view {
+  padding: 20px;
+  font-family: sans-serif;
+  max-width: 700px; /* Példa szélesség */
+  margin: 20px auto;
+}
+.loading, .error {
+  text-align: center;
+  padding: 40px;
+  font-size: 1.2em;
+}
+.error {
+  color: red;
+}
+/* A harci nézet placeholder stílusa (később mehet a CombatDisplay-be) */
+ .combat-view {
+    border: 2px dashed red;
+    padding: 15px;
+    margin-top: 20px;
+  }
+  .enemy-info {
+    background-color: #fdd;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+  }
+   .enemy-info h3{
+     margin-top: 0;
+   }
+  .action-button {
+     padding: 10px 15px;
+     margin-right: 10px;
+     cursor: pointer;
+     border: none;
+  }
+  .attack-button {
+    background-color: #dc3545; /* Piros */
+    color: white;
+  }
+   .attack-button:hover {
+    background-color: #c82333;
+  }
+</style>

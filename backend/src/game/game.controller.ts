@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { GameService } from './game.service'
 import { GameStateDto } from './dto/game-state.dto'
 import { MakeChoiceDto } from './dto/make-choice.dto'
+import { CombatActionDto } from './dto/combat-action.dto'
 
 @Controller('game')
 export class GameController {
@@ -37,5 +38,17 @@ export class GameController {
     const choiceId = makeChoiceDto.choiceId;
     this.logger.log(`Received request to make choice ID: ${choiceId} from user ID: ${userId}`);
     return this.gameService.makeChoice(userId, choiceId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('combat/action')
+  async handleCombatAction(
+    @Request() req,
+    @Body() combatActionDto: CombatActionDto // Fogadjuk az akció DTO-t
+  ): Promise<GameStateDto> { // Vagy egy specifikus CombatResultDto? Maradjunk GameStateDto-nál.
+    const userId = req.user.id;
+    this.logger.log(`Received combat action: ${combatActionDto.action} from user ID: ${userId}`);
+    // Meghívjuk a service megfelelő metódusát
+    return this.gameService.handleCombatAction(userId, combatActionDto);
   }
 }
