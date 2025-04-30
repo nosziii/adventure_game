@@ -147,7 +147,7 @@ export class GameService {
   } // getCurrentGameState vége
 
 
-  // --- checkChoiceAvailability JAVÍTVA ---
+  // --- checkChoiceAvailability ---
   private async checkChoiceAvailability(choice: ChoiceRecord, character: Character): Promise<boolean> {
 
       if (choice.required_item_id !== null && choice.required_item_id !== undefined) {

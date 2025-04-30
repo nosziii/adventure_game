@@ -26,15 +26,17 @@ let CharacterService = CharacterService_1 = class CharacterService {
     }
     async findByUserId(userId) {
         this.logger.debug(`Finding character for user ID: ${userId}`);
-        return this.knex('characters')
+        const character = await this.knex('characters')
             .where({ user_id: userId })
             .first();
+        return character ? await this.applyPassiveEffects(character) : undefined;
     }
     async findById(id) {
         this.logger.debug(`Finding character by ID: ${id}`);
-        return this.knex('characters')
+        const character = await this.knex('characters')
             .where({ id: id })
             .first();
+        return character ? await this.applyPassiveEffects(character) : undefined;
     }
     async createCharacter(userId) {
         this.logger.log(`Creating new character for user ID: ${userId}.`);
@@ -79,7 +81,8 @@ let CharacterService = CharacterService_1 = class CharacterService {
         let character = await this.findByUserId(userId);
         if (!character) {
             this.logger.log(`Character not found for user ${userId} in findOrCreate, creating new one.`);
-            character = await this.createCharacter(userId);
+            const baseCharacter = await this.createCharacter(userId);
+            character = await this.applyPassiveEffects(baseCharacter);
         }
         return character;
     }
@@ -96,6 +99,49 @@ let CharacterService = CharacterService_1 = class CharacterService {
             this.logger.error(`Failed to fetch inventory for character ${characterId}: ${error}`, error.stack);
             throw new common_1.InternalServerErrorException('Could not retrieve inventory.');
         }
+    }
+    async applyPassiveEffects(character) {
+        const characterWithEffects = { ...character };
+        const inventory = await this.getInventory(character.id);
+        this.logger.debug(`Applying passive effects for character ${character.id}. Inventory size: ${inventory.length}`);
+        for (const item of inventory) {
+            const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
+            if (isPassiveType && typeof item.effect === 'string' && item.effect.length > 0) {
+                this.logger.debug(`Parsing passive effect "${item.effect}" from item ${item.itemId} (${item.name})`);
+                const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                const match = item.effect.match(effectRegex);
+                if (match) {
+                    const [, statName, operator, valueStr] = match;
+                    const value = parseInt(valueStr, 10);
+                    const modifier = operator === '+' ? value : -value;
+                    this.logger.debug(`Parsed effect: stat=${statName}, modifier=${modifier}`);
+                    switch (statName.toLowerCase()) {
+                        case 'skill':
+                            characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
+                            this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
+                            break;
+                        case 'health':
+                            this.logger.warn(`Passive health effect found, but max health handling not implemented.`);
+                            break;
+                        case 'luck':
+                            characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
+                            this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
+                            break;
+                        case 'stamina':
+                            characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
+                            this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
+                            break;
+                        default:
+                            this.logger.warn(`Unknown stat in passive effect: ${statName}`);
+                            break;
+                    }
+                }
+                else {
+                    this.logger.warn(`Could not parse passive effect string: "${item.effect}"`);
+                }
+            }
+        }
+        return characterWithEffects;
     }
     async hasItem(characterId, itemId) {
         this.logger.debug(`Checking if character ${characterId} has item ${itemId}`);

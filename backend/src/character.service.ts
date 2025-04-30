@@ -30,17 +30,20 @@ export class CharacterService {
   // Karakter lekérdezése userId alapján
   async findByUserId(userId: number): Promise<Character | undefined> {
     this.logger.debug(`Finding character for user ID: ${userId}`);
-    return this.knex<Character>('characters')
-               .where({ user_id: userId })
-               .first();
+    const character = await this.knex<Character>('characters')
+                                  .where({ user_id: userId })
+                                  .first();
+        // Alkalmazzuk a passzív effekteket, mielőtt visszaadjuk
+        return character ? await this.applyPassiveEffects(character) : undefined;
   }
 
    // Karakter lekérdezése ID alapján (ezt használta a JwtStrategy)
   async findById(id: number): Promise<Character | undefined> {
      this.logger.debug(`Finding character by ID: ${id}`);
-     return this.knex<Character>('characters')
-             .where({ id: id })
-             .first();
+     const character = await this.knex<Character>('characters')
+                                 .where({ id: id })
+                                 .first();
+         return character ? await this.applyPassiveEffects(character) : undefined;
    }
 
   // Új karakter létrehozása
@@ -90,12 +93,13 @@ export class CharacterService {
   }
   
   async findOrCreateByUserId(userId: number): Promise<Character> {
-    let character = await this.findByUserId(userId)
-    if (!character) {
-       this.logger.log(`Character not found for user ${userId} in findOrCreate, creating new one.`)
-       character = await this.createCharacter(userId)
-    }
-    return character
+    let character = await this.findByUserId(userId); // Ez már az effektekkel ellátottat adja vissza, ha létezik
+       if (!character) {
+          this.logger.log(`Character not found for user ${userId} in findOrCreate, creating new one.`)
+          const baseCharacter = await this.createCharacter(userId)
+          character = await this.applyPassiveEffects(baseCharacter)
+       }
+       return character
   }
   
   /**
@@ -122,6 +126,72 @@ export class CharacterService {
          throw new InternalServerErrorException('Could not retrieve inventory.');
     }
   }
+  /**
+   * Lekérdezi egy karakter leltárának egy elemét, az item_id alapján.
+   * Ez a metódus nem csatlakozik az items táblához, csak a character_inventory táblát használja.
+   * Használható például a karakter leltárának egy adott elemének lekérdezésére.
+   */
+  // TODO: Később ezt is bővíteni kellene
+
+  private async applyPassiveEffects(character: Character): Promise<Character> {
+        const characterWithEffects = { ...character }; // Másolat készítése
+        const inventory = await this.getInventory(character.id);
+
+        this.logger.debug(`Applying passive effects for character ${character.id}. Inventory size: ${inventory.length}`);
+
+        for (const item of inventory) {
+            // Ellenőrizzük, hogy passzív-e a hatás (pl. fegyver, páncél)
+            // Később lehetne explicit 'passive' flag az items táblában/effekt stringben
+            const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? ''); // Típusok listája bővíthető
+
+            if (isPassiveType && typeof item.effect === 'string' && item.effect.length > 0) {
+                this.logger.debug(`Parsing passive effect "${item.effect}" from item ${item.itemId} (${item.name})`);
+
+                // Próbáljuk értelmezni a "stat[+-]érték" formátumot (pl. "skill+2", "health-5")
+                const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                const match = item.effect.match(effectRegex);
+
+                if (match) {
+                    const [, statName, operator, valueStr] = match;
+                    const value = parseInt(valueStr, 10);
+                    const modifier = operator === '+' ? value : -value; // Érték előjellel
+
+                    this.logger.debug(`Parsed effect: stat=${statName}, modifier=${modifier}`);
+
+                    // Alkalmazzuk a módosítást a megfelelő statisztikára
+                    // Fontos a null/undefined értékek kezelése
+                    switch (statName.toLowerCase()) {
+                        case 'skill':
+                            characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
+                            this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
+                            break;
+                        case 'health': // Max Health módosítására gondolunk itt? Vagy base health? Legyen max.
+                            // TODO: Meg kell különböztetni a max HP-t és az aktuálisat.
+                            // Jelenleg nincs max HP tárolva, így ezt nem tudjuk jól kezelni.
+                            // Hagyjuk ki egyelőre a passzív HP módosítást.
+                            this.logger.warn(`Passive health effect found, but max health handling not implemented.`);
+                            break;
+                        case 'luck':
+                             characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
+                             this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
+                            break;
+                        case 'stamina': // Feltételezzük, hogy ez a max stamina
+                             characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
+                             this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
+                             break;
+                        // TODO: Ide jöhetnek további statisztikák (pl. strength, defense stb.)
+                        default:
+                            this.logger.warn(`Unknown stat in passive effect: ${statName}`);
+                            break;
+                    }
+                } else {
+                    this.logger.warn(`Could not parse passive effect string: "${item.effect}"`);
+                }
+            } // if (isPassiveType && item.effect) vége
+        } // for ciklus vége
+
+        return characterWithEffects; // Visszaadjuk a módosított karaktert
+    } // applyPassiveEffects vége
 
   /**
    * Ellenőrzi, hogy egy karakter rendelkezik-e egy adott tárgyból legalább egy darabbal.

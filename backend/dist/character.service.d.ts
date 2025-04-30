@@ -22,6 +22,7 @@ export declare class CharacterService {
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
     findOrCreateByUserId(userId: number): Promise<Character>;
     getInventory(characterId: number): Promise<InventoryItemDto[]>;
+    private applyPassiveEffects;
     hasItem(characterId: number, itemId: number): Promise<boolean>;
     addItemToInventory(characterId: number, itemId: number, quantityToAdd?: number): Promise<void>;
     removeItemFromInventory(characterId: number, itemId: number, quantityToRemove?: number): Promise<boolean>;
