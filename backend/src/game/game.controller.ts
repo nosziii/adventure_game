@@ -1,9 +1,7 @@
 import { Controller, Get, Logger, Request, UseGuards, Post, Body} from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { GameService } from './game.service'
-import { GameStateDto } from './dto/game-state.dto'
-import { MakeChoiceDto } from './dto/make-choice.dto'
-import { CombatActionDto } from './dto/combat-action.dto'
+import { GameStateDto, MakeChoiceDto, UseItemDto, CharacterStatsDto, CombatActionDto } from './dto'
 
 @Controller('game')
 export class GameController {
@@ -50,5 +48,18 @@ export class GameController {
     this.logger.log(`Received combat action: ${combatActionDto.action} from user ID: ${userId}`);
     // Meghívjuk a service megfelelő metódusát
     return this.gameService.handleCombatAction(userId, combatActionDto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('use-item') // POST /api/game/use-item
+  async useItem(
+    @Request() req,
+    @Body() useItemDto: UseItemDto // Fogadjuk az itemId-t
+  ): Promise<CharacterStatsDto> { // Csak a frissített statokat adjuk vissza
+    const userId = req.user.id;
+    const itemId = useItemDto.itemId;
+    this.logger.log(`Received request to use item ID: ${itemId} from user ID: ${userId} (out of combat)`);
+    // Meghívjuk a service megfelelő metódusát
+    return this.gameService.useItemOutOfCombat(userId, itemId);
   }
 }

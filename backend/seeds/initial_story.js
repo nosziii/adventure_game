@@ -28,7 +28,7 @@ exports.seed = async function (knex) {
       name: 'Rozsdás Kard',
       description: 'Egy régi, de még használható kard. Növeli az ügyességed.',
       type: 'weapon',
-      effect: 'skill+2', // Ezt a stringet majd a kódnak kell értelmeznie
+      effect: 'skill+2;damage+5', // Ezt a stringet majd a kódnak kell értelmeznie
       usable: false, // Felszerelés jellegű
     },
     {
@@ -103,7 +103,12 @@ exports.seed = async function (knex) {
   // ID-kat nem adunk meg, hagyjuk az auto-incrementet (bár ez tesztelésnél néha nehezebb)
   await knex('choices').insert([
     // Node 1 választásai
-    { source_node_id: 1, target_node_id: 2, text: 'Elindulsz az ösvényen.' }, // -> Manó
+    {
+      source_node_id: 1,
+      target_node_id: 2,
+      text: 'Elindulsz az ösvényen. (Költség: Gyógyító Ital)',
+      item_cost_id: 2
+    }, // -> Manó
     { source_node_id: 1, target_node_id: 6, text: 'Odamész a kunyhóhoz.' }, // -> Kunyhó bejárata
     { source_node_id: 1, target_node_id: 4, text: 'Megvizsgálod a zizegő bokrot.' }, // -> Bokor
 

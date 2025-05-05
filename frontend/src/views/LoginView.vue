@@ -73,7 +73,7 @@
         email: email.value,
         password: password.value
       })
-      router.push('/')
+      router.push('/game')
     } catch (error: any) {
       errorMessage.value =
         error.response?.data?.message || 'A bejelentkezés sikertelen.'

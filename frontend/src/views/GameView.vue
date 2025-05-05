@@ -2,11 +2,8 @@
   <div class="game-view">
     <StatsBar :stats="gameStore.getCharacterStats" />
 
-    <div v-if="gameStore.isLoading && !gameStore.isInCombat" class="loading"> Töltés...
-    </div>
-    <div v-else-if="gameStore.getError" class="error">
-      Hiba történt: {{ gameStore.getError }}
-    </div>
+    <div v-if="gameStore.isLoading && !gameStore.isInCombat" class="loading"> Töltés... </div>
+    <div v-else-if="gameStore.getError" class="error"> Hiba történt: {{ gameStore.getError }} </div>
 
     <div v-else>
       <div v-if="gameStore.isInCombat && gameStore.getCombatState" class="combat-view">
@@ -14,41 +11,29 @@
         <div class="enemy-info">
           <h3>Ellenfél: {{ gameStore.getCombatState.name }}</h3>
           <p>Életerő: {{ gameStore.getCombatState.currentHealth }} / {{ gameStore.getCombatState.health }}</p>
-          </div>
-        <div class="combat-actions">
-          <button
-            @click="handleAttack"
-            class="action-button attack-button"
-            :disabled="gameStore.isLoading" >
-            {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }} </button>
-          <button class="action-button item-button" disabled>Tárgyak (TODO)</button>
         </div>
+        <div class="combat-actions">
+          <button @click="handleAttack" class="action-button attack-button" :disabled="gameStore.isLoading">
+            {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }}
+          </button>
+          </div>
         <div class="combat-log">
-            <div v-if="gameStore.isInCombat && gameStore.getCombatState" class="combat-view">
-      <div class="combat-log">
-         <h4>Harc Napló:</h4>
-         <p v-for="(message, index) in gameStore.getCombatLog" :key="index">
-             {{ message }}
-         </p>
-         <p v-if="gameStore.getCombatLog.length === 0"><i>A harc elkezdődött...</i></p>
-      </div>
-    </div>
-           </div>
-      </div>
+            <h4>Harc Napló:</h4>
+            <p v-for="(message, index) in gameStore.getCombatLog" :key="index"> {{ message }} </p>
+            <p v-if="gameStore.getCombatLog.length === 0"><i>A harc elkezdődött...</i></p>
+        </div>
+
+        <InventoryDisplay :inventory="gameStore.getInventory" />
+        </div>
 
       <div v-else-if="gameStore.currentNode" class="game-content">
         <NodeDisplay :node="gameStore.currentNode" />
         <InventoryDisplay :inventory="gameStore.getInventory" />
         <hr />
-        <ChoiceList
-          :choices="gameStore.getChoices"
-          @choice-selected="handleChoiceSelection"
-        />
+        <ChoiceList :choices="gameStore.getChoices" @choice-selected="handleChoiceSelection" />
       </div>
 
-      <div v-else>
-          Nem található játékállapot.
-      </div>
+      <div v-else> Nem található játékállapot. </div>
     </div>
 
   </div>

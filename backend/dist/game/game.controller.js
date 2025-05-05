@@ -17,8 +17,7 @@ exports.GameController = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const game_service_1 = require("./game.service");
-const make_choice_dto_1 = require("./dto/make-choice.dto");
-const combat_action_dto_1 = require("./dto/combat-action.dto");
+const dto_1 = require("./dto");
 let GameController = GameController_1 = class GameController {
     gameService;
     logger = new common_1.Logger(GameController_1.name);
@@ -47,6 +46,12 @@ let GameController = GameController_1 = class GameController {
         this.logger.log(`Received combat action: ${combatActionDto.action} from user ID: ${userId}`);
         return this.gameService.handleCombatAction(userId, combatActionDto);
     }
+    async useItem(req, useItemDto) {
+        const userId = req.user.id;
+        const itemId = useItemDto.itemId;
+        this.logger.log(`Received request to use item ID: ${itemId} from user ID: ${userId} (out of combat)`);
+        return this.gameService.useItemOutOfCombat(userId, itemId);
+    }
 };
 exports.GameController = GameController;
 __decorate([
@@ -63,7 +68,7 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, make_choice_dto_1.MakeChoiceDto]),
+    __metadata("design:paramtypes", [Object, dto_1.MakeChoiceDto]),
     __metadata("design:returntype", Promise)
 ], GameController.prototype, "makeChoice", null);
 __decorate([
@@ -72,9 +77,18 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, combat_action_dto_1.CombatActionDto]),
+    __metadata("design:paramtypes", [Object, dto_1.CombatActionDto]),
     __metadata("design:returntype", Promise)
 ], GameController.prototype, "handleCombatAction", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Post)('use-item'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, dto_1.UseItemDto]),
+    __metadata("design:returntype", Promise)
+], GameController.prototype, "useItem", null);
 exports.GameController = GameController = GameController_1 = __decorate([
     (0, common_1.Controller)('game'),
     __metadata("design:paramtypes", [game_service_1.GameService])

@@ -1,6 +1,6 @@
 import { Knex } from 'knex';
 import { CharacterService } from '../character.service';
-import { GameStateDto, CombatActionDto } from './dto';
+import { GameStateDto, CharacterStatsDto, CombatActionDto } from './dto';
 export declare class GameService {
     private readonly knex;
     private readonly characterService;
@@ -11,4 +11,5 @@ export declare class GameService {
     private checkChoiceAvailability;
     makeChoice(userId: number, choiceId: number): Promise<GameStateDto>;
     handleCombatAction(userId: number, actionDto: CombatActionDto): Promise<GameStateDto>;
+    useItemOutOfCombat(userId: number, itemId: number): Promise<CharacterStatsDto>;
 }

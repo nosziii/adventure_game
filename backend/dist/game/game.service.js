@@ -125,6 +125,15 @@ let GameService = GameService_1 = class GameService {
             }
             this.logger.debug(`Required item ${choice.required_item_id} found in inventory.`);
         }
+        if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
+            this.logger.debug(`Checking item cost ID: ${choice.item_cost_id}`);
+            const hasCostItem = await this.characterService.hasItem(character.id, choice.item_cost_id);
+            if (!hasCostItem) {
+                this.logger.debug(`Choice ${choice.id} unavailable: Missing cost item ${choice.item_cost_id}`);
+                return false;
+            }
+            this.logger.debug(`Required cost item ${choice.item_cost_id} found in inventory.`);
+        }
         const reqStatCheck = choice.required_stat_check;
         if (typeof reqStatCheck === 'string') {
             this.logger.debug(`Evaluating stat requirement: "${reqStatCheck}"`);
@@ -213,6 +222,15 @@ let GameService = GameService_1 = class GameService {
         if (!await this.checkChoiceAvailability(choice, character)) {
             throw new common_1.ForbiddenException('You do not meet the requirements for this choice.');
         }
+        if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
+            this.logger.log(`Choice ${choiceId} has item cost: ${choice.item_cost_id}. Attempting to remove from inventory.`);
+            const removedSuccessfully = await this.characterService.removeItemFromInventory(character.id, choice.item_cost_id, 1);
+            if (!removedSuccessfully) {
+                this.logger.error(`Failed to remove cost item ${choice.item_cost_id} for choice ${choiceId} - item might have vanished?`);
+                throw new common_1.InternalServerErrorException('Failed to process item cost.');
+            }
+            this.logger.log(`Item ${choice.item_cost_id} successfully removed as cost.`);
+        }
         const targetNodeId = choice.target_node_id;
         this.logger.debug(`Choice ${choiceId} valid. Target node ID: ${targetNodeId}`);
         const targetNode = await this.knex('story_nodes').where({ id: targetNodeId }).first();
@@ -284,9 +302,28 @@ let GameService = GameService_1 = class GameService {
             const playerAttack = (character.skill ?? 0) + playerDice;
             const enemyDefense = (enemyBaseData.skill ?? 0) + enemyDice;
             if (playerAttack > enemyDefense) {
-                const damage = 10;
-                enemyCurrentHealth = Math.max(0, enemyCurrentHealth - damage);
-                combatLogMessages.push(`Eltaláltad! Sebzés: ${damage}. Ellenfél HP: ${enemyCurrentHealth}/${enemyBaseData.health}`);
+                let baseDamage = 1;
+                const inventory = await this.characterService.getInventory(character.id);
+                const weapon = inventory.find(item => item.type === 'weapon');
+                if (weapon && typeof weapon.effect === 'string') {
+                    this.logger.debug(`Found weapon: ${weapon.name} (Effect: ${weapon.effect})`);
+                    const damageMatch = weapon.effect.match(/damage\+(\d+)/);
+                    if (damageMatch && damageMatch[1]) {
+                        baseDamage = parseInt(damageMatch[1], 10);
+                        this.logger.debug(`Weapon base damage set to: ${baseDamage}`);
+                    }
+                    else {
+                        this.logger.warn(`Weapon ${weapon.name} found, but no valid 'damage+X' effect string.`);
+                    }
+                }
+                else {
+                    this.logger.debug('No weapon found in inventory, using base unarmed damage.');
+                }
+                const skillBonus = Math.floor((character.skill ?? 0) / 5);
+                const totalDamage = baseDamage + skillBonus;
+                this.logger.debug(`Calculating player damage: base=${baseDamage}, skillBonus=${skillBonus} (from skill=${character.skill}), total=${totalDamage}`);
+                enemyCurrentHealth = Math.max(0, enemyCurrentHealth - totalDamage);
+                combatLogMessages.push(`Eltaláltad! Sebzés: ${totalDamage}. Ellenfél HP: ${enemyCurrentHealth}/${enemyBaseData.health}`);
                 await this.knex('active_combats').where({ id: activeCombat.id }).update({ enemy_current_health: enemyCurrentHealth, last_action_time: new Date() });
             }
             else {
@@ -421,6 +458,63 @@ let GameService = GameService_1 = class GameService {
             messages: combatLogMessages,
         };
         return resultState;
+    }
+    async useItemOutOfCombat(userId, itemId) {
+        this.logger.log(`Attempting to use item ${itemId} for user ${userId} outside of combat.`);
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        const activeCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        if (activeCombat) {
+            this.logger.warn(`User ${userId} tried to use item ${itemId} outside combat, but is in combat.`);
+            throw new common_1.ForbiddenException('Cannot use items this way while in combat.');
+        }
+        const hasItem = await this.characterService.hasItem(character.id, itemId);
+        if (!hasItem) {
+            this.logger.warn(`User ${userId} tried to use item ${itemId} but doesn't have it.`);
+            throw new common_1.BadRequestException('You do not have this item.');
+        }
+        const item = await this.knex('items').where({ id: itemId }).first();
+        if (!item) {
+            throw new common_1.InternalServerErrorException('Item data inconsistency.');
+        }
+        if (!item.usable) {
+            this.logger.warn(`User ${userId} tried to use non-usable item ${itemId}.`);
+            throw new common_1.BadRequestException(`This item (${item.name}) cannot be used.`);
+        }
+        let characterStatsUpdated = false;
+        if (item.effect && item.effect.startsWith('heal+')) {
+            const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
+            if (healAmount > 0) {
+                const maxHp = 100;
+                const currentHealth = character.health;
+                const newHealth = Math.min(maxHp, currentHealth + healAmount);
+                if (newHealth > currentHealth) {
+                    this.logger.log(`Applying heal effect: ${healAmount} to character ${character.id}. New health: ${newHealth}`);
+                    await this.characterService.updateCharacter(character.id, { health: newHealth });
+                    const removed = await this.characterService.removeItemFromInventory(character.id, itemId, 1);
+                    if (!removed) {
+                        this.logger.error(`Failed to remove item ${itemId} after use for character ${character.id}!`);
+                    }
+                    characterStatsUpdated = true;
+                }
+                else {
+                    this.logger.log(`Character ${character.id} health already full, item ${itemId} not consumed.`);
+                }
+            }
+            else {
+                this.logger.warn(`Item ${itemId} has zero heal amount.`);
+            }
+        }
+        else {
+            this.logger.warn(`Item ${itemId} has unhandled usable effect: ${item.effect}`);
+            throw new common_1.BadRequestException(`Cannot use this type of item (${item.name}) right now.`);
+        }
+        const finalCharacter = characterStatsUpdated
+            ? await this.characterService.findById(character.id)
+            : character;
+        if (!finalCharacter) {
+            throw new common_1.InternalServerErrorException('Character data not found after using item.');
+        }
+        return this.mapCharacterToDto(finalCharacter);
     }
 };
 exports.GameService = GameService;

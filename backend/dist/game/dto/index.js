@@ -21,4 +21,5 @@ __exportStar(require("./game-state.dto"), exports);
 __exportStar(require("./make-choice.dto"), exports);
 __exportStar(require("./combat-action.dto"), exports);
 __exportStar(require("./inventory-item.dto"), exports);
+__exportStar(require("./use-item.dto"), exports);
 //# sourceMappingURL=index.js.map

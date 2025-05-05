@@ -129,28 +129,87 @@ _updateStateFromResponse(data: GameStateResponse) {
         }
       },
   
-       // TODO: Később jöhet a useItemInCombat akció is
-      // async useItemInCombat(itemId: number) {
-      //   this.loading = true
-      //   this.error = null
-      //   console.log(`Using item ID: ${itemId} in combat`)
-      //   try {
-      //     const response = await apiClient.post<GameStateDto>(
-      //       '/game/combat/action',
-      //       { action: 'useItem', itemId: itemId } // A CombatActionDto-nak megfelelően
-      //     )
-      //     this.currentNode = response.data.node
-      //     this.currentChoices = response.data.choices
-      //     this.characterStats = response.data.character
-      //     this.combatState = response.data.combat // Frissítjük az ellenfél HP-ját, vagy null lesz, ha a harc véget ért
-      //     console.log('Item used in combat, new state received:', response.data)
-      //   } catch (err: any) {
-      //     console.error('Failed to use item in combat:', err)
-      //     this.error = err.response?.data?.message || 'A tárgy használata a harcban sikertelen volt.'
-      //   } finally {
-      //     this.loading = false
-      //   }
-      // },
+       async useItemInCombat(itemId: number) {
+      if (!this.combatState) {
+        console.error('useItemInCombat action called but not in combat!');
+        this.error = 'Nem vagy harcban.'; // Adjunk visszajelzést
+        return; // Ne csinálj semmit, ha nincs harc
+      }
+      // Ellenőrizzük, hogy van-e ilyen tárgy (opcionális, a backend is ellenőrzi)
+      const item = this.inventory.find(i => i.itemId === itemId);
+      if (!item || item.quantity < 1) {
+           console.error(`Attempted to use item ${itemId} but not available in inventory.`);
+           this.error = 'Nincs ilyen tárgyad, vagy elfogyott.';
+           return;
+      }
+       if (!item.usable) {
+           console.error(`Attempted to use non-usable item ${itemId}.`);
+           this.error = `Ez a tárgy (${item.name}) nem használható.`;
+           return;
+       }
 
+
+      this.loading = true;
+      this.error = null;
+      console.log(`Executing use_item action for item ID: ${itemId}`);
+      try {
+        // Hívjuk a backend combat/action végpontját 'use_item' akcióval
+        const response = await apiClient.post<GameStateResponse>(
+          '/game/combat/action',
+          {
+            action: 'use_item',
+            itemId: itemId
+          } // A CombatActionDto-nak megfelelően
+        );
+
+        // Frissítjük a teljes store állapotot a kapott válasszal
+        this._updateStateFromResponse(response.data);
+        console.log('Use item action processed, new state received:', response.data);
+
+      } catch (err: any) {
+        console.error('Failed to execute use_item action:', err);
+        this.error = err.response?.data?.message || 'A tárgyhasználat sikertelen volt.';
+      } finally {
+        this.loading = false;
+      }
+      }, // useItemInCombat vége
+       
+       async useItemOutOfCombat(itemId: number) {
+        if (this.isInCombat) { // Extra ellenőrzés a frontend oldalon is
+            console.error('Tried to use item out of combat while in combat state.');
+            this.error = 'Harc közben másként kell tárgyat használni.';
+            return;
+        }
+        const item = this.inventory.find(i => i.itemId === itemId);
+         if (!item || item.quantity < 1 || !item.usable) {
+              this.error = 'Ez a tárgy nem található vagy nem használható.';
+              return;
+         }
+
+        this.loading = true; // Jelezhetjük, hogy a háttérben dolgozik
+        this.error = null;
+        console.log(`Using item ${itemId} out of combat...`);
+        try {
+            // Hívjuk az új backend végpontot
+            const response = await apiClient.post<CharacterStats>( // Visszatérési típus CharacterStatsDto
+                '/game/use-item',
+                { itemId: itemId }
+            );
+
+            // Frissítjük a karakter statisztikákat és az inventoryt
+            this.characterStats = response.data; // A válasz csak a friss statokat tartalmazza
+            // Mivel az inventory is változhatott (elfogyott a tárgy), újra le kell kérni
+            // vagy a backendnek vissza kellene adnia a teljes új GameState-et itt is?
+            // Egyszerűbb lehet itt egy teljes state frissítést kérni:
+            await this.fetchGameState(); // Újra lekérjük a teljes állapotot
+            console.log('Item used successfully out of combat, state refreshed.');
+
+        } catch (err: any) {
+            console.error('Failed to use item out of combat:', err);
+            this.error = err.response?.data?.message || 'A tárgyhasználat sikertelen volt.';
+        } finally {
+            this.loading = false;
+        }
     },
+} // actions vége
   })
