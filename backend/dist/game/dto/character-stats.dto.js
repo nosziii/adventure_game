@@ -7,6 +7,9 @@ class CharacterStatsDto {
     luck;
     stamina;
     name;
+    level;
+    xp;
+    xpToNextLevel;
 }
 exports.CharacterStatsDto = CharacterStatsDto;
 //# sourceMappingURL=character-stats.dto.js.map

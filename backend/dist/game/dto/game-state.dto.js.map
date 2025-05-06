@@ -1,1 +1,1 @@
-{"version":3,"file":"game-state.dto.js","sourceRoot":"","sources":["../../../src/game/dto/game-state.dto.ts"],"names":[],"mappings":";;;AAaA,MAAa,YAAY;IACvB,IAAI,CAAsB;IAC1B,OAAO,CAAa;IACpB,SAAS,CAAmB;IAC5B,MAAM,CAAqB;IAC3B,QAAQ,CAAW;IACnB,SAAS,CAA2B;CACrC;AAPD,oCAOC"}
+{"version":3,"file":"game-state.dto.js","sourceRoot":"","sources":["../../../src/game/dto/game-state.dto.ts"],"names":[],"mappings":";;;AAaA,MAAa,YAAY;IACvB,IAAI,CAAsB;IAC1B,OAAO,CAAa;IACpB,SAAS,CAAmB;IAC5B,MAAM,CAAqB;IAC3B,QAAQ,CAAW;IACnB,SAAS,CAA2B;IACpC,gBAAgB,CAAgB;IAChC,eAAe,CAAgB;CAChC;AATD,oCASC"}

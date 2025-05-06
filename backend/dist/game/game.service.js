@@ -33,7 +33,10 @@ let GameService = GameService_1 = class GameService {
             skill: character.skill,
             luck: character.luck,
             stamina: character.stamina,
-            name: character.name
+            name: character.name,
+            level: character.level,
+            xp: character.xp,
+            xpToNextLevel: character.xp_to_next_level,
         };
     }
     async getCurrentGameState(userId) {
@@ -70,7 +73,9 @@ let GameService = GameService_1 = class GameService {
                 character: this.mapCharacterToDto(character),
                 combat: enemyData,
                 inventory: inventory,
-                messages: []
+                messages: [],
+                equippedWeaponId: character.equipped_weapon_id,
+                equippedArmorId: character.equipped_armor_id
             };
         }
         else {
@@ -112,6 +117,8 @@ let GameService = GameService_1 = class GameService {
                 combat: null,
                 inventory: inventory,
                 messages: [],
+                equippedWeaponId: character.equipped_weapon_id,
+                equippedArmorId: character.equipped_armor_id
             };
         }
     }
@@ -336,6 +343,19 @@ let GameService = GameService_1 = class GameService {
                 combatLogMessages.push(`Legyőzted: ${enemyBaseData.name}! ${enemyBaseData.defeat_text ?? ''}`);
                 await this.knex('active_combats').where({ id: activeCombat.id }).del();
                 const victoryNodeId = 8;
+                if (enemyBaseData.xp_reward > 0) {
+                    this.logger.log(`Adding ${enemyBaseData.xp_reward} XP for defeating enemy ${enemyBaseData.id}`);
+                    try {
+                        const xpResult = await this.characterService.addXp(character.id, enemyBaseData.xp_reward);
+                        combatLogMessages.push(`Kaptál ${enemyBaseData.xp_reward} tapasztalati pontot.`);
+                        if (xpResult.leveledUp && xpResult.messages.length > 0) {
+                            combatLogMessages.push(...xpResult.messages);
+                        }
+                    }
+                    catch (xpError) {
+                        this.logger.error(`Failed to add XP for character ${character.id}: ${xpError}`);
+                    }
+                }
                 this.logger.log(`Moving character ${character.id} to victory node ${victoryNodeId}`);
                 if (enemyBaseData.item_drop_id !== null && enemyBaseData.item_drop_id !== undefined) {
                     combatLogMessages.push(`Az ellenfél eldobott valamit! (Tárgy ID: ${enemyBaseData.item_drop_id})`);

@@ -19,6 +19,9 @@ export interface Choice {
     luck: number | null
     stamina: number | null
     name?: string | null
+    level: number
+    xp: number
+    xpToNextLevel: number
 }
   
   export interface EnemyData {
@@ -47,4 +50,6 @@ export interface Choice {
     combat: EnemyData | null  // Használja a fenti EnemyData-t
     messages?: string[]
     inventory?: InventoryItem[] | null
+    equippedArmorId?: number | null
+    equippedWeaponId?: number | null
   }

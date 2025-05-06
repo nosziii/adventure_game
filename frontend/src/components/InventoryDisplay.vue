@@ -3,14 +3,33 @@
     <h3>Leltár</h3>
     <ul v-if="inventory && inventory.length > 0">
       <li v-for="item in inventory" :key="item.itemId" :title="item.description ?? ''">
-        {{ item.name }} ({{ item.quantity }})
-        <button
-          v-if="item.usable"
-          @click="useItem(item.itemId)"
-          class="use-button"
-          :disabled="!canUseItem(item.itemId) || gameStore.isLoading" :title="canUseItem(item.itemId) ? 'Használat' : 'Most nem használható'" >
-          Használat
-        </button>
+        <span>
+          {{ item.name }} ({{ item.quantity }})
+          <strong v-if="isEquipped(item.itemId)" class="equipped-marker"> [Felszerelve]</strong>
+        </span>
+
+        <span class="item-actions">
+           <button
+            v-if="item.usable"
+            @click="handleUseItem(item.itemId)"
+            class="use-button"
+            :disabled="!canUseItem(item.itemId) || gameStore.isLoading || gameStore.isEquipping"
+            title="Használat (harcon kívül)"
+          >
+            Használat
+          </button>
+
+          <button
+            v-if="isEquippable(item.type)"
+            @click="isEquipped(item.itemId) ? handleUnequip(item.type) : handleEquip(item.itemId)"
+            class="equip-button"
+            :disabled="gameStore.isLoading || gameStore.isEquipping"
+            :class="{ 'equipped': isEquipped(item.itemId) }"
+          >
+            {{ isEquipped(item.itemId) ? 'Levétel' : 'Felszerelés' }}
+          </button>
+        </span>
+
       </li>
     </ul>
     <p v-else>A leltárad üres.</p>
@@ -27,35 +46,45 @@ interface Props {
 }
 const props = defineProps<Props>()
 
-const gameStore = useGameStore();
+const gameStore = useGameStore()
 
-// Tárgy használatát kezelő metódus
-const useItem = async (itemId: number) => {
-  if (!canUseItem(itemId)) return
-  console.log(`[InventoryDisplay] Use item button clicked for item ID: ${itemId} (Out of combat)`)
-  await gameStore.useItemOutOfCombat(itemId)
+// --- Metódusok a gombokhoz ---
+const handleUseItem = async (itemId: number) => {
+  if (!canUseItem(itemId)) return;
+  await gameStore.useItemOutOfCombat(itemId);
 };
 
-// Eldönti, hogy egy tárgy használható-e MOST
-const canUseItem = (itemId: number): boolean => {
-  const item = props.inventory?.find(i => i.itemId === itemId);
-  if (!item?.usable) return false; // Csak usable tárgyak
+const handleEquip = async (itemId: number) => {
+    await gameStore.equipItem(itemId);
+};
 
-  // Harcon KÍVÜL használjuk?
-  if (!gameStore.isInCombat) {
-    // Gyógyitalt csak akkor, ha nem max HP-n vagyunk?
-    const stats = gameStore.getCharacterStats;
-    if (item.effect?.startsWith('heal+') && stats && stats.health >= 100) { // Feltételezzük a 100 max HP-t
-      return false;
+const handleUnequip = async (itemType: string) => {
+    // Biztosítjuk, hogy csak 'weapon' vagy 'armor' lehessen
+    if (itemType === 'weapon' || itemType === 'armor') {
+        await gameStore.unequipItem(itemType);
+    } else {
+        console.error('Invalid item type for unequip:', itemType);
     }
-    // Más feltétel harcon kívüli használatra?
-    return true; // Ha usable és nem gyógyít max HP-n
-  } else {
-     // Harcban van? Akkor itt most NEM használható ezzel a gombbal
-     // (A harci logikát külön kezelhetjük, vagy ezt a komponenst okosíthatjuk)
-     // Legyen egyelőre false harcban:
-     return false;
-  }
+}
+const isEquippable = (itemType: string): boolean => {
+    return itemType === 'weapon' || itemType === 'armor'; // Bővíthető
+};
+
+const isEquipped = (itemId: number): boolean => {
+    return gameStore.getEquippedWeaponId === itemId || gameStore.getEquippedArmorId === itemId;
+}
+
+
+// Tárgy használatát kezelő metódus
+const canUseItem = (itemId: number): boolean => {
+    const item = props.inventory?.find(i => i.itemId === itemId);
+    if (!item?.usable) return false;
+    // Csak harcon kívül engedjük használni ezzel a gombbal
+    if (gameStore.isInCombat) return false;
+    const stats = gameStore.getCharacterStats;
+    // Gyógyital max HP ellenőrzése
+    if (item.effect?.startsWith('heal+') && stats && stats.health >= 100) return false;
+    return true;
 }
 
 </script>
@@ -95,4 +124,35 @@ li {
      cursor: not-allowed;
      opacity: 0.5;
  }
+
+ li { /* Flexbox a jobb elrendezéshez */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+}
+.item-actions button { /* Gombok egymás mellett */
+  margin-left: 8px;
+}
+.equip-button {
+  padding: 2px 6px;
+  font-size: 0.8em;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  background-color: #eee;
+}
+.equip-button.equipped { /* Stílus a felszerelt tárgy levétel gombjához */
+    background-color: #adb5bd;
+    color: white;
+}
+.equip-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.equipped-marker {
+    color: green;
+    font-weight: bold;
+    margin-left: 5px;
+    font-size: 0.8em;
+}
 </style>

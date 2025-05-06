@@ -5,6 +5,8 @@
       <span v-if="stats.skill !== null"> | Skill: {{ stats.skill }}</span>
       <span v-if="stats.luck !== null"> | Luck: {{ stats.luck }}</span>
       <span v-if="stats.stamina !== null"> | Stamina: {{ stats.stamina }}</span>
+      <span v-if="stats.level !== null"> | Szint: {{ stats.level }}</span>
+      <span v-if="stats.xp !== null && stats.xpToNextLevel !== null"> | XP: {{ stats.xp }} / {{ stats.xpToNextLevel }}</span>
     </div>
     <button v-if="authStore.isAuthenticated" @click="handleLogout" class="logout-button">
       Kijelentkezés
@@ -17,6 +19,7 @@
 import type { CharacterStats } from '../types/game.types'
   import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
+import { defineProps } from 'vue'
   
   // Definiáljuk a prop-ot, amit a komponens kapni fog
   interface Props {

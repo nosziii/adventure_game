@@ -19,6 +19,7 @@ const users_controller_1 = require("./users/users.controller");
 const game_module_1 = require("./game/game.module");
 const character_module_1 = require("./character.module");
 const character_service_1 = require("./character.service");
+const character_controller_1 = require("./character.controller");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -33,7 +34,7 @@ exports.AppModule = AppModule = __decorate([
             game_module_1.GameModule,
             character_module_1.CharacterModule,
         ],
-        controllers: [app_controller_1.AppController, users_controller_1.UsersController],
+        controllers: [app_controller_1.AppController, users_controller_1.UsersController, character_controller_1.CharacterController],
         providers: [app_service_1.AppService, character_service_1.CharacterService],
     })
 ], AppModule);

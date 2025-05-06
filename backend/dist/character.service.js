@@ -100,44 +100,116 @@ let CharacterService = CharacterService_1 = class CharacterService {
             throw new common_1.InternalServerErrorException('Could not retrieve inventory.');
         }
     }
+    async equipItem(characterId, itemId) {
+        this.logger.log(`Attempting to equip item ${itemId} for character ${characterId}`);
+        const hasItemInInventory = await this.hasItem(characterId, itemId);
+        if (!hasItemInInventory) {
+            throw new common_1.BadRequestException(`Character ${characterId} does not possess item ${itemId}.`);
+        }
+        const item = await this.knex('items').where({ id: itemId }).first();
+        if (!item) {
+            throw new common_1.InternalServerErrorException('Item data not found.');
+        }
+        let equipSlotColumn = null;
+        let updateData = {};
+        if (item.type === 'weapon') {
+            equipSlotColumn = 'equipped_weapon_id';
+            updateData.equipped_weapon_id = itemId;
+        }
+        else if (item.type === 'armor') {
+            equipSlotColumn = 'equipped_armor_id';
+            updateData.equipped_armor_id = itemId;
+        }
+        if (!equipSlotColumn) {
+            throw new common_1.BadRequestException(`Item ${itemId} (${item.name}) is not equippable.`);
+        }
+        try {
+            this.logger.debug(`Equipping item ${itemId} into slot ${equipSlotColumn} for character ${characterId}`);
+            const updatedCharacter = await this.updateCharacter(characterId, updateData);
+            this.logger.log(`Item ${itemId} equipped successfully for character ${characterId}`);
+            return await this.applyPassiveEffects(updatedCharacter);
+        }
+        catch (error) {
+            this.logger.error(`Failed to equip item ${itemId} for character ${characterId}: ${error}`, error.stack);
+            if (error instanceof common_1.NotFoundException || error instanceof common_1.InternalServerErrorException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to equip item due to an unexpected error.');
+        }
+    }
+    async unequipItem(characterId, itemType) {
+        this.logger.log(`Attempting to unequip item type ${itemType} for character ${characterId}`);
+        let equipSlotColumn = null;
+        let updateData = {};
+        if (itemType === 'weapon') {
+            equipSlotColumn = 'equipped_weapon_id';
+            updateData.equipped_weapon_id = null;
+        }
+        else if (itemType === 'armor') {
+            equipSlotColumn = 'equipped_armor_id';
+            updateData.equipped_armor_id = null;
+        }
+        if (!equipSlotColumn) {
+            throw new common_1.BadRequestException(`Invalid item type "${itemType}" for unequipping.`);
+        }
+        try {
+            this.logger.debug(`Unequipping slot ${equipSlotColumn} for character ${characterId}`);
+            const updatedCharacter = await this.updateCharacter(characterId, updateData);
+            this.logger.log(`Item type ${itemType} unequipped successfully for character ${characterId}`);
+            return await this.applyPassiveEffects(updatedCharacter);
+        }
+        catch (error) {
+            this.logger.error(`Failed to unequip item type ${itemType} for character ${characterId}: ${error}`, error.stack);
+            if (error instanceof common_1.NotFoundException || error instanceof common_1.InternalServerErrorException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to unequip item due to an unexpected error.');
+        }
+    }
     async applyPassiveEffects(character) {
         const characterWithEffects = { ...character };
-        const inventory = await this.getInventory(character.id);
-        this.logger.debug(`Applying passive effects for character ${character.id}. Inventory size: ${inventory.length}`);
-        for (const item of inventory) {
+        this.logger.debug(`Applying passive effects for character ${character.id}. WeaponID: ${character.equipped_weapon_id}, ArmorID: ${character.equipped_armor_id}`);
+        const equippedItemIds = [character.equipped_weapon_id, character.equipped_armor_id]
+            .filter((id) => id !== null && id !== undefined);
+        if (equippedItemIds.length === 0) {
+            this.logger.debug('No items equipped, no passive effects to apply.');
+            return characterWithEffects;
+        }
+        const equippedItems = await this.knex('items').whereIn('id', equippedItemIds);
+        for (const item of equippedItems) {
             const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
             if (isPassiveType && typeof item.effect === 'string' && item.effect.length > 0) {
-                this.logger.debug(`Parsing passive effect "${item.effect}" from item ${item.itemId} (${item.name})`);
-                const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
-                const match = item.effect.match(effectRegex);
-                if (match) {
-                    const [, statName, operator, valueStr] = match;
-                    const value = parseInt(valueStr, 10);
-                    const modifier = operator === '+' ? value : -value;
-                    this.logger.debug(`Parsed effect: stat=${statName}, modifier=${modifier}`);
-                    switch (statName.toLowerCase()) {
-                        case 'skill':
-                            characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
-                            this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
-                            break;
-                        case 'health':
-                            this.logger.warn(`Passive health effect found, but max health handling not implemented.`);
-                            break;
-                        case 'luck':
-                            characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
-                            this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
-                            break;
-                        case 'stamina':
-                            characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
-                            this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
-                            break;
-                        default:
-                            this.logger.warn(`Unknown stat in passive effect: ${statName}`);
-                            break;
+                this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item ${item.id} (${item.name})`);
+                const effects = item.effect.split(';');
+                for (const effectPart of effects) {
+                    const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                    const match = effectPart.trim().match(effectRegex);
+                    if (match) {
+                        const [, statName, operator, valueStr] = match;
+                        const value = parseInt(valueStr, 10);
+                        const modifier = operator === '+' ? value : -value;
+                        this.logger.debug(`Parsed effect part: stat=${statName}, modifier=${modifier}`);
+                        switch (statName.toLowerCase()) {
+                            case 'skill':
+                                characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
+                                this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
+                                break;
+                            case 'luck':
+                                characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
+                                this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
+                                break;
+                            case 'stamina':
+                                characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
+                                this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
+                                break;
+                            default:
+                                this.logger.warn(`Unknown stat in passive effect: ${statName}`);
+                                break;
+                        }
                     }
-                }
-                else {
-                    this.logger.warn(`Could not parse passive effect string: "${item.effect}"`);
+                    else {
+                        this.logger.warn(`Could not parse passive effect part: "${effectPart}"`);
+                    }
                 }
             }
         }
@@ -217,6 +289,62 @@ let CharacterService = CharacterService_1 = class CharacterService {
             }
         });
         return success;
+    }
+    async addXp(characterId, xpToAdd) {
+        if (xpToAdd <= 0) {
+            return { leveledUp: false, messages: [] };
+        }
+        this.logger.log(`Attempting to add ${xpToAdd} XP to character ${characterId}`);
+        const character = await this.findById(characterId);
+        if (!character) {
+            this.logger.error(`Cannot add XP, character ${characterId} not found.`);
+            throw new common_1.NotFoundException('Character not found to add XP.');
+        }
+        let currentXp = character.xp + xpToAdd;
+        let currentLevel = character.level;
+        let currentXpToNext = character.xp_to_next_level;
+        let currentSkill = character.skill ?? 0;
+        let currentLuck = character.luck ?? 0;
+        let currentStamina = character.stamina ?? 100;
+        let currentHealth = character.health;
+        let leveledUp = false;
+        const levelUpMessages = [];
+        while (currentXp >= currentXpToNext) {
+            leveledUp = true;
+            currentLevel++;
+            const xpOver = currentXp - currentXpToNext;
+            currentXp = xpOver;
+            const newXpToNext = Math.floor(100 * Math.pow(1.5, currentLevel - 1));
+            currentXpToNext = newXpToNext;
+            const skillIncrease = 1;
+            const luckIncrease = 2;
+            const staminaIncrease = 10;
+            currentSkill += skillIncrease;
+            currentLuck += luckIncrease;
+            currentStamina += staminaIncrease;
+            currentHealth = currentStamina;
+            const levelUpMsg = `SZINTLÉPÉS! Elérted a ${currentLevel}. szintet! Skill+${skillIncrease}, Luck+${luckIncrease}, Stamina+${staminaIncrease}. Életerő visszatöltve!`;
+            this.logger.log(`Character ${characterId} leveled up to ${currentLevel}.`);
+            levelUpMessages.push(levelUpMsg);
+        }
+        try {
+            const updates = {
+                level: currentLevel,
+                xp: currentXp,
+                xp_to_next_level: currentXpToNext,
+                skill: currentSkill,
+                luck: currentLuck,
+                stamina: currentStamina,
+                health: currentHealth
+            };
+            await this.updateCharacter(characterId, updates);
+            this.logger.log(`Character ${characterId} XP/Level/Stats updated.`);
+            return { leveledUp, messages: levelUpMessages };
+        }
+        catch (error) {
+            this.logger.error(`Failed to update character ${characterId} after XP gain/level up: ${error}`, error.stack);
+            throw new common_1.InternalServerErrorException('Failed to save character progression.');
+        }
     }
 };
 exports.CharacterService = CharacterService;

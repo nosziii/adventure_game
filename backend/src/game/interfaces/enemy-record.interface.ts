@@ -6,6 +6,7 @@ export interface EnemyRecord {
     attack_description: string | null
     defeat_text: string | null
     item_drop_id: number | null
+    xp_reward: number
     created_at: Date
     updated_at: Date
   }

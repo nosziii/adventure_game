@@ -4,4 +4,7 @@ export declare class CharacterStatsDto {
     luck: number | null;
     stamina: number | null;
     name?: string | null;
+    level: number;
+    xp: number;
+    xpToNextLevel: number;
 }

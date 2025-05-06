@@ -18,4 +18,6 @@ export class GameStateDto {
   combat: EnemyDataDto | null
   messages?: string[]
   inventory: InventoryItemDto[] | null
+  equippedWeaponId?: number | null
+  equippedArmorId?: number | null
 }

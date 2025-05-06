@@ -11,6 +11,9 @@ interface GameState {
     combatState: EnemyData | null 
     combatLogMessages: string[]
     inventory: InventoryItem[]
+    equippedWeaponId: number | null
+    equippedArmorId: number | null
+    equipLoading: boolean // Külön töltés jelző a fel/le szereléshez (opcionális)
   }
   
   export const useGameStore = defineStore('game', {
@@ -22,7 +25,10 @@ interface GameState {
       error: null,
       combatState: null,
       combatLogMessages: [],
-      inventory: []
+      inventory: [],
+      equippedWeaponId: null,
+      equippedArmorId: null,
+      equipLoading: false,
     }),
   
     getters: {
@@ -36,6 +42,12 @@ interface GameState {
       isInCombat: (state): boolean => !!state.combatState, // Getter a harc állapot ellenőrzésére
       getCombatState: (state): EnemyData | null => state.combatState, // Getter a harc adatokhoz
       getInventory: (state): InventoryItem[] => state.inventory, // Getter az inventoryhoz
+      getLevel: (state): number => state.characterStats?.level ?? 1, // Új getter
+      getXp: (state): number => state.characterStats?.xp ?? 0, // Új getter
+      getXpToNextLevel: (state): number => state.characterStats?.xpToNextLevel ?? 100, // Új getter
+      getEquippedWeaponId: (state): number | null => state.equippedWeaponId,
+      getEquippedArmorId: (state): number | null => state.equippedArmorId,
+      isEquipping: (state): boolean => state.equipLoading, // Getter az equip töltéshez
     },
   
     actions: {
@@ -43,9 +55,20 @@ interface GameState {
 _updateStateFromResponse(data: GameStateResponse) {
         this.currentNode = data.node
         this.currentChoices = data.choices
-        this.characterStats = data.character
+        this.characterStats = data.character ? {
+            health: data.character.health,
+            skill: data.character.skill,
+            luck: data.character.luck,
+            stamina: data.character.stamina,
+            name: data.character.name,
+            level: data.character.level,               
+            xp: data.character.xp,                    
+            xpToNextLevel: data.character.xpToNextLevel,
+        } : null
         this.combatState = data.combat
         this.inventory = data.inventory ?? []
+        this.equippedWeaponId = data.equippedWeaponId ?? null
+        this.equippedArmorId = data.equippedArmorId ?? null
         // Ha vannak üzenetek a válaszban, felülírjuk a logot, különben töröljük  **skipped**
         // this.combatLogMessages = data.messages ?? [] // todo nem tudom melyiket használjam még
         // Hozzáadjuk az új üzeneteket a meglévőkhöz?
@@ -210,6 +233,56 @@ _updateStateFromResponse(data: GameStateResponse) {
         } finally {
             this.loading = false;
         }
+      },
+       
+      async equipItem(itemId: number) {
+        this.equipLoading = true;
+        this.error = null;
+        console.log(`Attempting to equip item ID: ${itemId}`);
+        try {
+            // Hívjuk az ÚJ backend végpontot
+            const response = await apiClient.post<CharacterStats>( // A válasz csak a CharacterStatsDto
+                '/character/equip', // Figyelj az útvonalra! /api/character/equip lesz a teljes
+                { itemId: itemId }
+             );
+            // Közvetlenül frissítjük a karakter statokat a válasszal
+            this.characterStats = response.data;
+            // Az inventory nem változott, de a felszerelt ID igen, kérjük le újra a teljes state-et
+            // VAGY a backend válasza tartalmazhatná az új equipped ID-kat is?
+            // Maradjunk a fetchGameState-nél a konzisztencia miatt.
+            await this.fetchGameState(); // Biztosítjuk, hogy az equipped ID-k is frissüljenek
+            console.log('Equip successful, state refreshed.');
+
+        } catch (err: any) {
+            console.error('Failed to equip item:', err);
+            this.error = err.response?.data?.message || 'A tárgy felszerelése sikertelen volt.';
+        } finally {
+            this.equipLoading = false;
+        }
     },
+
+    async unequipItem(itemType: 'weapon' | 'armor') {
+        this.equipLoading = true;
+        this.error = null;
+        console.log(`Attempting to unequip item type: ${itemType}`);
+         try {
+            // Hívjuk az ÚJ backend végpontot
+            const response = await apiClient.post<CharacterStats>(
+                '/character/unequip',
+                { itemType: itemType }
+             );
+            // Frissítjük a statokat és lekérjük a teljes állapotot
+             this.characterStats = response.data;
+             await this.fetchGameState();
+             console.log('Unequip successful, state refreshed.');
+
+        } catch (err: any) {
+            console.error('Failed to unequip item:', err);
+            this.error = err.response?.data?.message || 'A tárgy levétele sikertelen volt.';
+        } finally {
+            this.equipLoading = false;
+        }
+    },
+       
 } // actions vége
   })

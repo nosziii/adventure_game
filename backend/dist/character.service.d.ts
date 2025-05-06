@@ -8,9 +8,14 @@ export interface Character {
     skill: number;
     luck: number | null;
     stamina: number | null;
+    level: number;
+    xp: number;
+    xp_to_next_level: number;
     current_node_id: number | null;
     created_at: Date;
     updated_at: Date;
+    equipped_weapon_id: number | null;
+    equipped_armor_id: number | null;
 }
 export declare class CharacterService {
     private readonly knex;
@@ -22,8 +27,14 @@ export declare class CharacterService {
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
     findOrCreateByUserId(userId: number): Promise<Character>;
     getInventory(characterId: number): Promise<InventoryItemDto[]>;
+    equipItem(characterId: number, itemId: number): Promise<Character>;
+    unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<Character>;
     private applyPassiveEffects;
     hasItem(characterId: number, itemId: number): Promise<boolean>;
     addItemToInventory(characterId: number, itemId: number, quantityToAdd?: number): Promise<void>;
     removeItemFromInventory(characterId: number, itemId: number, quantityToRemove?: number): Promise<boolean>;
+    addXp(characterId: number, xpToAdd: number): Promise<{
+        leveledUp: boolean;
+        messages: string[];
+    }>;
 }

@@ -52,6 +52,7 @@ exports.seed = async function (knex) {
       attack_description: 'óriási bunkósbotjával lesújt',
       defeat_text: 'Az ogre nagyot nyögve a földre rogy.',
       item_drop_id: 2, // Eldobja a 2-es ID-jű tárgyat (Gyógyító Ital)
+      xp_reward: 50 
     },
   ]);
   console.log('Enemies inserted.');

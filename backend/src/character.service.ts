@@ -1,5 +1,5 @@
 // src/character.service.ts
-import { Injectable, Inject, NotFoundException, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, Logger, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from './database/database.module' // Ellenőrizd az útvonalat!
 import { InventoryItem } from './types/character.interfaces'
@@ -13,9 +13,14 @@ export interface Character {
     skill: number
     luck: number | null
     stamina: number | null
+    level: number
+    xp: number
+    xp_to_next_level: number
     current_node_id: number | null
     created_at: Date
     updated_at: Date
+    equipped_weapon_id: number | null
+    equipped_armor_id: number | null
 }
 
 
@@ -126,6 +131,93 @@ export class CharacterService {
          throw new InternalServerErrorException('Could not retrieve inventory.');
     }
   }
+
+
+
+ // --- Tárgy felszerelése - JAVÍTOTT ---
+    async equipItem(characterId: number, itemId: number): Promise<Character> { // Visszatérési típus: Promise<Character>
+        this.logger.log(`Attempting to equip item ${itemId} for character ${characterId}`);
+
+        const hasItemInInventory = await this.hasItem(characterId, itemId);
+        if (!hasItemInInventory) {
+            throw new BadRequestException(`Character ${characterId} does not possess item ${itemId}.`);
+        }
+
+        const item = await this.knex('items').where({ id: itemId }).first();
+        if (!item) { throw new InternalServerErrorException('Item data not found.'); }
+
+        let equipSlotColumn: 'equipped_weapon_id' | 'equipped_armor_id' | null = null;
+        let updateData: Partial<Character> = {}; // Objektum a frissítendő adatoknak
+
+        if (item.type === 'weapon') {
+            equipSlotColumn = 'equipped_weapon_id';
+            updateData.equipped_weapon_id = itemId;
+        } else if (item.type === 'armor') {
+            equipSlotColumn = 'equipped_armor_id';
+            updateData.equipped_armor_id = itemId;
+        }
+
+        if (!equipSlotColumn) {
+            throw new BadRequestException(`Item ${itemId} (${item.name}) is not equippable.`);
+        }
+
+        try {
+            this.logger.debug(`Equipping item ${itemId} into slot ${equipSlotColumn} for character ${characterId}`);
+            // Használjuk az updateCharacter metódust a frissítéshez
+            const updatedCharacter = await this.updateCharacter(characterId, updateData);
+            this.logger.log(`Item ${itemId} equipped successfully for character ${characterId}`);
+            // Alkalmazzuk az effekteket és adjuk vissza a végső karakter állapotot
+            return await this.applyPassiveEffects(updatedCharacter); // <-- RETURN itt van!
+        } catch (error) {
+            this.logger.error(`Failed to equip item ${itemId} for character ${characterId}: ${error}`, error.stack);
+            // A hiba továbbdobása vagy specifikusabb hibakezelés
+             if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
+                 throw error; // Dobjuk tovább a már ismert hibákat
+             }
+            throw new InternalServerErrorException('Failed to equip item due to an unexpected error.');
+        }
+    }
+
+    // --- Tárgy levétele - JAVÍTOTT ---
+    async unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<Character> { // Visszatérési típus: Promise<Character>
+         this.logger.log(`Attempting to unequip item type ${itemType} for character ${characterId}`);
+         let equipSlotColumn: 'equipped_weapon_id' | 'equipped_armor_id' | null = null;
+         let updateData: Partial<Character> = {};
+
+         if (itemType === 'weapon') {
+            equipSlotColumn = 'equipped_weapon_id';
+            updateData.equipped_weapon_id = null; // NULL-ra állítjuk
+         } else if (itemType === 'armor') {
+            equipSlotColumn = 'equipped_armor_id';
+            updateData.equipped_armor_id = null; // NULL-ra állítjuk
+         }
+
+         if (!equipSlotColumn) {
+            throw new BadRequestException(`Invalid item type "${itemType}" for unequipping.`);
+         }
+
+         try {
+             this.logger.debug(`Unequipping slot ${equipSlotColumn} for character ${characterId}`);
+             // Használjuk az updateCharacter metódust a frissítéshez (NULL-ra állításhoz)
+             const updatedCharacter = await this.updateCharacter(characterId, updateData);
+             this.logger.log(`Item type ${itemType} unequipped successfully for character ${characterId}`);
+             // Alkalmazzuk az effekteket (most már a levett tárgy nélkül) és adjuk vissza
+             return await this.applyPassiveEffects(updatedCharacter); // <-- RETURN itt van!
+         } catch (error) {
+              this.logger.error(`Failed to unequip item type ${itemType} for character ${characterId}: ${error}`, error.stack);
+              if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
+                  throw error;
+              }
+              throw new InternalServerErrorException('Failed to unequip item due to an unexpected error.');
+         }
+    }
+
+
+
+
+
+
+
   /**
    * Lekérdezi egy karakter leltárának egy elemét, az item_id alapján.
    * Ez a metódus nem csatlakozik az items táblához, csak a character_inventory táblát használja.
@@ -133,64 +225,62 @@ export class CharacterService {
    */
   // TODO: Később ezt is bővíteni kellene
 
-  private async applyPassiveEffects(character: Character): Promise<Character> {
-        const characterWithEffects = { ...character }; // Másolat készítése
-        const inventory = await this.getInventory(character.id);
+  // --- applyPassiveEffects : Már csak a felszerelt tárgyakat nézi ---
+    private async applyPassiveEffects(character: Character): Promise<Character> {
+        const characterWithEffects = { ...character };
+        this.logger.debug(`Applying passive effects for character ${character.id}. WeaponID: ${character.equipped_weapon_id}, ArmorID: ${character.equipped_armor_id}`);
 
-        this.logger.debug(`Applying passive effects for character ${character.id}. Inventory size: ${inventory.length}`);
+        const equippedItemIds = [character.equipped_weapon_id, character.equipped_armor_id]
+                                 .filter((id): id is number => id !== null && id !== undefined); // Összegyűjtjük a nem null ID-kat
 
-        for (const item of inventory) {
-            // Ellenőrizzük, hogy passzív-e a hatás (pl. fegyver, páncél)
-            // Később lehetne explicit 'passive' flag az items táblában/effekt stringben
-            const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? ''); // Típusok listája bővíthető
+        if (equippedItemIds.length === 0) {
+            this.logger.debug('No items equipped, no passive effects to apply.');
+            return characterWithEffects; // Visszaadjuk az eredetit, ha nincs mit alkalmazni
+        }
+
+        // Lekérdezzük az összes felszerelt tárgy adatát egyszerre
+        const equippedItems = await this.knex('items').whereIn('id', equippedItemIds);
+
+        for (const item of equippedItems) {
+             // Csak a passzívnak ítélt típusokat vesszük figyelembe (vagy azokat, amiknek van effektje)
+             const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
 
             if (isPassiveType && typeof item.effect === 'string' && item.effect.length > 0) {
-                this.logger.debug(`Parsing passive effect "${item.effect}" from item ${item.itemId} (${item.name})`);
+                this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item ${item.id} (${item.name})`);
+                // Effektek értelmezése (ugyanaz a logika, mint korábban)
+                const effects = item.effect.split(';'); // Ha több effekt van pontosvesszővel elválasztva
+                for (const effectPart of effects) {
+                    const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                    const match = effectPart.trim().match(effectRegex);
 
-                // Próbáljuk értelmezni a "stat[+-]érték" formátumot (pl. "skill+2", "health-5")
-                const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
-                const match = item.effect.match(effectRegex);
+                    if (match) {
+                        const [, statName, operator, valueStr] = match;
+                        const value = parseInt(valueStr, 10);
+                        const modifier = operator === '+' ? value : -value;
+                        this.logger.debug(`Parsed effect part: stat=${statName}, modifier=${modifier}`);
 
-                if (match) {
-                    const [, statName, operator, valueStr] = match;
-                    const value = parseInt(valueStr, 10);
-                    const modifier = operator === '+' ? value : -value; // Érték előjellel
+                        switch (statName.toLowerCase()) {
+                            case 'skill':
+                                characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
+                                this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
+                                break;
+                            case 'luck':
+                                 characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
+                                 this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
+                                break;
+                            case 'stamina':
+                                 characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
+                                 this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
+                                 break;
+                            // TODO: Ide jöhetnek más statok (pl. max_health, defense)
+                            default: this.logger.warn(`Unknown stat in passive effect: ${statName}`); break;
+                        }
+                    } else { this.logger.warn(`Could not parse passive effect part: "${effectPart}"`); }
+                } // for effectPart vége
+            } // if (isPassiveType...) vége
+        } // for item vége
 
-                    this.logger.debug(`Parsed effect: stat=${statName}, modifier=${modifier}`);
-
-                    // Alkalmazzuk a módosítást a megfelelő statisztikára
-                    // Fontos a null/undefined értékek kezelése
-                    switch (statName.toLowerCase()) {
-                        case 'skill':
-                            characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
-                            this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
-                            break;
-                        case 'health': // Max Health módosítására gondolunk itt? Vagy base health? Legyen max.
-                            // TODO: Meg kell különböztetni a max HP-t és az aktuálisat.
-                            // Jelenleg nincs max HP tárolva, így ezt nem tudjuk jól kezelni.
-                            // Hagyjuk ki egyelőre a passzív HP módosítást.
-                            this.logger.warn(`Passive health effect found, but max health handling not implemented.`);
-                            break;
-                        case 'luck':
-                             characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
-                             this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
-                            break;
-                        case 'stamina': // Feltételezzük, hogy ez a max stamina
-                             characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
-                             this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
-                             break;
-                        // TODO: Ide jöhetnek további statisztikák (pl. strength, defense stb.)
-                        default:
-                            this.logger.warn(`Unknown stat in passive effect: ${statName}`);
-                            break;
-                    }
-                } else {
-                    this.logger.warn(`Could not parse passive effect string: "${item.effect}"`);
-                }
-            } // if (isPassiveType && item.effect) vége
-        } // for ciklus vége
-
-        return characterWithEffects; // Visszaadjuk a módosított karaktert
+        return characterWithEffects;
     } // applyPassiveEffects vége
 
   /**
@@ -287,7 +377,80 @@ async addItemToInventory(characterId: number, itemId: number, quantityToAdd: num
                 success = false // Sikertelen volt
             }
         }); // Tranzakció vége
+    
+    
 
         return success
-   }
+  }
+  // XP Hozzáadása és Szintlépés Kezelése ---
+    async addXp(characterId: number, xpToAdd: number): Promise<{ leveledUp: boolean; messages: string[] }> {
+        if (xpToAdd <= 0) {
+            return { leveledUp: false, messages: [] }; // Ne csinálj semmit, ha nincs XP
+        }
+        this.logger.log(`Attempting to add ${xpToAdd} XP to character ${characterId}`);
+
+        const character = await this.findById(characterId); // Lekérdezzük a karaktert (effektek nélkül?) Elég lehet a DB adat. Legyen findById.
+        if (!character) {
+             this.logger.error(`Cannot add XP, character ${characterId} not found.`);
+             throw new NotFoundException('Character not found to add XP.');
+        }
+
+        let currentXp = character.xp + xpToAdd;
+        let currentLevel = character.level;
+        let currentXpToNext = character.xp_to_next_level;
+        let currentSkill = character.skill ?? 0; // Null kezelés
+        let currentLuck = character.luck ?? 0;
+        let currentStamina = character.stamina ?? 100; // Alap max HP?
+        let currentHealth = character.health; // Jelenlegi HP
+
+        let leveledUp = false;
+        const levelUpMessages: string[] = [];
+
+        // Szintlépés ciklus (ha több szintet is lépne egyszerre)
+        while (currentXp >= currentXpToNext) {
+            leveledUp = true;
+            currentLevel++; // Szint növelése
+            const xpOver = currentXp - currentXpToNext; // XP a szintlépés felett
+            currentXp = xpOver; // Az új XP a maradék lesz
+
+            // Új xp_to_next_level számítása (példa: 100 * 1.5^(szint-1))
+            const newXpToNext = Math.floor(100 * Math.pow(1.5, currentLevel - 1));
+            currentXpToNext = newXpToNext;
+
+            // Stat növelések (példa)
+            const skillIncrease = 1;
+            const luckIncrease = 2;
+            const staminaIncrease = 10; // Max HP növelés
+
+            currentSkill += skillIncrease;
+            currentLuck += luckIncrease;
+            currentStamina += staminaIncrease;
+            // Szintlépéskor gyógyuljon max HP-ra?
+            currentHealth = currentStamina;
+
+            const levelUpMsg = `SZINTLÉPÉS! Elérted a ${currentLevel}. szintet! Skill+${skillIncrease}, Luck+${luckIncrease}, Stamina+${staminaIncrease}. Életerő visszatöltve!`;
+            this.logger.log(`Character ${characterId} leveled up to ${currentLevel}.`);
+            levelUpMessages.push(levelUpMsg);
+        } // while vége
+
+        // Adatbázis frissítése az új értékekkel
+        try {
+             const updates: Partial<Character> = {
+                 level: currentLevel,
+                 xp: currentXp,
+                 xp_to_next_level: currentXpToNext,
+                 skill: currentSkill,
+                 luck: currentLuck,
+                 stamina: currentStamina, // Frissítjük a max HP-t (stamina)
+                 health: currentHealth // Frissítjük az aktuális HP-t is (gyógyulás)
+             };
+             await this.updateCharacter(characterId, updates); // Használjuk a meglévő update-et
+             this.logger.log(`Character ${characterId} XP/Level/Stats updated.`);
+             return { leveledUp, messages: levelUpMessages };
+        } catch(error) {
+             this.logger.error(`Failed to update character ${characterId} after XP gain/level up: ${error}`, error.stack);
+             throw new InternalServerErrorException('Failed to save character progression.');
+        }
+
+    } // addXp vége
 }
