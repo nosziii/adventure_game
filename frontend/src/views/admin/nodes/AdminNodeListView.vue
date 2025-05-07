@@ -56,8 +56,7 @@ const truncateText = (text: string, length: number): string => {
 };
 
 const goToCreate = () => {
-  // router.push({ name: 'admin-nodes-new' }); // Ha lesz ilyen route
-  alert('Új node létrehozása még nincs implementálva.');
+  router.push({ name: 'admin-nodes-new' })
 };
 
 const goToEdit = (id: number) => {
