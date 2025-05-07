@@ -9,6 +9,8 @@ exports.seed = async function (knex) {
   console.log('Deleting existing data...');
   // Először a kapcsolótábla
   await knex('character_inventory').del();
+  // Aztán a harcok (amik story_node-ra és item-re hivatkoznak)
+  await knex('active_combats').del();
   // Aztán a choice-ok (amik story_node-ra és item-re hivatkoznak)
   await knex('choices').del();
   // Aztán a story_node-ok (amik enemy-re és item-re hivatkoznak)
@@ -39,6 +41,14 @@ exports.seed = async function (knex) {
       effect: 'heal+30', // Kód értelmezi majd
       usable: true, // Használható
     },
+    {
+      id: 3,
+      name: 'Rozsdás Kulcs',
+      description: 'Egy régi, nehéz kulcs. Vajon mit nyit?',
+      type: 'key',
+      effect: null,
+      usable: false
+    },
   ]);
   console.log('Items inserted.');
 
@@ -51,7 +61,8 @@ exports.seed = async function (knex) {
       skill: 12,
       attack_description: 'óriási bunkósbotjával lesújt',
       defeat_text: 'Az ogre nagyot nyögve a földre rogy.',
-      item_drop_id: 2, // Eldobja a 2-es ID-jű tárgyat (Gyógyító Ital)
+      item_drop_id: 3, // Rozsdás Kulcs (ha legyőzöd)
+      // item_drop_id: 2, // Gyógyító Ital (ha legyőzöd)
       xp_reward: 50 
     },
   ]);
@@ -91,11 +102,14 @@ exports.seed = async function (knex) {
       enemy_id: 1, // Az 1-es ID-jű ellenfél (Morcos Ogre) jelenik meg itt
       // Itt nincs választás, a harc kimenetele dönt
     },
-    {
-        id: 8, // Győzelem az ogre felett (Új)
-        text: 'Nagy nehezen legyűröd az ogrét! A kunyhóban kutatva találsz egy gyógyító italt a holmijai között.',
-        item_reward_id: 2, // Megkapod a 2-es ID-jű tárgyat (Gyógyító Ital)
-    },
+    // {
+    //     id: 8, // Győzelem az ogre felett (Új)
+    //     text: 'Nagy nehezen legyűröd az ogrét! A kunyhóban kutatva találsz egy gyógyító italt a holmijai között.',
+    //     item_reward_id: 2, // Megkapod a 2-es ID-jű tárgyat (Gyógyító Ital)
+    // },
+    { id: 8, text: 'Nagy nehezen legyűröd az ogrét! A holmijai között egy rozsdás kulcsot találsz.' }, // Már nem ad italt itt!
+    { id: 10, text: 'A kunyhó hátsó részében egy erős, zárt ajtót találsz, ami egy pincébe vezethet.'}, // <-- ÚJ NODE: Pinceajtó
+    { id: 11, text: 'A kulccsal kinyitod az ajtót és leereszkedsz a sötét, dohos pincébe. Egy ládát látsz a sarokban!'},
     // Node 9 nem kell, mert a Node 3 lett a vereség vége.
   ]);
   console.log('Story nodes inserted/updated.');
@@ -121,7 +135,12 @@ exports.seed = async function (knex) {
     { source_node_id: 6, target_node_id: 2, text: 'Inkább elsunnyogsz az ösvény felé.' }, // -> Manó
 
     // Node 8 választása (Győzelem után)
-    { source_node_id: 8, target_node_id: 2, text: 'Elhagyod a kunyhót.' }, // -> Manó
+    // { source_node_id: 8, target_node_id: 2, text: 'Elhagyod a kunyhót.' }, // -> Manó
+     // Node 8 (Győzelem) választása MOST Node 10-re mutat
+    { source_node_id: 8, target_node_id: 10, text: 'Körülnézel a kunyhóban.' }, // <-- MÓDOSÍTOTT CÉL
+    // Node 10 (Pinceajtó) választásai (ÚJAK)
+    { source_node_id: 10, target_node_id: 11, text: 'Kinyitod az ajtót a kulccsal.', required_item_id: 3 }, // <-- Kell a kulcs (ID=3)
+    { source_node_id: 10, target_node_id: 2, text: 'Inkább elhagyod a kunyhót az ösvény felé.' }, // -> Manó
   ]);
   console.log('Choices inserted.');
 

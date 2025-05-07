@@ -5,7 +5,7 @@ import apiClient from '../services/api'
 interface User {
   id: number;
   email: string;
-  // ...további adatok...
+  role: string; // 'admin' vagy 'user'
 }
 interface LoginCredentials { email: string; password: string; }
 interface RegisterData extends LoginCredentials { /* ...további adatok... */ }
@@ -14,6 +14,7 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('authToken') || null as string | null,
     user: null as User | null,
+    isLoadingUser: false,
     // loading: false,
     // error: null as string | null,
   }),
@@ -22,6 +23,7 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state): boolean => !!state.token,
     getToken: (state): string | null => state.token,
     getUser: (state): User | null => state.user,
+    isAdmin: (state): boolean => state.user?.role === 'admin',
   },
 
   actions: {
@@ -97,9 +99,11 @@ export const useAuthStore = defineStore('auth', {
 
     // --- Felhasználói adatok lekérése ---
     async fetchUser() {
+      this.isLoadingUser = true
       if (!this.token) {
-          console.log('fetchUser skipped: No token found.');
-          return;
+        console.log('fetchUser skipped: No token found.')
+        this.isLoadingUser = false
+        return
       }
       // this.loading = true; // Jelezhetjük, hogy töltünk
       try {
@@ -122,22 +126,25 @@ export const useAuthStore = defineStore('auth', {
         // Az interceptor logout-ja biztonságosabb alapértelmezés.
         // this.user = null; // Vagy logout hívása itt is a biztonság kedvéért
       } finally {
-        // this.loading = false;
+        this.isLoadingUser = false
       }
     },
 
     // --- Auth ellenőrzés az app indulásakor ---
     async checkAuth() {
-        console.log('checkAuth called.');
+        this.isLoadingUser = true
+        console.log('checkAuth called.')
         if (this.token && !this.user) {
             // Ha van token, de nincs user adat (pl. oldalfrissítés után),
             // próbáljuk meg lekérni a felhasználót
             console.log('Token found in storage, attempting to fetch user...');
             await this.fetchUser();
         } else if (this.token && this.user) {
+            this.isLoadingUser = false
             console.log('User is already authenticated.');
         } else {
-            console.log('No active session found.');
+          this.isLoadingUser = false
+          console.log('No active session found.');
         }
     }
   },

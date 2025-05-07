@@ -11,6 +11,8 @@ import { GameModule } from './game/game.module'
 import { CharacterModule } from './character.module'
 import { CharacterService } from './character.service'
 import { CharacterController } from './character.controller';
+import { AdminModule } from './admin/admin.module';
+
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { CharacterController } from './character.controller';
     UsersModule,
     GameModule,
     CharacterModule,
+    AdminModule,
   ],
   controllers: [AppController, UsersController, CharacterController],
   providers: [AppService, CharacterService],

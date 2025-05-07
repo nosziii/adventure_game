@@ -1,9 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import GameView from '../views/GameView.vue'
+
+import AdminDashboardView from '../views/admin/AdminDashboardView.vue' // Placeholder kezdőoldal
+import AdminNodeListView from '../views/admin/nodes/AdminNodeListView.vue' // Node lista nézet
+// import AdminNodeEditView from '../views/admin/nodes/AdminNodeEditView.vue'; // Node szerkesztő nézet
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // HTML5 history mód
@@ -30,26 +35,71 @@ const router = createRouter({
       name: 'game',
       component: GameView,
       meta: { requiresAuth: true }
-    }
+    },
+     // --- ADMIN ÚTVONALAK ---
+    {
+        path: '/admin',
+        // component: AdminLayout, // Opcionális keret komponens
+        meta: { requiresAdmin: true }, // Jelöljük, hogy admin jog kell
+        children: [
+            { path: '', name: 'admin-dashboard', component: AdminDashboardView }, // /admin
+            { path: 'nodes', name: 'admin-nodes-list', component: AdminNodeListView }, // /admin/nodes
+            // { path: 'nodes/new', name: 'admin-nodes-new', component: AdminNodeEditView }, // /admin/nodes/new (később)
+            // { path: 'nodes/:id/edit', name: 'admin-nodes-edit', component: AdminNodeEditView }, // /admin/nodes/:id/edit (később)
+            // TODO: Ide jönnek majd a Choices, Items, Enemies admin útvonalai is
+        ]
+    },
   ]
 })
+
 router.beforeEach(async (to, from, next) => {
-  const authStore = useAuthStore()
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const isAuthenticated = authStore.isAuthenticated
+  const authStore = useAuthStore();
 
-  console.log(`Navigating to: ${to.path}, requiresAuth: ${requiresAuth}, isAuthenticated: ${isAuthenticated}`)
-
-  if (requiresAuth && !isAuthenticated) {
-    console.log('Redirecting to login.')
-    next({ name: 'login' })
-  } else if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
-    console.log('User already authenticated, redirecting from login/register.')
-    next({ name: 'game' });
-  } else {
-    console.log('Allowing navigation.')
-    next()
+  // Ha van token, de a user adatok még nincsenek betöltve ÉS nem fut már a betöltés
+  if (authStore.token && !authStore.user && !authStore.isLoadingUser) {
+      console.log('[Guard] User data not loaded, token exists. Running checkAuth...');
+      try {
+        await authStore.checkAuth(); // Megvárjuk, amíg a user adatok (és a role) betöltődnek
+        console.log('[Guard] checkAuth completed inside guard. User role:', authStore.user);
+      } catch (e) {
+        console.error("[Guard] Error during checkAuth in guard, logging out:", e);
+        authStore.logout();
+        if (to.name !== 'login') {
+            next({ name: 'login', query: { redirect: to.fullPath } });
+            return; // Fontos a return
+        }
+        // Ha már a login oldalon voltunk és hiba történt, ne csináljunk semmit (vagy next())
+        // De a logout miatt valószínűleg a requiresAuth ág fogja elkapni
+      }
   }
-})
+
+  // Most olvassuk ki a (potenciálisan frissített) állapotokat
+  const isAuthenticated = authStore.isAuthenticated;
+  const isAdmin = authStore.isAdmin;
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+
+  console.log(
+    `[Guard Decision] Path: ${to.path} | reqAuth: ${requiresAuth} | reqAdmin: ${requiresAdmin} | isAuth: ${isAuthenticated} | isAdmin: ${isAdmin}`
+  );
+
+  if (requiresAdmin) {
+    if (isAuthenticated && isAdmin) {
+      next();
+    } else {
+      next({ name: 'login', query: { redirect: to.fullPath } });
+    }
+  } else if (requiresAuth) {
+    if (isAuthenticated) {
+      next();
+    } else {
+      next({ name: 'login', query: { redirect: to.fullPath } });
+    }
+  } else if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
+    next(isAdmin ? { name: 'admin-dashboard' } : { name: 'game' });
+  } else {
+    next();
+  }
+});
 
 export default router

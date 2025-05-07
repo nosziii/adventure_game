@@ -73,7 +73,11 @@
         email: email.value,
         password: password.value
       })
-      router.push('/game')
+      if (authStore.isAdmin) {
+        router.push({ name: 'admin-dashboard' }) // Vagy '/admin'
+      } else {
+        router.push({ name: 'game' }) // Vagy '/'
+    }
     } catch (error: any) {
       errorMessage.value =
         error.response?.data?.message || 'A bejelentkezés sikertelen.'

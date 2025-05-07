@@ -20,6 +20,7 @@ const game_module_1 = require("./game/game.module");
 const character_module_1 = require("./character.module");
 const character_service_1 = require("./character.service");
 const character_controller_1 = require("./character.controller");
+const admin_module_1 = require("./admin/admin.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -33,6 +34,7 @@ exports.AppModule = AppModule = __decorate([
             users_module_1.UsersModule,
             game_module_1.GameModule,
             character_module_1.CharacterModule,
+            admin_module_1.AdminModule,
         ],
         controllers: [app_controller_1.AppController, users_controller_1.UsersController, character_controller_1.CharacterController],
         providers: [app_service_1.AppService, character_service_1.CharacterService],
