@@ -14,7 +14,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // HTML5 history mód
   routes: [
     // Ide definiáljuk az útvonalakat
-    // Példák (a komponenseket majd importálni kell):
     {
       path: "/",
       name: "home",
@@ -53,11 +52,11 @@ const router = createRouter({
           name: "admin-nodes-new",
           component: AdminNodeEditView,
         },
-        // {
-        //   path: "nodes/:id/edit",
-        //   name: "admin-nodes-edit",
-        //   component: AdminNodeEditView,
-        // }, // /admin/nodes/:id/edit (később)
+        {
+          path: "nodes/:id/edit",
+          name: "admin-nodes-edit",
+          component: AdminNodeEditView,
+        },
         // TODO: Ide jönnek majd a Choices, Items, Enemies admin útvonalai is
       ],
     },

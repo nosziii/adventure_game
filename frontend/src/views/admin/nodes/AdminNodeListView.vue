@@ -60,8 +60,7 @@ const goToCreate = () => {
 };
 
 const goToEdit = (id: number) => {
-   // router.push({ name: 'admin-nodes-edit', params: { id } }); // Ha lesz ilyen route
-   alert(`Node ${id} szerkesztése még nincs implementálva.`);
+   router.push({ name: 'admin-nodes-edit', params: { id } })
 };
 
 const deleteNode = (id: number) => {

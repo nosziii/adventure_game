@@ -1,61 +1,43 @@
 <template>
   <div class="admin-node-edit">
-    <h1>Új Story Node Létrehozása</h1>
-    <form @submit.prevent="handleSubmit">
+    <h1>{{ isEditing ? `Node Szerkesztése (ID: ${nodeId})` : 'Új Story Node Létrehozása' }}</h1>
+
+    <div v-if="isEditing && store.isLoadingCurrent">Node adatainak töltése...</div>
+    <div v-else-if="store.getError" class="error">{{ store.getError }}</div>
+
+    <form @submit.prevent="handleSubmit" v-else>
       <div class="form-group">
         <label for="text">Szöveg:</label>
         <textarea id="text" v-model="nodeData.text" rows="5" required></textarea>
       </div>
-
-      <div class="form-group">
-        <label for="image">Kép URL (opcionális):</label>
-        <input type="url" id="image" v-model="nodeData.image" />
-      </div>
-
-      <div class="form-group checkbox-group">
-        <input type="checkbox" id="is_end" v-model="nodeData.is_end" />
-        <label for="is_end">Ez egy befejező csomópont?</label>
-      </div>
-
-      <div class="form-group">
-        <label for="health_effect">Életerő Hatás (opcionális, pl. -10 vagy 20):</label>
-        <input type="number" id="health_effect" v-model.number="nodeData.health_effect" />
-      </div>
-
-      <div class="form-group">
-        <label for="item_reward_id">Tárgy Jutalom ID (opcionális):</label>
-        <input type="number" id="item_reward_id" v-model.number="nodeData.item_reward_id" min="1" />
-      </div>
-
-      <div class="form-group">
-        <label for="enemy_id">Ellenfél ID (opcionális):</label>
-        <input type="number" id="enemy_id" v-model.number="nodeData.enemy_id" min="1" />
-      </div>
-
-      <div class="form-actions">
+       <div class="form-actions">
         <button type="submit" :disabled="store.isLoading">
-          {{ store.isLoading ? 'Mentés...' : 'Mentés' }}
+          {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
         </button>
         <router-link :to="{ name: 'admin-nodes-list' }" class="cancel-button">Mégse</router-link>
       </div>
-      <p v-if="store.getError" class="error">{{ store.getError }}</p>
       <p v-if="successMessage" class="success">{{ successMessage }}</p>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue'; // computed és watch hozzáadva
 import { useRouter, useRoute } from 'vue-router';
-import { useAdminNodesStore } from '../../../stores/adminNodes'; // Vagy relatív útvonal
-import type { AdminCreateNodePayload, AdminNodeData } from '../../../types/admin.types'; // Vagy relatív útvonal
+import { useAdminNodesStore } from '../../../stores/adminNodes';
+import type { AdminCreateNodePayload, AdminUpdateNodePayload, AdminNodeData } from '../../../types/admin.types';
 
 const store = useAdminNodesStore();
 const router = useRouter();
-const route = useRoute(); // A route paraméterek eléréséhez (később a szerkesztéshez)
+const route = useRoute();
 
-// Az űrlap adatai (kezdetben CreateNodeDto alapján)
-const nodeData = reactive<AdminCreateNodePayload>({
+// Megmondja, hogy szerkesztési módban vagyunk-e (van :id paraméter az URL-ben)
+const nodeId = ref<number | null>(null);
+const isEditing = computed(() => nodeId.value !== null);
+
+// Az űrlap adatai (kezdetben CreateNodeDto alapján, de Update is lehet)
+// Használjunk ref-et, hogy könnyebb legyen felülírni szerkesztéskor
+const nodeData = ref<AdminCreateNodePayload | AdminUpdateNodePayload>({
   text: '',
   image: null,
   is_end: false,
@@ -66,30 +48,72 @@ const nodeData = reactive<AdminCreateNodePayload>({
 
 const successMessage = ref<string | null>(null);
 
-// TODO: Később, a szerkesztéshez:
-// const nodeId = ref<number | null>(null);
-// onMounted(async () => {
-//   if (route.params.id) {
-//     nodeId.value = Number(route.params.id);
-//     // Hívd meg a store.fetchNode(nodeId.value) akciót,
-//     // és töltsd fel a nodeData-t a kapott értékekkel.
-//   }
-// });
+// Adatok lekérése szerkesztési módban, amikor a komponens betöltődik
+onMounted(async () => {
+  const idParam = route.params.id;
+  if (idParam) {
+    nodeId.value = Array.isArray(idParam) ? parseInt(idParam[0], 10) : parseInt(idParam, 10);
+    if (!isNaN(nodeId.value)) {
+      console.log(`Editing node with ID: ${nodeId.value}`);
+      // Lekérjük a node adatait a store-on keresztül
+      await store.fetchNode(nodeId.value);
+      // A watchEffect lentebb kezeli az űrlap feltöltését
+    } else {
+        console.error("Invalid node ID in route parameter:", route.params.id);
+        store.error = "Érvénytelen Node ID.";
+        nodeId.value = null; // Visszaállítjuk, mintha create lenne
+    }
+  } else {
+      console.log('Creating new node.');
+      // Létrehozási mód: ürítjük a store currentNode-ját és az űrlapot (biztonság kedvéért)
+      store.currentNode = null;
+      nodeData.value = { text: '', image: null, is_end: false, health_effect: null, item_reward_id: null, enemy_id: null };
+  }
+});
+
+// Figyeljük a store currentNode változását, és ha van adat (szerkesztéskor), betöltjük az űrlapba
+watch(() => store.getCurrentNode, (currentNode) => {
+    if (isEditing.value && currentNode) {
+        console.log('Populating form with fetched node data:', currentNode);
+        // Biztosítjuk, hogy a null értékek megmaradjanak null-nak
+        nodeData.value = {
+            text: currentNode.text,
+            image: currentNode.image ?? null,
+            is_end: currentNode.is_end,
+            health_effect: currentNode.health_effect ?? null,
+            item_reward_id: currentNode.item_reward_id ?? null,
+            enemy_id: currentNode.enemy_id ?? null,
+        };
+    }
+}/* , { immediate: true } // Az immediate itt felesleges lehet az onMounted miatt */);
+
 
 const handleSubmit = async () => {
-  successMessage.value = null; // Előző üzenet törlése
-  // Létrehozás logikája
-  // TODO: Később itt kell majd az updateNode-ot is hívni, ha nodeId.value létezik
-  const newNode = await store.createNode(nodeData);
-  if (newNode) {
-    successMessage.value = `Node sikeresen létrehozva (ID: ${newNode.id})!`;
-    // Opcionális: Visszairányítás a lista oldalra kis késleltetéssel
+  successMessage.value = null;
+  let result: AdminNodeData | null = null;
+
+  if (isEditing.value && nodeId.value !== null) {
+    // --- UPDATE ---
+    console.log(`Submitting update for node ID: ${nodeId.value}`);
+    result = await store.updateNode(nodeId.value, nodeData.value as AdminUpdateNodePayload);
+    if (result) {
+      successMessage.value = `Node (ID: ${result.id}) sikeresen frissítve!`;
+    }
+  } else {
+    // --- CREATE ---
+    console.log('Submitting create new node');
+    result = await store.createNode(nodeData.value as AdminCreateNodePayload);
+     if (result) {
+        successMessage.value = `Node sikeresen létrehozva (ID: ${result.id})!`;
+     }
+  }
+
+  if (result) { // Ha a create vagy update sikeres volt
     setTimeout(() => {
         router.push({ name: 'admin-nodes-list' });
     }, 1500);
-    // Vagy rögtön: router.push({ name: 'admin-nodes-list' });
   }
-  // A store.error már kezeli a hibaüzenetet
+  // A store.error kezeli a hibaüzenetet a template-ben
 };
 </script>
 
