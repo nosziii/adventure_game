@@ -142,10 +142,27 @@ export const useAdminNodesStore = defineStore("adminNodes", {
         this.loading = false;
       }
     },
-
-    // --- Ide jönnek majd a create, update, delete akciók ---
-    // async createNode(data: CreateNodeDto) { ... }
-    // async updateNode(id: number, data: UpdateNodeDto) { ... }
-    // async deleteNode(id: number) { ... }
+    async deleteNode(id: number): Promise<boolean> {
+      this.loading = true; // Használhatjuk a fő loading flaget, vagy egy külön deleteLoading
+      this.error = null;
+      console.log(`Attempting to delete node ID: ${id}`);
+      try {
+        // Hívjuk a backend DELETE /api/admin/nodes/:id végpontját
+        await apiClient.delete(`/admin/nodes/${id}`);
+        // Sikeres törlés esetén eltávolítjuk a node-ot a helyi state-ből
+        this.nodes = this.nodes.filter((node) => node.id !== id);
+        console.log(`Node ${id} deleted successfully from state.`);
+        return true;
+      } catch (err: any) {
+        console.error(`Failed to delete admin node ${id}:`, err);
+        this.error =
+          err.response?.data?.message ||
+          `Nem sikerült törölni a(z) ${id} ID-jú csomópontot.`;
+        // Ha a backend pl. 409 Conflict-ot küld (mert choice hivatkozik rá), az itt az err.response.data.message-ben lesz.
+        return false;
+      } finally {
+        this.loading = false;
+      }
+    },
   },
 });

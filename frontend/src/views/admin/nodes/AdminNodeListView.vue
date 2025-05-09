@@ -25,7 +25,7 @@
             <td>{{ node.item_reward_id ?? '-' }}</td>
             <td>
               <button @click="goToEdit(node.id)" class="edit-button">Szerkesztés</button>
-              <button @click="deleteNode(node.id)" class="delete-button">Törlés (TODO)</button>
+              <button @click="handleDeleteNode(node.id, node.text)" class="delete-button">Törlés</button>
             </td>
           </tr>
           <tr v-if="store.allNodes.length === 0">
@@ -60,15 +60,19 @@ const goToCreate = () => {
 };
 
 const goToEdit = (id: number) => {
-   router.push({ name: 'admin-nodes-edit', params: { id } })
+  router.push({ name: 'admin-nodes-edit', params: { id } })
 };
 
-const deleteNode = (id: number) => {
-    if (confirm(`Biztosan törölni akarod a(z) ${id} ID-jú node-ot?`)) {
-       console.log(`Deleting node ${id}... (TODO: Implement store action)`);
-       // store.deleteNode(id);
-       alert(`Node ${id} törlése még nincs implementálva.`);
-    }
+const handleDeleteNode = async (id: number, nodeText: string) => {
+  // Megerősítés kérése a felhasználótól
+  if (confirm(`Biztosan törölni akarod a következő node-ot?\n\nID: ${id}\nSzöveg: "${truncateText(nodeText, 100)}" `)) {
+    console.log(`User confirmed deletion for node ID: ${id}`);
+    await store.deleteNode(id);
+    // A store.error már kezeli a hibaüzeneteket, ha a törlés nem sikerül
+    // Ha a store akció sikeres, a lista automatikusan frissül, mert a state.nodes változik
+  } else {
+    console.log(`User cancelled deletion for node ID: ${id}`);
+  }
 };
 </script>
 

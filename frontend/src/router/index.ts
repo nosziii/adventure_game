@@ -10,6 +10,15 @@ import AdminDashboardView from "../views/admin/AdminDashboardView.vue"; // Place
 import AdminNodeListView from "../views/admin/nodes/AdminNodeListView.vue"; // Node lista nézet
 import AdminNodeEditView from "../views/admin/nodes/AdminNodeEditView.vue"; // Node szerkesztő nézet
 
+import AdminChoiceListView from "../views/admin/choices/AdminChoiceListView.vue";
+import AdminChoiceEditView from "../views/admin/choices/AdminChoiceEditView.vue";
+
+import AdminItemListView from "../views/admin/items/AdminItemListView.vue";
+import AdminItemEditView from "../views/admin/items/AdminItemEditView.vue";
+
+import AdminEnemyListView from "../views/admin/enemies/AdminEnemyListView.vue";
+import AdminEnemyEditView from "../views/admin/enemies/AdminEnemyEditView.vue";
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // HTML5 history mód
   routes: [
@@ -57,7 +66,51 @@ const router = createRouter({
           name: "admin-nodes-edit",
           component: AdminNodeEditView,
         },
-        // TODO: Ide jönnek majd a Choices, Items, Enemies admin útvonalai is
+        {
+          path: "choices",
+          name: "admin-choices-list",
+          component: AdminChoiceListView,
+        },
+        {
+          path: "choices/new",
+          name: "admin-choices-new",
+          component: AdminChoiceEditView,
+        },
+        {
+          path: "choices/:id/edit",
+          name: "admin-choices-edit",
+          component: AdminChoiceEditView,
+        },
+        {
+          path: "items",
+          name: "admin-items-list",
+          component: AdminItemListView,
+        },
+        {
+          path: "items/new",
+          name: "admin-items-new",
+          component: AdminItemEditView,
+        },
+        {
+          path: "items/:id/edit",
+          name: "admin-items-edit",
+          component: AdminItemEditView,
+        },
+        {
+          path: "enemies",
+          name: "admin-enemies-list",
+          component: AdminEnemyListView,
+        },
+        {
+          path: "enemies/new",
+          name: "admin-enemies-new",
+          component: AdminEnemyEditView,
+        },
+        {
+          path: "enemies/:id/edit",
+          name: "admin-enemies-edit",
+          component: AdminEnemyEditView,
+        },
       ],
     },
   ],

@@ -6,18 +6,46 @@
     <div v-else-if="store.getError" class="error">{{ store.getError }}</div>
 
     <form @submit.prevent="handleSubmit" v-else>
+
       <div class="form-group">
         <label for="text">Szöveg:</label>
         <textarea id="text" v-model="nodeData.text" rows="5" required></textarea>
       </div>
-       <div class="form-actions">
+
+      <div class="form-group">
+        <label for="image">Kép URL (opcionális):</label>
+        <input type="url" id="image" v-model="nodeData.image" placeholder="http://... vagy /images/..." />
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="is_end" v-model="nodeData.is_end" />
+        <label for="is_end">Ez egy befejező csomópont?</label>
+      </div>
+
+      <div class="form-group">
+        <label for="health_effect">Életerő Hatás (opcionális, pl. -10 vagy 20):</label>
+        <input type="number" id="health_effect" v-model.number="nodeData.health_effect" />
+      </div>
+
+      <div class="form-group">
+        <label for="item_reward_id">Tárgy Jutalom ID (opcionális):</label>
+        <input type="number" id="item_reward_id" v-model.number="nodeData.item_reward_id" min="1" />
+      </div>
+
+      <div class="form-group">
+        <label for="enemy_id">Ellenfél ID (opcionális):</label>
+        <input type="number" id="enemy_id" v-model.number="nodeData.enemy_id" min="1" />
+      </div>
+
+      <div class="form-actions">
         <button type="submit" :disabled="store.isLoading">
           {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
         </button>
         <router-link :to="{ name: 'admin-nodes-list' }" class="cancel-button">Mégse</router-link>
       </div>
+
       <p v-if="successMessage" class="success">{{ successMessage }}</p>
-    </form>
+      <p v-if="store.getError" class="error">{{ store.getError }}</p> </form>
   </div>
 </template>
 

@@ -1,25 +1,95 @@
 // A Story Node megjelenítéséhez és listázásához szükséges adatok
 export interface AdminNodeData {
-  id: number
-  text: string
-  image: string | null
-  is_end: boolean
-  health_effect: number | null
-  item_reward_id: number | null
-  enemy_id: number | null
-  created_at: string // A backend Date-t küld, de az Axios/JSON stringgé alakíthatja
-  updated_at: string // Fontos lehet a Date objektummá alakítás a frontend oldalon, ha szükséges
+  id: number;
+  text: string;
+  image: string | null;
+  is_end: boolean;
+  health_effect: number | null;
+  item_reward_id: number | null;
+  enemy_id: number | null;
+  created_at: string; // A backend Date-t küld, de az Axios/JSON stringgé alakíthatja
+  updated_at: string; // Fontos lehet a Date objektummá alakítás a frontend oldalon, ha szükséges
 }
 
 // Node létrehozásához küldendő adatok
 export interface AdminCreateNodePayload {
-  text: string
-  image?: string | null
-  is_end?: boolean
-  health_effect?: number | null
-  item_reward_id?: number | null
-  enemy_id?: number | null
+  text: string;
+  image?: string | null;
+  is_end?: boolean;
+  health_effect?: number | null;
+  item_reward_id?: number | null;
+  enemy_id?: number | null;
+}
+
+// Choice adatok az admin listához és szerkesztéshez
+export interface AdminChoiceData {
+  id: number;
+  sourceNodeId: number;
+  targetNodeId: number;
+  text: string;
+  requiredItemId: number | null;
+  itemCostId: number | null;
+  requiredStatCheck: string | null;
+  createdAt: string; // Vagy Date
+  updatedAt: string; // Vagy Date
+}
+
+// Choice létrehozásához payload
+export interface AdminCreateChoicePayload {
+  sourceNodeId: number;
+  targetNodeId: number;
+  text: string;
+  requiredItemId?: number | null;
+  itemCostId?: number | null;
+  requiredStatCheck?: string | null;
+}
+
+export interface AdminItemData {
+  id: number;
+  name: string;
+  description: string | null;
+  type: string;
+  effect: string | null;
+  usable: boolean;
+  createdAt: string; // Vagy Date
+  updatedAt: string; // Vagy Date
+}
+
+// Item létrehozásához payload
+export interface AdminCreateItemPayload {
+  name: string;
+  description?: string | null;
+  type: string;
+  effect?: string | null;
+  usable?: boolean;
+}
+
+export interface AdminEnemyData {
+  id: number;
+  name: string;
+  health: number;
+  skill: number;
+  attackDescription: string | null;
+  defeatText: string | null;
+  itemDropId: number | null;
+  xpReward: number;
+  createdAt: string; // Vagy Date
+  updatedAt: string; // Vagy Date
+}
+
+// Enemy létrehozásához payload
+export interface AdminCreateEnemyPayload {
+  name: string;
+  health: number;
+  skill: number;
+  attackDescription?: string | null;
+  defeatText?: string | null;
+  itemDropId?: number | null;
+  xpReward: number;
 }
 
 // Node frissítéséhez küldendő adatok (minden mező opcionális)
-export type AdminUpdateNodePayload = Partial<AdminCreateNodePayload>
+export type AdminUpdateNodePayload = Partial<AdminCreateNodePayload>;
+export type AdminUpdateChoicePayload = Partial<AdminCreateChoicePayload>;
+export type AdminUpdateItemPayload = Partial<AdminCreateItemPayload>;
+export type AdminUpdateEnemyPayload = Partial<AdminCreateEnemyPayload>;

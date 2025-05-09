@@ -10,13 +10,29 @@ exports.AdminModule = void 0;
 const common_1 = require("@nestjs/common");
 const nodes_controller_1 = require("./nodes/nodes.controller");
 const nodes_service_1 = require("./nodes/nodes.service");
+const choices_controller_1 = require("./choices/choices.controller");
+const choices_service_1 = require("./choices/choices.service");
+const items_controller_1 = require("./items/items.controller");
+const items_service_1 = require("./items/items.service");
+const enemies_controller_1 = require("./enemies/enemies.controller");
+const enemies_service_1 = require("./enemies/enemies.service");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
     (0, common_1.Module)({
-        controllers: [nodes_controller_1.AdminNodesController],
-        providers: [nodes_service_1.AdminNodesService]
+        controllers: [
+            nodes_controller_1.AdminNodesController,
+            choices_controller_1.AdminChoicesController,
+            items_controller_1.AdminItemsController,
+            enemies_controller_1.AdminEnemiesController,
+        ],
+        providers: [
+            nodes_service_1.AdminNodesService,
+            choices_service_1.AdminChoicesService,
+            items_service_1.AdminItemsService,
+            enemies_service_1.AdminEnemiesService,
+        ],
     })
 ], AdminModule);
 //# sourceMappingURL=admin.module.js.map
