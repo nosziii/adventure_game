@@ -1,5 +1,6 @@
 import { AdminNodesService } from './nodes.service';
 import { NodeDto, CreateNodeDto, UpdateNodeDto } from './dto';
+import { StoryGraphDto } from '../story-graph/dto/story-graph.dto';
 export declare class AdminNodesController {
     private readonly adminNodesService;
     private readonly logger;
@@ -9,4 +10,5 @@ export declare class AdminNodesController {
     create(createNodeDto: CreateNodeDto): Promise<NodeDto>;
     update(id: number, updateNodeDto: UpdateNodeDto): Promise<NodeDto>;
     remove(id: number): Promise<void>;
+    getStoryGraph(): Promise<StoryGraphDto>;
 }

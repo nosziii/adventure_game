@@ -6,3 +6,7 @@ export * from './make-choice.dto';
 export * from './combat-action.dto';
 export * from './inventory-item.dto';
 export * from './use-item.dto';
+export * from './player-progress-step.dto';
+export * from './player-map-node.dto';
+export * from './player-map-edge.dto';
+export * from './player-map-data.dto';

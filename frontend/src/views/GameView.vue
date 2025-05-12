@@ -1,6 +1,12 @@
 <template>
   <div class="game-view">
     <StatsBar :stats="gameStore.getCharacterStats" />
+    <div class="game-actions-bar">
+        <button @click="toggleMinimapHandler" class="minimap-toggle-button">
+            {{ gameStore.isMinimapVisible ? 'Minimap Bezárása' : 'Minimap Mutatása' }}
+        </button>
+    </div>
+    <PlayerMinimap v-if="gameStore.isMinimapVisible" />
 
     <div v-if="gameStore.isLoading && !gameStore.isInCombat" class="loading"> Töltés... </div>
     <div v-else-if="gameStore.getError" class="error"> Hiba történt: {{ gameStore.getError }} </div>
@@ -48,6 +54,7 @@ import NodeDisplay from '../components/NodeDisplay.vue'
 import ChoiceList from '../components/ChoiceList.vue'
 import InventoryDisplay from '../components/InventoryDisplay.vue'
 // import CombatDisplay from '@/components/CombatDisplay.vue'; // Később kell majd
+import PlayerMinimap from '../components/PlayerMinimap.vue'
 
 const gameStore = useGameStore()
 
@@ -68,6 +75,10 @@ const handleAttack = async () => { // Legyen async
   await gameStore.attackEnemy()
   // A view a store állapotának változása miatt automatikusan frissül
 }
+// Minimap megjelenítésének kezelése
+const toggleMinimapHandler = () => {
+    gameStore.toggleMinimap();
+};
 </script>
 
 <style scoped>
@@ -122,4 +133,19 @@ const handleAttack = async () => { // Legyen async
    .attack-button:hover {
     background-color: #c82333;
   }
+  .game-actions-bar {
+    margin-bottom: 15px;
+    text-align: right; /* Vagy ahova szeretnéd tenni a gombot */
+}
+.minimap-toggle-button {
+    padding: 8px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.minimap-toggle-button:hover {
+    background-color: #0056b3;
+}
 </style>

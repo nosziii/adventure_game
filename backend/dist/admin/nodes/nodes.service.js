@@ -45,7 +45,9 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
     }
     async findOne(id) {
         this.logger.log(`Workspaceing story node with ID: ${id}`);
-        const node = await this.knex('story_nodes').where({ id }).first();
+        const node = await this.knex('story_nodes')
+            .where({ id })
+            .first();
         if (!node) {
             this.logger.warn(`Story node with ID ${id} not found.`);
             throw new common_1.NotFoundException(`Story node with ID ${id} not found.`);
@@ -94,9 +96,7 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
     async remove(id) {
         this.logger.log(`Attempting to remove story node with ID: ${id}`);
         try {
-            const numDeleted = await this.knex('story_nodes')
-                .where({ id })
-                .del();
+            const numDeleted = await this.knex('story_nodes').where({ id }).del();
             if (numDeleted === 0) {
                 this.logger.warn(`Story node with ID ${id} not found for removal.`);
                 throw new common_1.NotFoundException(`Story node with ID ${id} not found.`);
@@ -109,6 +109,22 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
                 throw new common_1.ConflictException(`Cannot delete node ${id} because other records (e.g., choices) depend on it.`);
             }
             throw new common_1.InternalServerErrorException('Failed to remove story node.');
+        }
+    }
+    async getStoryGraphData() {
+        this.logger.log('Fetching all data for story graph');
+        try {
+            const nodes = await this.knex('story_nodes')
+                .select('*')
+                .orderBy('id');
+            const choices = await this.knex('choices')
+                .select('*')
+                .orderBy('id');
+            return { nodes, choices };
+        }
+        catch (error) {
+            this.logger.error('Failed to fetch story graph data', error.stack);
+            throw new common_1.InternalServerErrorException('Could not retrieve story graph data.');
         }
     }
 };

@@ -7,6 +7,7 @@
         <li><router-link to="/admin/choices">Választások Kezelése</router-link></li>
         <li><router-link to="/admin/items">Tárgyak Kezelése</router-link></li>
          <li><router-link to="/admin/enemies">Ellenségek Kezelése</router-link></li>
+         <li><router-link to="/admin/map">Történet Térkép Megtekintése</router-link></li>
         </nav>
   </div>
 </template>

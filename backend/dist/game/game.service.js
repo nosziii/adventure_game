@@ -75,7 +75,7 @@ let GameService = GameService_1 = class GameService {
                 inventory: inventory,
                 messages: [],
                 equippedWeaponId: character.equipped_weapon_id,
-                equippedArmorId: character.equipped_armor_id
+                equippedArmorId: character.equipped_armor_id,
             };
         }
         else {
@@ -97,33 +97,39 @@ let GameService = GameService_1 = class GameService {
             }
             this.logger.debug(`Found story node: ${currentNode.id}`);
             this.logger.debug(`Workspaceing and evaluating choices for source node ID: ${currentNodeId}`);
-            const potentialChoices = await this.knex('choices')
-                .where({ source_node_id: currentNodeId });
+            const potentialChoices = await this.knex('choices').where({
+                source_node_id: currentNodeId,
+            });
             const availableChoicesPromises = potentialChoices.map(async (choice) => {
                 const isAvailable = await this.checkChoiceAvailability(choice, character);
                 this.logger.debug(`Choice ${choice.id} (${choice.text}) - Evaluated Availability: ${isAvailable}`);
                 return {
                     id: choice.id,
                     text: choice.text,
-                    isAvailable: isAvailable
+                    isAvailable: isAvailable,
                 };
             });
             const availableChoices = await Promise.all(availableChoicesPromises);
             this.logger.debug(`Evaluated ${availableChoices.length} choices.`);
             return {
-                node: { id: currentNode.id, text: currentNode.text, image: currentNode.image },
+                node: {
+                    id: currentNode.id,
+                    text: currentNode.text,
+                    image: currentNode.image,
+                },
                 choices: availableChoices,
                 character: this.mapCharacterToDto(character),
                 combat: null,
                 inventory: inventory,
                 messages: [],
                 equippedWeaponId: character.equipped_weapon_id,
-                equippedArmorId: character.equipped_armor_id
+                equippedArmorId: character.equipped_armor_id,
             };
         }
     }
     async checkChoiceAvailability(choice, character) {
-        if (choice.required_item_id !== null && choice.required_item_id !== undefined) {
+        if (choice.required_item_id !== null &&
+            choice.required_item_id !== undefined) {
             this.logger.debug(`Checking required item ID: ${choice.required_item_id}`);
             const hasRequiredItem = await this.characterService.hasItem(character.id, choice.required_item_id);
             if (!hasRequiredItem) {
@@ -210,7 +216,9 @@ let GameService = GameService_1 = class GameService {
     async makeChoice(userId, choiceId) {
         this.logger.log(`Processing choice ID: ${choiceId} for user ID: ${userId}`);
         const character = await this.characterService.findOrCreateByUserId(userId);
-        const existingCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        const existingCombat = await this.knex('active_combats')
+            .where({ character_id: character.id })
+            .first();
         if (existingCombat) {
             throw new common_1.ForbiddenException('Cannot make choices while in combat.');
         }
@@ -218,15 +226,19 @@ let GameService = GameService_1 = class GameService {
         if (!currentNodeId) {
             throw new common_1.BadRequestException('Cannot make a choice without being at a node.');
         }
-        const currentNode = await this.knex('story_nodes').where({ id: currentNodeId }).first();
+        const currentNode = await this.knex('story_nodes')
+            .where({ id: currentNodeId })
+            .first();
         if (!currentNode) {
             throw new common_1.NotFoundException(`Current node ${currentNodeId} not found!`);
         }
-        const choice = await this.knex('choices').where({ id: choiceId, source_node_id: currentNodeId }).first();
+        const choice = await this.knex('choices')
+            .where({ id: choiceId, source_node_id: currentNodeId })
+            .first();
         if (!choice) {
             throw new common_1.BadRequestException(`Invalid choice ID: ${choiceId}`);
         }
-        if (!await this.checkChoiceAvailability(choice, character)) {
+        if (!(await this.checkChoiceAvailability(choice, character))) {
             throw new common_1.ForbiddenException('You do not meet the requirements for this choice.');
         }
         if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
@@ -240,16 +252,20 @@ let GameService = GameService_1 = class GameService {
         }
         const targetNodeId = choice.target_node_id;
         this.logger.debug(`Choice ${choiceId} valid. Target node ID: ${targetNodeId}`);
-        const targetNode = await this.knex('story_nodes').where({ id: targetNodeId }).first();
+        const targetNode = await this.knex('story_nodes')
+            .where({ id: targetNodeId })
+            .first();
         if (!targetNode) {
             throw new common_1.InternalServerErrorException('Target node missing.');
         }
         let healthUpdate = character.health;
-        if (currentNode.health_effect !== null && currentNode.health_effect !== undefined) {
+        if (currentNode.health_effect !== null &&
+            currentNode.health_effect !== undefined) {
             this.logger.log(`Applying health effect ${currentNode.health_effect} from current node ${currentNodeId}`);
             healthUpdate = Math.max(0, character.health + currentNode.health_effect);
         }
-        if (currentNode.item_reward_id !== null && currentNode.item_reward_id !== undefined) {
+        if (currentNode.item_reward_id !== null &&
+            currentNode.item_reward_id !== undefined) {
             this.logger.log(`Current node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id}`);
             try {
                 await this.characterService.addItemToInventory(character.id, currentNode.item_reward_id, 1);
@@ -262,9 +278,13 @@ let GameService = GameService_1 = class GameService {
         if (targetNode.enemy_id) {
             this.logger.log(`Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`);
             if (healthUpdate !== character.health) {
-                await this.characterService.updateCharacter(character.id, { health: healthUpdate });
+                await this.characterService.updateCharacter(character.id, {
+                    health: healthUpdate,
+                });
             }
-            const enemy = await this.knex('enemies').where({ id: targetNode.enemy_id }).first();
+            const enemy = await this.knex('enemies')
+                .where({ id: targetNode.enemy_id })
+                .first();
             if (!enemy) {
                 throw new common_1.InternalServerErrorException('Enemy data missing for combat.');
             }
@@ -273,12 +293,22 @@ let GameService = GameService_1 = class GameService {
                 enemy_id: enemy.id,
                 enemy_current_health: enemy.health,
             });
+            await this.knex('player_progress').insert({
+                character_id: character.id,
+                node_id: targetNodeId,
+                choice_id_taken: choice.id,
+            });
         }
         else {
             this.logger.log(`Choice leads to non-combat node ${targetNodeId}`);
             await this.characterService.updateCharacter(character.id, {
                 current_node_id: targetNodeId,
                 health: healthUpdate,
+            });
+            await this.knex('player_progress').insert({
+                character_id: character.id,
+                node_id: targetNodeId,
+                choice_id_taken: choice.id,
             });
         }
         this.logger.log(`Choice processed for user ${userId}. Fetching new game state.`);
@@ -287,12 +317,16 @@ let GameService = GameService_1 = class GameService {
     async handleCombatAction(userId, actionDto) {
         this.logger.log(`Handling combat action '${actionDto.action}' for user ID: ${userId}`);
         const character = await this.characterService.findOrCreateByUserId(userId);
-        const activeCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        const activeCombat = await this.knex('active_combats')
+            .where({ character_id: character.id })
+            .first();
         if (!activeCombat) {
             this.logger.warn(`User ${userId} tried combat action but is not in combat.`);
             throw new common_1.ForbiddenException('You are not currently in combat.');
         }
-        const enemyBaseData = await this.knex('enemies').where({ id: activeCombat.enemy_id }).first();
+        const enemyBaseData = await this.knex('enemies')
+            .where({ id: activeCombat.enemy_id })
+            .first();
         if (!enemyBaseData) {
             this.logger.error(`Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`);
             await this.knex('active_combats').where({ id: activeCombat.id }).del();
@@ -311,7 +345,7 @@ let GameService = GameService_1 = class GameService {
             if (playerAttack > enemyDefense) {
                 let baseDamage = 1;
                 const inventory = await this.characterService.getInventory(character.id);
-                const weapon = inventory.find(item => item.type === 'weapon');
+                const weapon = inventory.find((item) => item.type === 'weapon');
                 if (weapon && typeof weapon.effect === 'string') {
                     this.logger.debug(`Found weapon: ${weapon.name} (Effect: ${weapon.effect})`);
                     const damageMatch = weapon.effect.match(/damage\+(\d+)/);
@@ -331,7 +365,12 @@ let GameService = GameService_1 = class GameService {
                 this.logger.debug(`Calculating player damage: base=${baseDamage}, skillBonus=${skillBonus} (from skill=${character.skill}), total=${totalDamage}`);
                 enemyCurrentHealth = Math.max(0, enemyCurrentHealth - totalDamage);
                 combatLogMessages.push(`Eltaláltad! Sebzés: ${totalDamage}. Ellenfél HP: ${enemyCurrentHealth}/${enemyBaseData.health}`);
-                await this.knex('active_combats').where({ id: activeCombat.id }).update({ enemy_current_health: enemyCurrentHealth, last_action_time: new Date() });
+                await this.knex('active_combats')
+                    .where({ id: activeCombat.id })
+                    .update({
+                    enemy_current_health: enemyCurrentHealth,
+                    last_action_time: new Date(),
+                });
             }
             else {
                 combatLogMessages.push(`Támadásod célt tévesztett!`);
@@ -357,7 +396,8 @@ let GameService = GameService_1 = class GameService {
                     }
                 }
                 this.logger.log(`Moving character ${character.id} to victory node ${victoryNodeId}`);
-                if (enemyBaseData.item_drop_id !== null && enemyBaseData.item_drop_id !== undefined) {
+                if (enemyBaseData.item_drop_id !== null &&
+                    enemyBaseData.item_drop_id !== undefined) {
                     combatLogMessages.push(`Az ellenfél eldobott valamit! (Tárgy ID: ${enemyBaseData.item_drop_id})`);
                     try {
                         await this.characterService.addItemToInventory(character.id, enemyBaseData.item_drop_id, 1);
@@ -367,7 +407,14 @@ let GameService = GameService_1 = class GameService {
                         this.logger.error(`Failed to add item drop ${enemyBaseData.item_drop_id}: ${itemDropError}`);
                     }
                 }
-                await this.characterService.updateCharacter(character.id, { current_node_id: victoryNodeId });
+                await this.characterService.updateCharacter(character.id, {
+                    current_node_id: victoryNodeId,
+                });
+                await this.knex('player_progress').insert({
+                    character_id: character.id,
+                    node_id: victoryNodeId,
+                    choice_id_taken: null,
+                });
                 const finalState = await this.getCurrentGameState(userId);
                 finalState.messages = combatLogMessages;
                 this.logger.log('>>> RETURNING FINAL STATE FROM VICTORY BLOCK (After Attack) <<<');
@@ -386,7 +433,9 @@ let GameService = GameService_1 = class GameService {
                 playerActionSuccessful = true;
             }
             else {
-                const item = await this.knex('items').where({ id: itemIdToUse }).first();
+                const item = await this.knex('items')
+                    .where({ id: itemIdToUse })
+                    .first();
                 if (!item) {
                     throw new common_1.InternalServerErrorException('Item data inconsistency.');
                 }
@@ -403,7 +452,9 @@ let GameService = GameService_1 = class GameService {
                         const healedAmount = playerCurrentHealth - previousPlayerHealth;
                         if (healedAmount > 0) {
                             combatLogMessages.push(`Gyógyító italt használtál (${item.name}). Visszatöltöttél ${healedAmount} életerőt! HP: ${playerCurrentHealth}`);
-                            const updatedCharacterData = await this.characterService.updateCharacter(character.id, { health: playerCurrentHealth });
+                            const updatedCharacterData = await this.characterService.updateCharacter(character.id, {
+                                health: playerCurrentHealth,
+                            });
                             playerCurrentHealth = updatedCharacterData.health;
                             const removed = await this.characterService.removeItemFromInventory(character.id, itemIdToUse, 1);
                             if (!removed) {
@@ -441,7 +492,9 @@ let GameService = GameService_1 = class GameService {
                 const enemyDamage = 5;
                 playerCurrentHealth = Math.max(0, playerCurrentHealth - enemyDamage);
                 combatLogMessages.push(`Eltalált! Sebzés: ${enemyDamage}. Életerőd: ${playerCurrentHealth}`);
-                await this.characterService.updateCharacter(character.id, { health: playerCurrentHealth });
+                await this.characterService.updateCharacter(character.id, {
+                    health: playerCurrentHealth,
+                });
             }
             else {
                 combatLogMessages.push(`Sikeresen kivédted a támadást!`);
@@ -451,7 +504,15 @@ let GameService = GameService_1 = class GameService {
                 this.logger.log(`Character ${character.id} defeated by enemy ${enemyBaseData.id}.`);
                 await this.knex('active_combats').where({ id: activeCombat.id }).del();
                 const defeatNodeId = 3;
-                await this.characterService.updateCharacter(character.id, { current_node_id: defeatNodeId, health: 0 });
+                await this.characterService.updateCharacter(character.id, {
+                    current_node_id: defeatNodeId,
+                    health: 0,
+                });
+                await this.knex('player_progress').insert({
+                    character_id: character.id,
+                    node_id: defeatNodeId,
+                    choice_id_taken: null,
+                });
                 const finalState = await this.getCurrentGameState(userId);
                 finalState.messages = combatLogMessages;
                 return finalState;
@@ -467,7 +528,7 @@ let GameService = GameService_1 = class GameService {
             name: enemyBaseData.name,
             health: enemyBaseData.health,
             currentHealth: enemyCurrentHealth,
-            skill: enemyBaseData.skill
+            skill: enemyBaseData.skill,
         };
         const resultState = {
             node: null,
@@ -482,7 +543,9 @@ let GameService = GameService_1 = class GameService {
     async useItemOutOfCombat(userId, itemId) {
         this.logger.log(`Attempting to use item ${itemId} for user ${userId} outside of combat.`);
         const character = await this.characterService.findOrCreateByUserId(userId);
-        const activeCombat = await this.knex('active_combats').where({ character_id: character.id }).first();
+        const activeCombat = await this.knex('active_combats')
+            .where({ character_id: character.id })
+            .first();
         if (activeCombat) {
             this.logger.warn(`User ${userId} tried to use item ${itemId} outside combat, but is in combat.`);
             throw new common_1.ForbiddenException('Cannot use items this way while in combat.');
@@ -509,7 +572,9 @@ let GameService = GameService_1 = class GameService {
                 const newHealth = Math.min(maxHp, currentHealth + healAmount);
                 if (newHealth > currentHealth) {
                     this.logger.log(`Applying heal effect: ${healAmount} to character ${character.id}. New health: ${newHealth}`);
-                    await this.characterService.updateCharacter(character.id, { health: newHealth });
+                    await this.characterService.updateCharacter(character.id, {
+                        health: newHealth,
+                    });
                     const removed = await this.characterService.removeItemFromInventory(character.id, itemId, 1);
                     if (!removed) {
                         this.logger.error(`Failed to remove item ${itemId} after use for character ${character.id}!`);
@@ -535,6 +600,74 @@ let GameService = GameService_1 = class GameService {
             throw new common_1.InternalServerErrorException('Character data not found after using item.');
         }
         return this.mapCharacterToDto(finalCharacter);
+    }
+    async getPlayerProgress(userId) {
+        this.logger.log(`Workspaceing rich player progress for user ID: ${userId}`);
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        if (!character) {
+            return { nodes: [], edges: [] };
+        }
+        const progressRecords = await this.knex('player_progress')
+            .where({ character_id: character.id })
+            .orderBy('visited_at', 'asc');
+        if (progressRecords.length === 0) {
+            return { nodes: [], edges: [] };
+        }
+        const nodeIds = new Set();
+        const choiceIds = new Set();
+        progressRecords.forEach((record) => {
+            nodeIds.add(record.node_id);
+            if (record.choice_id_taken) {
+                choiceIds.add(record.choice_id_taken);
+            }
+        });
+        const nodesData = await this.knex('story_nodes')
+            .whereIn('id', Array.from(nodeIds))
+            .select('id', 'text');
+        const mapNodes = nodesData.map((n) => ({
+            id: n.id,
+            textSnippet: n.text.substring(0, 30) + (n.text.length > 30 ? '...' : ''),
+        }));
+        let choicesData = [];
+        if (choiceIds.size > 0) {
+            choicesData = await this.knex('choices')
+                .whereIn('id', Array.from(choiceIds))
+                .select('id', 'text', 'source_node_id');
+        }
+        const choicesCache = new Map(choicesData.map((c) => [c.id, c]));
+        const mapEdges = [];
+        let previousNodeId = null;
+        for (const record of progressRecords) {
+            let fromNode = null;
+            let choiceText = undefined;
+            if (record.choice_id_taken) {
+                const choice = choicesCache.get(record.choice_id_taken);
+                if (choice) {
+                    fromNode = choice.source_node_id;
+                    if (choice.text) {
+                        choiceText =
+                            choice.text.substring(0, 20) +
+                                (choice.text.length > 20 ? '...' : '');
+                    }
+                }
+                else {
+                    this.logger.warn(`Choice with ID ${record.choice_id_taken} not found in cache for progress record.`);
+                    fromNode = previousNodeId;
+                }
+            }
+            else {
+                fromNode = null;
+            }
+            mapEdges.push({
+                from: fromNode,
+                to: record.node_id,
+                choiceTextSnippet: choiceText,
+            });
+            previousNodeId = record.node_id;
+        }
+        const uniqueEdges = mapEdges.filter((edge, index, self) => index ===
+            self.findIndex((e) => e.from === edge.from && e.to === edge.to));
+        return { nodes: mapNodes, edges: uniqueEdges };
     }
 };
 exports.GameService = GameService;

@@ -52,6 +52,11 @@ let GameController = GameController_1 = class GameController {
         this.logger.log(`Received request to use item ID: ${itemId} from user ID: ${userId} (out of combat)`);
         return this.gameService.useItemOutOfCombat(userId, itemId);
     }
+    async getPlayerMapProgress(req) {
+        const userId = req.user.id;
+        this.logger.log(`Received request for player map progress from user ID: ${userId}`);
+        return this.gameService.getPlayerProgress(userId);
+    }
 };
 exports.GameController = GameController;
 __decorate([
@@ -89,6 +94,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, dto_1.UseItemDto]),
     __metadata("design:returntype", Promise)
 ], GameController.prototype, "useItem", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Get)('map-progress'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GameController.prototype, "getPlayerMapProgress", null);
 exports.GameController = GameController = GameController_1 = __decorate([
     (0, common_1.Controller)('game'),
     __metadata("design:paramtypes", [game_service_1.GameService])

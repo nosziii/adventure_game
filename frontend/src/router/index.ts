@@ -19,6 +19,8 @@ import AdminItemEditView from "../views/admin/items/AdminItemEditView.vue";
 import AdminEnemyListView from "../views/admin/enemies/AdminEnemyListView.vue";
 import AdminEnemyEditView from "../views/admin/enemies/AdminEnemyEditView.vue";
 
+import AdminMapView from "../views/admin/map/AdminMapView.vue";
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // HTML5 history mód
   routes: [
@@ -111,6 +113,7 @@ const router = createRouter({
           name: "admin-enemies-edit",
           component: AdminEnemyEditView,
         },
+        { path: "map", name: "admin-map-view", component: AdminMapView },
       ],
     },
   ],

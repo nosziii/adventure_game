@@ -44,6 +44,9 @@ let CharacterService = CharacterService_1 = class CharacterService {
         const defaultSkill = 10;
         const defaultLuck = 5;
         const defaultStamina = 100;
+        const defaultLevel = 1;
+        const defaultXp = 0;
+        const defaultXpToNextLevel = 100;
         try {
             const [newCharacter] = await this.knex('characters')
                 .insert({
@@ -53,10 +56,18 @@ let CharacterService = CharacterService_1 = class CharacterService {
                 skill: defaultSkill,
                 luck: defaultLuck,
                 stamina: defaultStamina,
+                level: defaultLevel,
+                xp: defaultXp,
+                xp_to_next_level: defaultXpToNextLevel,
                 name: 'Kalandor',
             })
                 .returning('*');
             this.logger.log(`New character created with ID: ${newCharacter.id} for user ID: ${userId}`);
+            await this.knex('player_progress').insert({
+                character_id: newCharacter.id,
+                node_id: STARTING_NODE_ID,
+                choice_id_taken: null,
+            });
             return newCharacter;
         }
         catch (error) {
@@ -131,7 +142,8 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         catch (error) {
             this.logger.error(`Failed to equip item ${itemId} for character ${characterId}: ${error}`, error.stack);
-            if (error instanceof common_1.NotFoundException || error instanceof common_1.InternalServerErrorException) {
+            if (error instanceof common_1.NotFoundException ||
+                error instanceof common_1.InternalServerErrorException) {
                 throw error;
             }
             throw new common_1.InternalServerErrorException('Failed to equip item due to an unexpected error.');
@@ -160,7 +172,8 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         catch (error) {
             this.logger.error(`Failed to unequip item type ${itemType} for character ${characterId}: ${error}`, error.stack);
-            if (error instanceof common_1.NotFoundException || error instanceof common_1.InternalServerErrorException) {
+            if (error instanceof common_1.NotFoundException ||
+                error instanceof common_1.InternalServerErrorException) {
                 throw error;
             }
             throw new common_1.InternalServerErrorException('Failed to unequip item due to an unexpected error.');
@@ -169,8 +182,10 @@ let CharacterService = CharacterService_1 = class CharacterService {
     async applyPassiveEffects(character) {
         const characterWithEffects = { ...character };
         this.logger.debug(`Applying passive effects for character ${character.id}. WeaponID: ${character.equipped_weapon_id}, ArmorID: ${character.equipped_armor_id}`);
-        const equippedItemIds = [character.equipped_weapon_id, character.equipped_armor_id]
-            .filter((id) => id !== null && id !== undefined);
+        const equippedItemIds = [
+            character.equipped_weapon_id,
+            character.equipped_armor_id,
+        ].filter((id) => id !== null && id !== undefined);
         if (equippedItemIds.length === 0) {
             this.logger.debug('No items equipped, no passive effects to apply.');
             return characterWithEffects;
@@ -178,7 +193,9 @@ let CharacterService = CharacterService_1 = class CharacterService {
         const equippedItems = await this.knex('items').whereIn('id', equippedItemIds);
         for (const item of equippedItems) {
             const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
-            if (isPassiveType && typeof item.effect === 'string' && item.effect.length > 0) {
+            if (isPassiveType &&
+                typeof item.effect === 'string' &&
+                item.effect.length > 0) {
                 this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item ${item.id} (${item.name})`);
                 const effects = item.effect.split(';');
                 for (const effectPart of effects) {
@@ -191,15 +208,18 @@ let CharacterService = CharacterService_1 = class CharacterService {
                         this.logger.debug(`Parsed effect part: stat=${statName}, modifier=${modifier}`);
                         switch (statName.toLowerCase()) {
                             case 'skill':
-                                characterWithEffects.skill = (characterWithEffects.skill ?? 0) + modifier;
+                                characterWithEffects.skill =
+                                    (characterWithEffects.skill ?? 0) + modifier;
                                 this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
                                 break;
                             case 'luck':
-                                characterWithEffects.luck = (characterWithEffects.luck ?? 0) + modifier;
+                                characterWithEffects.luck =
+                                    (characterWithEffects.luck ?? 0) + modifier;
                                 this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
                                 break;
                             case 'stamina':
-                                characterWithEffects.stamina = (characterWithEffects.stamina ?? 0) + modifier;
+                                characterWithEffects.stamina =
+                                    (characterWithEffects.stamina ?? 0) + modifier;
                                 this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
                                 break;
                             default:
@@ -247,8 +267,7 @@ let CharacterService = CharacterService_1 = class CharacterService {
             }
             else {
                 this.logger.debug(`Item ${itemId} not found, inserting new entry.`);
-                await trx('character_inventory')
-                    .insert({
+                await trx('character_inventory').insert({
                     character_id: characterId,
                     item_id: itemId,
                     quantity: quantityToAdd,
@@ -335,7 +354,7 @@ let CharacterService = CharacterService_1 = class CharacterService {
                 skill: currentSkill,
                 luck: currentLuck,
                 stamina: currentStamina,
-                health: currentHealth
+                health: currentHealth,
             };
             await this.updateCharacter(characterId, updates);
             this.logger.log(`Character ${characterId} XP/Level/Stats updated.`);

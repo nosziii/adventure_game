@@ -22,4 +22,8 @@ __exportStar(require("./make-choice.dto"), exports);
 __exportStar(require("./combat-action.dto"), exports);
 __exportStar(require("./inventory-item.dto"), exports);
 __exportStar(require("./use-item.dto"), exports);
+__exportStar(require("./player-progress-step.dto"), exports);
+__exportStar(require("./player-map-node.dto"), exports);
+__exportStar(require("./player-map-edge.dto"), exports);
+__exportStar(require("./player-map-data.dto"), exports);
 //# sourceMappingURL=index.js.map

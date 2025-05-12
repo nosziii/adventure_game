@@ -30,7 +30,20 @@ const mapStoryNodeToNodeDto = (node) => {
         item_reward_id: node.item_reward_id,
         enemy_id: node.enemy_id,
         created_at: node.created_at,
-        updated_at: node.updated_at
+        updated_at: node.updated_at,
+    };
+};
+const mapChoiceRecordToChoiceAdminDto = (choice) => {
+    return {
+        id: choice.id,
+        sourceNodeId: choice.source_node_id,
+        targetNodeId: choice.target_node_id,
+        text: choice.text,
+        requiredItemId: choice.required_item_id,
+        itemCostId: choice.item_cost_id,
+        requiredStatCheck: choice.required_stat_check,
+        createdAt: choice.created_at,
+        updatedAt: choice.updated_at,
     };
 };
 let AdminNodesController = AdminNodesController_1 = class AdminNodesController {
@@ -81,11 +94,20 @@ let AdminNodesController = AdminNodesController_1 = class AdminNodesController {
         }
         catch (error) {
             this.logger.error(`Error during node removal for ID ${id}: ${error}`);
-            if (error instanceof common_1.NotFoundException || error instanceof common_1.ConflictException) {
+            if (error instanceof common_1.NotFoundException ||
+                error instanceof common_1.ConflictException) {
                 throw error;
             }
             throw error;
         }
+    }
+    async getStoryGraph() {
+        this.logger.log('Request received for story graph data');
+        const { nodes, choices } = await this.adminNodesService.getStoryGraphData();
+        return {
+            nodes: nodes.map(mapStoryNodeToNodeDto),
+            choices: choices.map(mapChoiceRecordToChoiceAdminDto),
+        };
     }
 };
 exports.AdminNodesController = AdminNodesController;
@@ -131,6 +153,13 @@ __decorate([
     __metadata("design:paramtypes", [Number]),
     __metadata("design:returntype", Promise)
 ], AdminNodesController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Get)('graph/data'),
+    (0, roles_decorator_1.Roles)('admin'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AdminNodesController.prototype, "getStoryGraph", null);
 exports.AdminNodesController = AdminNodesController = AdminNodesController_1 = __decorate([
     (0, common_1.Controller)('admin/nodes'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt'), roles_guard_1.RolesGuard),
