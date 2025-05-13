@@ -1,24 +1,22 @@
 <template>
   <div class="inventory-display">
     <h3>Leltár</h3>
-    <ul v-if="inventory && inventory.length > 0">
-      <li v-for="item in inventory" :key="item.itemId" :title="item.description ?? ''">
+    <ul v-if="props.inventory && props.inventory.length > 0">
+      <li v-for="item in props.inventory" :key="item.itemId" :title="item.description ?? ''">
         <span>
           {{ item.name }} ({{ item.quantity }})
           <strong v-if="isEquipped(item.itemId)" class="equipped-marker"> [Felszerelve]</strong>
         </span>
-
         <span class="item-actions">
-           <button
+          <button
             v-if="item.usable"
             @click="handleUseItem(item.itemId)"
             class="use-button"
             :disabled="!canUseItem(item.itemId) || gameStore.isLoading || gameStore.isEquipping"
-            title="Használat (harcon kívül)"
+            :title="determineUseButtonTitle(item.itemId)"
           >
             Használat
           </button>
-
           <button
             v-if="isEquippable(item.type)"
             @click="isEquipped(item.itemId) ? handleUnequip(item.type) : handleEquip(item.itemId)"
@@ -29,7 +27,6 @@
             {{ isEquipped(item.itemId) ? 'Levétel' : 'Felszerelés' }}
           </button>
         </span>
-
       </li>
     </ul>
     <p v-else>A leltárad üres.</p>
@@ -50,8 +47,15 @@ const gameStore = useGameStore()
 
 // --- Metódusok a gombokhoz ---
 const handleUseItem = async (itemId: number) => {
-  if (!canUseItem(itemId)) return;
-  await gameStore.useItemOutOfCombat(itemId);
+  if (!canUseItem(itemId)) return; // Extra ellenőrzés
+
+  if (gameStore.isInCombat) {
+    console.log(`[InventoryDisplay] Use item (ID: ${itemId}) in COMBAT`);
+    await gameStore.useItemInCombat(itemId); // Harci tárgyhasználat
+  } else {
+    console.log(`[InventoryDisplay] Use item (ID: ${itemId}) OUT OF COMBAT`);
+    await gameStore.useItemOutOfCombat(itemId); // Harcon kívüli tárgyhasználat
+  }
 };
 
 const handleEquip = async (itemId: number) => {
@@ -77,15 +81,30 @@ const isEquipped = (itemId: number): boolean => {
 
 // Tárgy használatát kezelő metódus
 const canUseItem = (itemId: number): boolean => {
-    const item = props.inventory?.find(i => i.itemId === itemId);
-    if (!item?.usable) return false;
-    // Csak harcon kívül engedjük használni ezzel a gombbal
-    if (gameStore.isInCombat) return false;
-    const stats = gameStore.getCharacterStats;
-    // Gyógyital max HP ellenőrzése
-    if (item.effect?.startsWith('heal+') && stats && stats.health >= 100) return false;
-    return true;
-}
+  const item = props.inventory?.find(i => i.itemId === itemId);
+  if (!item?.usable) return false; // Csak 'usable' tárgyak
+
+  const stats = gameStore.getCharacterStats;
+
+  // Gyógyital speciális feltételei (max HP ellenőrzés)
+  if (item.effect?.startsWith('heal+')) {
+    if (stats && stats.health >= 100) { // TODO: Használj valós max HP-t a stats-ból, ha lesz
+      return false; // Nem használható, ha max HP-n van
+    }
+  }
+  // TODO: Más tárgytípusok használati feltételei ide jöhetnek
+  // Pl. kulcsot csak bizonyos node-on lehet használni (ezt a backend validálja inkább)
+
+  // Ha idáig eljutott, és usable, akkor általánosan használható
+  // A gomb title majd pontosít, hogy harcban vagy azon kívül
+  return true;
+};
+
+const determineUseButtonTitle = (itemId: number): string => {
+    if (!canUseItem(itemId)) return 'Most nem használható';
+    if (gameStore.isInCombat) return 'Használat harcban';
+    return 'Használat';
+};
 
 </script>
 
