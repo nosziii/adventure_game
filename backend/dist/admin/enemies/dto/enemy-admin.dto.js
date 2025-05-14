@@ -10,6 +10,11 @@ class EnemyAdminDto {
     defeatText;
     itemDropId;
     xpReward;
+    specialAttackName;
+    specialAttackDamageMultiplier;
+    specialAttackChargeTurns;
+    specialAttackTelegraphText;
+    specialAttackExecuteText;
     createdAt;
     updatedAt;
 }

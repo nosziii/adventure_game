@@ -7,6 +7,11 @@ export declare class EnemyAdminDto {
     defeatText: string | null;
     itemDropId: number | null;
     xpReward: number;
+    specialAttackName: string | null;
+    specialAttackDamageMultiplier: number | null;
+    specialAttackChargeTurns: number | null;
+    specialAttackTelegraphText: string | null;
+    specialAttackExecuteText: string | null;
     createdAt: Date;
     updatedAt: Date;
 }

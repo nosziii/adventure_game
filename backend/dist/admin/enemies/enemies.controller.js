@@ -30,6 +30,11 @@ const mapEnemyRecordToDto = (enemy) => {
         defeatText: enemy.defeat_text,
         itemDropId: enemy.item_drop_id,
         xpReward: enemy.xp_reward,
+        specialAttackName: enemy.special_attack_name,
+        specialAttackDamageMultiplier: enemy.special_attack_damage_multiplier,
+        specialAttackChargeTurns: enemy.special_attack_charge_turns,
+        specialAttackTelegraphText: enemy.special_attack_telegraph_text,
+        specialAttackExecuteText: enemy.special_attack_execute_text,
         createdAt: enemy.created_at,
         updatedAt: enemy.updated_at,
     };

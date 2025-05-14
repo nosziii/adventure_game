@@ -7,6 +7,10 @@ class EnemyDataDto {
     health;
     skill;
     currentHealth;
+    isChargingSpecial;
+    currentChargeTurns;
+    maxChargeTurns;
+    specialAttackTelegraphText;
 }
 exports.EnemyDataDto = EnemyDataDto;
 //# sourceMappingURL=enemy-data.dto.js.map

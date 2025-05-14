@@ -19,6 +19,11 @@ class CreateEnemyDto {
     defeatText;
     itemDropId;
     xpReward;
+    specialAttackName;
+    specialAttackDamageMultiplier;
+    specialAttackChargeTurns;
+    specialAttackTelegraphText;
+    specialAttackExecuteText;
 }
 exports.CreateEnemyDto = CreateEnemyDto;
 __decorate([
@@ -63,4 +68,32 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], CreateEnemyDto.prototype, "xpReward", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(100),
+    __metadata("design:type", Object)
+], CreateEnemyDto.prototype, "specialAttackName", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsPositive)(),
+    __metadata("design:type", Object)
+], CreateEnemyDto.prototype, "specialAttackDamageMultiplier", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Object)
+], CreateEnemyDto.prototype, "specialAttackChargeTurns", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], CreateEnemyDto.prototype, "specialAttackTelegraphText", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], CreateEnemyDto.prototype, "specialAttackExecuteText", void 0);
 //# sourceMappingURL=create-enemy.dto.js.map

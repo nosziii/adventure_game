@@ -6,4 +6,9 @@ export declare class CreateEnemyDto {
     defeatText?: string | null;
     itemDropId?: number | null;
     xpReward: number;
+    specialAttackName?: string | null;
+    specialAttackDamageMultiplier?: number | null;
+    specialAttackChargeTurns?: number | null;
+    specialAttackTelegraphText?: string | null;
+    specialAttackExecuteText?: string | null;
 }

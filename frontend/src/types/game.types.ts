@@ -31,6 +31,10 @@ export interface EnemyData {
   health: number;
   currentHealth: number;
   skill?: number;
+  isChargingSpecial?: boolean;
+  currentChargeTurns?: number | null;
+  maxChargeTurns?: number | null;
+  specialAttackTelegraphText?: string | null;
 }
 
 export interface InventoryItem {

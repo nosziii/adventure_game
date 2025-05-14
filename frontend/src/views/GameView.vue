@@ -18,6 +18,9 @@
           <h3>Ellenfél: {{ gameStore.getCombatState.name }}</h3>
           <p>Életerő: {{ gameStore.getCombatState.currentHealth }} / {{ gameStore.getCombatState.health }}</p>
         </div>
+        <div v-if="gameStore.getCombatState.isChargingSpecial && gameStore.getCombatState.specialAttackTelegraphText" class="telegraph-message">
+          <p><strong>Figyelem!</strong> {{ gameStore.getCombatState.specialAttackTelegraphText }}</p>
+          </div>
         <div class="combat-actions">
           <button @click="handleAttack" class="action-button attack-button" :disabled="gameStore.isLoading">
             {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }}
@@ -168,5 +171,19 @@ const toggleMinimapHandler = () => {
 }
 .defend-button:hover:not(:disabled) {
   background-color: #138496;
+}
+
+.telegraph-message {
+  background-color: #fff3cd; /* Világos sárga figyelmeztető háttér */
+  color: #856404; /* Sötét sárga/barna szöveg */
+  border: 1px solid #ffeeba;
+  padding: 10px 15px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+  text-align: center;
+}
+.telegraph-message p {
+    margin: 0;
 }
 </style>

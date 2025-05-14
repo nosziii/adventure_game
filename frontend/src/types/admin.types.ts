@@ -73,6 +73,11 @@ export interface AdminEnemyData {
   defeatText: string | null;
   itemDropId: number | null;
   xpReward: number;
+  specialAttackName: string | null;
+  specialAttackDamageMultiplier: number | null;
+  specialAttackChargeTurns: number | null;
+  specialAttackTelegraphText: string | null;
+  specialAttackExecuteText: string | null;
   createdAt: string; // Vagy Date
   updatedAt: string; // Vagy Date
 }
@@ -86,6 +91,11 @@ export interface AdminCreateEnemyPayload {
   defeatText?: string | null;
   itemDropId?: number | null;
   xpReward: number;
+  specialAttackName?: string | null;
+  specialAttackDamageMultiplier?: number | null;
+  specialAttackChargeTurns?: number | null;
+  specialAttackTelegraphText?: string | null;
+  specialAttackExecuteText?: string | null;
 }
 
 // Node frissítéséhez küldendő adatok (minden mező opcionális)

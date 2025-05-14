@@ -31,7 +31,7 @@ let CombatService = CombatService_1 = class CombatService {
     async handleCombatAction(userId, actionDto) {
         this.logger.log(`Handling combat action '${actionDto.action}' for user ID: ${userId}`);
         let character = await this.characterService.findOrCreateByUserId(userId);
-        const activeCombat = await this.knex('active_combats')
+        let activeCombat = await this.knex('active_combats')
             .where({ character_id: character.id })
             .first();
         if (!activeCombat) {
@@ -48,7 +48,6 @@ let CombatService = CombatService_1 = class CombatService {
         let playerCurrentHealth = character.health;
         const combatLogMessages = [];
         let playerActionSuccessful = false;
-        let playerIsDefending = false;
         if (actionDto.action === 'attack') {
             combatLogMessages.push(`Megtámadod (${enemyBaseData.name})!`);
             const playerDice = Math.floor(Math.random() * 6) + 1;
@@ -135,7 +134,6 @@ let CombatService = CombatService_1 = class CombatService {
             await this.knex('active_combats')
                 .where({ id: activeCombat.id })
                 .update({ character_is_defending: true, last_action_time: new Date() });
-            playerIsDefending = true;
             playerActionSuccessful = true;
         }
         else {
@@ -168,42 +166,88 @@ let CombatService = CombatService_1 = class CombatService {
                 enemy: undefined,
             };
         }
+        let enemyPerformedSpecialAttackOrCharged = false;
         if (enemyCurrentHealth > 0 && playerActionSuccessful) {
-            combatLogMessages.push(`${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''})!`);
-            const playerDiceDef = Math.floor(Math.random() * 6) + 1;
-            const enemyDiceAtk = Math.floor(Math.random() * 6) + 1;
-            const enemyAttackVal = (enemyBaseData.skill ?? 0) + enemyDiceAtk;
-            let playerEffectiveDefenseSkill = character.skill ?? 0;
-            const currentCombatTurnState = await this.knex('active_combats')
+            activeCombat = await this.knex('active_combats')
                 .where({ id: activeCombat.id })
                 .first();
-            if (!currentCombatTurnState)
-                throw new common_1.InternalServerErrorException('Combat state lost mid-turn!');
-            let actualPlayerDefenseValue = playerEffectiveDefenseSkill + playerDiceDef;
-            if (currentCombatTurnState.character_is_defending) {
-                this.logger.debug(`Player is defending! Applying defense bonus.`);
-                combatLogMessages.push(`Védekezel!`);
-                actualPlayerDefenseValue += character.skill ?? 0;
-            }
-            this.logger.debug(`Enemy attack roll: ${enemyAttackVal} vs Player effective defense roll: ${actualPlayerDefenseValue}`);
-            if (enemyAttackVal > actualPlayerDefenseValue) {
+            if (!activeCombat)
+                throw new common_1.InternalServerErrorException('Combat state lost before enemy turn!');
+            const characterIsDefending = activeCombat.character_is_defending;
+            if (enemyBaseData.special_attack_name &&
+                activeCombat.enemy_charge_turns_current >=
+                    (enemyBaseData.special_attack_charge_turns ?? 0)) {
+                enemyPerformedSpecialAttackOrCharged = true;
+                combatLogMessages.push(enemyBaseData.special_attack_execute_text ||
+                    `${enemyBaseData.name} elsüti: ${enemyBaseData.special_attack_name}!`);
                 const baseEnemyDamage = 5;
-                const playerDefenseStat = character.defense ?? 0;
-                let actualDamageTaken = Math.max(0, baseEnemyDamage - playerDefenseStat);
-                if (currentCombatTurnState.character_is_defending) {
-                    actualDamageTaken = Math.floor(actualDamageTaken / 2);
-                    combatLogMessages.push(`A védekezésed csökkentette a sebzést!`);
+                let specialDamage = Math.floor(baseEnemyDamage *
+                    (enemyBaseData.special_attack_damage_multiplier ?? 1.0));
+                if (characterIsDefending) {
+                    combatLogMessages.push(`De te védekeztél, így a sebzés jelentősen csökkent!`);
+                    specialDamage = Math.floor(specialDamage * 0.25);
                 }
-                playerCurrentHealth = Math.max(0, playerCurrentHealth - actualDamageTaken);
-                combatLogMessages.push(`Eltalált! Sebzés: ${actualDamageTaken}. Életerőd: ${playerCurrentHealth}`);
+                else {
+                    specialDamage = Math.max(0, specialDamage - (character.defense ?? 0));
+                }
+                playerCurrentHealth = Math.max(0, playerCurrentHealth - specialDamage);
+                combatLogMessages.push(`Eltalált a speciális támadással! Sebzés: ${specialDamage}. Életerőd: ${playerCurrentHealth}`);
                 character = await this.characterService.updateCharacter(character.id, {
                     health: playerCurrentHealth,
                 });
+                await this.knex('active_combats')
+                    .where({ id: activeCombat.id })
+                    .update({ enemy_charge_turns_current: 0 });
+            }
+            else if (enemyBaseData.special_attack_name &&
+                activeCombat.enemy_charge_turns_current > 0) {
+                enemyPerformedSpecialAttackOrCharged = true;
+                const newCharge = activeCombat.enemy_charge_turns_current + 1;
+                await this.knex('active_combats')
+                    .where({ id: activeCombat.id })
+                    .update({ enemy_charge_turns_current: newCharge });
+                combatLogMessages.push(enemyBaseData.special_attack_telegraph_text ||
+                    `${enemyBaseData.name} készül valamire...`);
+            }
+            else if (enemyBaseData.special_attack_name &&
+                (enemyBaseData.special_attack_charge_turns ?? 0) > 0 &&
+                Math.random() < 0.33) {
+                enemyPerformedSpecialAttackOrCharged = true;
+                await this.knex('active_combats')
+                    .where({ id: activeCombat.id })
+                    .update({ enemy_charge_turns_current: 1 });
+                combatLogMessages.push(enemyBaseData.special_attack_telegraph_text ||
+                    `${enemyBaseData.name} erőt gyűjt!`);
             }
             else {
-                combatLogMessages.push(`Sikeresen kivédted ${enemyBaseData.name} támadását!`);
+                combatLogMessages.push(`${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''})!`);
+                const playerDiceDef = Math.floor(Math.random() * 6) + 1;
+                const enemyDiceAtk = Math.floor(Math.random() * 6) + 1;
+                const enemyAttackVal = (enemyBaseData.skill ?? 0) + enemyDiceAtk;
+                let playerEffectiveDefenseSkill = character.skill ?? 0;
+                if (characterIsDefending) {
+                    this.logger.debug(`Player is defending! Applying defense bonus to skill roll.`);
+                    combatLogMessages.push(`Védekezel!`);
+                    playerEffectiveDefenseSkill += character.skill ?? 0;
+                }
+                const playerDefenseVal = playerEffectiveDefenseSkill + playerDiceDef;
+                if (enemyAttackVal > playerDefenseVal) {
+                    const baseEnemyDamage = 5;
+                    let actualDamageTaken = Math.max(0, baseEnemyDamage - (character.defense ?? 0));
+                    if (characterIsDefending) {
+                        actualDamageTaken = Math.floor(actualDamageTaken / 2);
+                        if (actualDamageTaken > 0)
+                            combatLogMessages.push(`A védekezésed csökkentette a sebzést!`);
+                    }
+                    playerCurrentHealth = Math.max(0, playerCurrentHealth - actualDamageTaken);
+                    combatLogMessages.push(`Eltalált! Sebzés: ${actualDamageTaken}. Életerőd: ${playerCurrentHealth}`);
+                    character = await this.characterService.updateCharacter(character.id, { health: playerCurrentHealth });
+                }
+                else {
+                    combatLogMessages.push(`Sikeresen kivédted ${enemyBaseData.name} támadását!`);
+                }
             }
-            if (currentCombatTurnState.character_is_defending) {
+            if (characterIsDefending) {
                 await this.knex('active_combats')
                     .where({ id: activeCombat.id })
                     .update({ character_is_defending: false });
@@ -222,12 +266,23 @@ let CombatService = CombatService_1 = class CombatService {
         const finalCharacterStateInRound = await this.characterService.findById(character.id);
         if (!finalCharacterStateInRound)
             throw new common_1.InternalServerErrorException('Character state lost!');
+        const finalActiveCombatState = await this.knex('active_combats')
+            .where({ id: activeCombat.id })
+            .first();
         const currentCombatEnemyData = {
             id: enemyBaseData.id,
             name: enemyBaseData.name,
             health: enemyBaseData.health,
             currentHealth: enemyCurrentHealth,
             skill: enemyBaseData.skill,
+            isChargingSpecial: (finalActiveCombatState?.enemy_charge_turns_current ?? 0) > 0 &&
+                (finalActiveCombatState?.enemy_charge_turns_current ?? 0) <
+                    (enemyBaseData.special_attack_charge_turns ?? Infinity),
+            currentChargeTurns: finalActiveCombatState?.enemy_charge_turns_current,
+            maxChargeTurns: enemyBaseData.special_attack_charge_turns,
+            specialAttackTelegraphText: (finalActiveCombatState?.enemy_charge_turns_current ?? 0) > 0
+                ? enemyBaseData.special_attack_telegraph_text
+                : null,
         };
         return {
             character: finalCharacterStateInRound,

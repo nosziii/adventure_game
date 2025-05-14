@@ -4,4 +4,8 @@ export declare class EnemyDataDto {
     health: number;
     skill?: number;
     currentHealth: number;
+    isChargingSpecial?: boolean;
+    currentChargeTurns?: number | null;
+    maxChargeTurns?: number | null;
+    specialAttackTelegraphText?: string | null;
 }

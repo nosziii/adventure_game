@@ -39,6 +39,17 @@ let AdminEnemiesService = AdminEnemiesService_1 = class AdminEnemiesService {
             dbData.item_drop_id = dto.itemDropId;
         if (dto.xpReward !== undefined)
             dbData.xp_reward = dto.xpReward;
+        if (dto.specialAttackName !== undefined)
+            dbData.special_attack_name = dto.specialAttackName;
+        if (dto.specialAttackDamageMultiplier !== undefined)
+            dbData.special_attack_damage_multiplier =
+                dto.specialAttackDamageMultiplier;
+        if (dto.specialAttackChargeTurns !== undefined)
+            dbData.special_attack_charge_turns = dto.specialAttackChargeTurns;
+        if (dto.specialAttackTelegraphText !== undefined)
+            dbData.special_attack_telegraph_text = dto.specialAttackTelegraphText;
+        if (dto.specialAttackExecuteText !== undefined)
+            dbData.special_attack_execute_text = dto.specialAttackExecuteText;
         return dbData;
     }
     async findAll() {

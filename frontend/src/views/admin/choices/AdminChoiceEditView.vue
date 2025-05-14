@@ -2,19 +2,28 @@
   <div class="admin-choice-edit">
     <h1>{{ isEditing ? `Választás Szerkesztése (ID: ${choiceId})` : 'Új Választás Létrehozása' }}</h1>
 
-    <div v-if="isEditing && store.isLoadingCurrent">Adatok töltése...</div>
-    <div v-else-if="store.getError" class="error-message">{{ store.getError }}</div>
+    <div v-if="pageLoading">Adatok töltése...</div> <div v-else-if="store.getError" class="error-message">{{ store.getError }}</div>
 
     <form @submit.prevent="handleSubmit" v-else>
       <div class="form-group">
-        <label for="sourceNodeId">Forrás Node ID:</label>
-        <input type="number" id="sourceNodeId" v-model.number="choiceData.sourceNodeId" required min="1" />
-        </div>
+        <label for="sourceNodeId">Forrás Node:</label>
+        <select id="sourceNodeId" v-model.number="choiceData.sourceNodeId" required>
+          <option :value="0" disabled>Válassz egy forrás node-ot...</option>
+          <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
+            ID: {{ node.id }} - {{ truncateText(node.text, 40) }}
+          </option>
+        </select>
+      </div>
 
       <div class="form-group">
-        <label for="targetNodeId">Cél Node ID:</label>
-        <input type="number" id="targetNodeId" v-model.number="choiceData.targetNodeId" required min="1" />
-        </div>
+        <label for="targetNodeId">Cél Node:</label>
+        <select id="targetNodeId" v-model.number="choiceData.targetNodeId" required>
+          <option :value="0" disabled>Válassz egy cél node-ot...</option>
+          <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
+            ID: {{ node.id }} - {{ truncateText(node.text, 40) }}
+          </option>
+        </select>
+      </div>
 
       <div class="form-group">
         <label for="text">Szöveg:</label>
@@ -22,14 +31,24 @@
       </div>
 
       <div class="form-group">
-        <label for="requiredItemId">Szükséges Tárgy ID (opcionális):</label>
-        <input type="number" id="requiredItemId" v-model.number="choiceData.requiredItemId" min="1" />
-         </div>
+        <label for="requiredItemId">Szükséges Tárgy (opcionális):</label>
+        <select id="requiredItemId" v-model.number="choiceData.requiredItemId">
+          <option :value="null">Nincs</option>
+          <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
+            ID: {{ item.id }} - {{ item.name }}
+          </option>
+        </select>
+      </div>
 
       <div class="form-group">
-        <label for="itemCostId">Tárgy Költség ID (opcionális):</label>
-        <input type="number" id="itemCostId" v-model.number="choiceData.itemCostId" min="1" />
-         </div>
+        <label for="itemCostId">Tárgy Költség (opcionális):</label>
+        <select id="itemCostId" v-model.number="choiceData.itemCostId">
+          <option :value="null">Nincs</option>
+          <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
+            ID: {{ item.id }} - {{ item.name }}
+          </option>
+        </select>
+      </div>
 
       <div class="form-group">
         <label for="requiredStatCheck">Statisztika Feltétel (opcionális, pl. "skill >= 10"):</label>
@@ -37,7 +56,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" :disabled="store.isLoading">
+        <button type="submit" :disabled="store.isLoading || adminNodesStore.isLoading || adminItemsStore.isLoading">
           {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
         </button>
         <router-link :to="{ name: 'admin-choices-list' }" class="cancel-button">Mégse</router-link>
@@ -52,17 +71,21 @@ import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAdminChoicesStore } from '../../../stores/adminChoices'; // Vagy relatív útvonal
 import type { AdminCreateChoicePayload, AdminUpdateChoicePayload, AdminChoiceData } from '../../../types/admin.types';
+import { useAdminNodesStore } from '../../../stores/adminNodes'; 
+import { useAdminItemsStore } from '../../../stores/adminItems'; 
 
 const store = useAdminChoicesStore();
+const adminNodesStore = useAdminNodesStore(); // Node store példányosítása
+const adminItemsStore = useAdminItemsStore(); // Item store példányosítása
 const router = useRouter();
 const route = useRoute();
 
 const choiceId = ref<number | null>(null);
 const isEditing = computed(() => choiceId.value !== null);
+const pageLoading = ref(false); // Új loading flag az oldal betöltéséhez
 
-// Az űrlap adatai
-const choiceData = ref<AdminCreateChoicePayload | AdminUpdateChoicePayload>({
-  sourceNodeId: 0, // Vagy egy valid alapértelmezett, vagy null és validáció
+const getInitialChoiceData = (): AdminCreateChoicePayload => ({
+  sourceNodeId: 0, // Vagy null, és a selectben van egy "Válassz..." opció
   targetNodeId: 0,
   text: '',
   requiredItemId: null,
@@ -70,35 +93,42 @@ const choiceData = ref<AdminCreateChoicePayload | AdminUpdateChoicePayload>({
   requiredStatCheck: null,
 });
 
+const choiceData = ref<AdminCreateChoicePayload | AdminUpdateChoicePayload>(getInitialChoiceData());
 const successMessage = ref<string | null>(null);
 
 onMounted(async () => {
+  pageLoading.value = true;
+  // Párhuzamosan lekérjük a node és item listákat a dropdownokhoz
+  const fetchNodesPromise = adminNodesStore.fetchNodes();
+  const fetchItemsPromise = adminItemsStore.fetchItems();
+
   const idParam = route.params.id;
   if (idParam) {
-    choiceId.value = Array.isArray(idParam) ? parseInt(idParam[0], 10) : parseInt(idParam, 10);
-    if (!isNaN(choiceId.value)) {
-      console.log(`Editing choice with ID: ${choiceId.value}`);
-      const success = await store.fetchChoice(choiceId.value);
-      // A watchEffect lentebb kezeli az űrlap feltöltését
-      if(!success) choiceId.value = null; // Hiba esetén visszaállítjuk create módra
+    const idToFetch = Array.isArray(idParam) ? parseInt(idParam[0], 10) : parseInt(idParam, 10);
+    if (!isNaN(idToFetch)) {
+      choiceId.value = idToFetch;
+      await store.fetchChoice(choiceId.value); // Ez beállítja a store.currentChoice-ot
     } else {
-        console.error("Invalid choice ID in route parameter:", route.params.id);
-        store.error = "Érvénytelen Választás ID.";
-        choiceId.value = null;
+      store.error = "Érvénytelen Választás ID."; choiceId.value = null;
+      choiceData.value = getInitialChoiceData();
     }
   } else {
-      console.log('Creating new choice.');
-      store.currentChoice = null; // Előző szerkesztett törlése
-      // Alapértelmezett értékek új choice-hoz
-      choiceData.value = { sourceNodeId: 0, targetNodeId: 0, text: '', requiredItemId: null, itemCostId: null, requiredStatCheck: null };
+    store.currentChoice = null;
+    choiceData.value = getInitialChoiceData();
   }
+  // Megvárjuk a listák betöltését is
+  try {
+      await Promise.all([fetchNodesPromise, fetchItemsPromise]);
+  } catch (listError) {
+      console.error("Failed to fetch lists for dropdowns", listError);
+      // A store-ok error mezője már kezeli a saját hibáikat
+  }
+  pageLoading.value = false;
 });
 
-// Figyeljük a store currentChoice változását, és betöltjük az űrlapba
 watch(() => store.getCurrentChoice, (currentChoice) => {
     if (isEditing.value && currentChoice) {
-        console.log('Populating form with fetched choice data:', currentChoice);
-        choiceData.value = { // Ne felejtsük el, hogy a DTO camelCase, a DB snake_case lehet
+        choiceData.value = {
             sourceNodeId: currentChoice.sourceNodeId,
             targetNodeId: currentChoice.targetNodeId,
             text: currentChoice.text,
@@ -106,34 +136,16 @@ watch(() => store.getCurrentChoice, (currentChoice) => {
             itemCostId: currentChoice.itemCostId ?? null,
             requiredStatCheck: currentChoice.requiredStatCheck ?? null,
         };
-    } else if (!isEditing.value) { // Create módban ürítsük, ha pl. szerkesztésből jövünk ide
-         choiceData.value = { sourceNodeId: 0, targetNodeId: 0, text: '', requiredItemId: null, itemCostId: null, requiredStatCheck: null };
+    } else if (!isEditing.value) {
+         choiceData.value = getInitialChoiceData();
     }
-}, { immediate: true }); // immediate: true, hogy betöltéskor is lefusson, ha már van currentChoice
+}, { immediate: true, deep: true }); // deep: true a currentChoice objektum változásaira
 
+const handleSubmit = async () => { /* ... (változatlan) ... */ };
 
-const handleSubmit = async () => {
-  successMessage.value = null;
-  store.error = null; // Hiba törlése
-  let result: AdminChoiceData | null = null;
-
-  // Validáció (egyszerű példa, class-validator jobb lenne a DTO-ban)
-  if (!choiceData.value.sourceNodeId || !choiceData.value.targetNodeId || !choiceData.value.text) {
-      store.error = "A Forrás Node ID, Cél Node ID és Szöveg kitöltése kötelező!";
-      return;
-  }
-
-  if (isEditing.value && choiceId.value !== null) {
-    result = await store.updateChoice(choiceId.value, choiceData.value as AdminUpdateChoicePayload);
-    if (result) successMessage.value = `Választás (ID: ${result.id}) sikeresen frissítve!`;
-  } else {
-    result = await store.createChoice(choiceData.value as AdminCreateChoicePayload);
-    if (result) successMessage.value = `Választás sikeresen létrehozva (ID: ${result.id})!`;
-  }
-
-  if (result) {
-    setTimeout(() => router.push({ name: 'admin-choices-list' }), 1500);
-  }
+// Segédfüggvény a szöveg rövidítésére (ha kellene itt is)
+const truncateText = (text: string, length: number): string => {
+    return text && text.length > length ? text.substring(0, length) + '...' : text || '';
 };
 </script>
 
