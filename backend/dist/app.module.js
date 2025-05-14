@@ -21,6 +21,8 @@ const character_module_1 = require("./character.module");
 const character_service_1 = require("./character.service");
 const character_controller_1 = require("./character.controller");
 const admin_module_1 = require("./admin/admin.module");
+const combat_module_1 = require("./combat.module");
+const combat_service_1 = require("./combat.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -35,9 +37,10 @@ exports.AppModule = AppModule = __decorate([
             game_module_1.GameModule,
             character_module_1.CharacterModule,
             admin_module_1.AdminModule,
+            combat_module_1.CombatModule,
         ],
         controllers: [app_controller_1.AppController, users_controller_1.UsersController, character_controller_1.CharacterController],
-        providers: [app_service_1.AppService, character_service_1.CharacterService],
+        providers: [app_service_1.AppService, character_service_1.CharacterService, combat_service_1.CombatService],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

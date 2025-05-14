@@ -26,6 +26,7 @@ export interface Character {
   current_node_id: number | null;
   created_at: Date;
   updated_at: Date;
+  defense: number | null;
   equipped_weapon_id: number | null;
   equipped_armor_id: number | null;
 }
@@ -311,93 +312,95 @@ export class CharacterService {
 
   // --- applyPassiveEffects : Már csak a felszerelt tárgyakat nézi ---
   private async applyPassiveEffects(character: Character): Promise<Character> {
-    const characterWithEffects = { ...character };
+    const characterWithEffects = { ...character }; // Másolat
+    // Alapértelmezett defense érték beállítása, ha null (a DB defaultja 0 kellene legyen)
+    characterWithEffects.defense = characterWithEffects.defense ?? 0;
+    // Alapértelmezett skill, luck, stamina is, ha lehetnek null-ok és számítunk velük
+    characterWithEffects.skill = characterWithEffects.skill ?? 0;
+    characterWithEffects.luck = characterWithEffects.luck ?? 0;
+    characterWithEffects.stamina = characterWithEffects.stamina ?? 100;
+
     this.logger.debug(
-      `Applying passive effects for character ${character.id}. WeaponID: ${character.equipped_weapon_id}, ArmorID: ${character.equipped_armor_id}`,
+      `Applying passive effects for char ${character.id}. Base Skill: ${character.skill}, Base Defense: ${character.defense}`,
     );
 
     const equippedItemIds = [
       character.equipped_weapon_id,
       character.equipped_armor_id,
-    ].filter((id): id is number => id !== null && id !== undefined); // Összegyűjtjük a nem null ID-kat
+    ].filter((id): id is number => id !== null && id !== undefined);
 
-    if (equippedItemIds.length === 0) {
-      this.logger.debug('No items equipped, no passive effects to apply.');
-      return characterWithEffects; // Visszaadjuk az eredetit, ha nincs mit alkalmazni
-    }
-
-    // Lekérdezzük az összes felszerelt tárgy adatát egyszerre
-    const equippedItems = await this.knex('items').whereIn(
-      'id',
-      equippedItemIds,
-    );
-
-    for (const item of equippedItems) {
-      // Csak a passzívnak ítélt típusokat vesszük figyelembe (vagy azokat, amiknek van effektje)
-      const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(
-        item.type?.toLowerCase() ?? '',
+    if (equippedItemIds.length > 0) {
+      const equippedItems = await this.knex('items').whereIn(
+        'id',
+        equippedItemIds,
+      );
+      this.logger.debug(
+        `Found ${equippedItems.length} equipped items to process effects.`,
       );
 
-      if (
-        isPassiveType &&
-        typeof item.effect === 'string' &&
-        item.effect.length > 0
-      ) {
-        this.logger.debug(
-          `Parsing passive effect "${item.effect}" from equipped item ${item.id} (${item.name})`,
+      for (const item of equippedItems) {
+        const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(
+          item.type?.toLowerCase() ?? '',
         );
-        // Effektek értelmezése (ugyanaz a logika, mint korábban)
-        const effects = item.effect.split(';'); // Ha több effekt van pontosvesszővel elválasztva
-        for (const effectPart of effects) {
-          const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
-          const match = effectPart.trim().match(effectRegex);
+        if (
+          isPassiveType &&
+          typeof item.effect === 'string' &&
+          item.effect.length > 0
+        ) {
+          this.logger.debug(
+            `Parsing passive effect "${item.effect}" from equipped item <span class="math-inline">\{item\.id\} \(</span>{item.name})`,
+          );
+          const effects = item.effect.split(';');
+          for (const effectPart of effects) {
+            const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+            const match = effectPart.trim().match(effectRegex);
+            if (match) {
+              const [, statName, operator, valueStr] = match;
+              const value = parseInt(valueStr, 10);
+              const modifier = operator === '+' ? value : -value;
+              this.logger.debug(
+                `Parsed effect part: stat=<span class="math-inline">\{statName\}, modifier\=</span>{modifier}`,
+              );
 
-          if (match) {
-            const [, statName, operator, valueStr] = match;
-            const value = parseInt(valueStr, 10);
-            const modifier = operator === '+' ? value : -value;
-            this.logger.debug(
-              `Parsed effect part: stat=${statName}, modifier=${modifier}`,
-            );
-
-            switch (statName.toLowerCase()) {
-              case 'skill':
-                characterWithEffects.skill =
-                  (characterWithEffects.skill ?? 0) + modifier;
-                this.logger.log(
-                  `Applied effect: skill changed to ${characterWithEffects.skill}`,
-                );
-                break;
-              case 'luck':
-                characterWithEffects.luck =
-                  (characterWithEffects.luck ?? 0) + modifier;
-                this.logger.log(
-                  `Applied effect: luck changed to ${characterWithEffects.luck}`,
-                );
-                break;
-              case 'stamina':
-                characterWithEffects.stamina =
-                  (characterWithEffects.stamina ?? 0) + modifier;
-                this.logger.log(
-                  `Applied effect: stamina changed to ${characterWithEffects.stamina}`,
-                );
-                break;
-              // TODO: Ide jöhetnek más statok (pl. max_health, defense)
-              default:
-                this.logger.warn(`Unknown stat in passive effect: ${statName}`);
-                break;
+              switch (statName.toLowerCase()) {
+                case 'skill':
+                  characterWithEffects.skill =
+                    (characterWithEffects.skill ?? 0) + modifier;
+                  break;
+                case 'luck':
+                  characterWithEffects.luck =
+                    (characterWithEffects.luck ?? 0) + modifier;
+                  break;
+                case 'stamina': // Ez a max HP-t (állóképességet) növeli
+                  characterWithEffects.stamina =
+                    (characterWithEffects.stamina ?? 0) + modifier;
+                  break;
+                case 'defense': // <-- ÚJ DEFENSE KEZELÉSE
+                  characterWithEffects.defense =
+                    (characterWithEffects.defense ?? 0) + modifier;
+                  break;
+                default:
+                  this.logger.warn(
+                    `Unknown stat in passive effect: ${statName}`,
+                  );
+                  break;
+              }
+            } else {
+              this.logger.warn(
+                `Could not parse passive effect part: "${effectPart}"`,
+              );
             }
-          } else {
-            this.logger.warn(
-              `Could not parse passive effect part: "${effectPart}"`,
-            );
-          }
-        } // for effectPart vége
-      } // if (isPassiveType...) vége
-    } // for item vége
-
+          } // for effectPart
+        } // if isPassiveType
+      } // for item
+      this.logger.log(
+        `Effects applied. Final stats: Skill=<span class="math-inline">\{characterWithEffects\.skill\}, Def\=</span>{characterWithEffects.defense}, Luck=<span class="math-inline">\{characterWithEffects\.luck\}, Stamina\=</span>{characterWithEffects.stamina}`,
+      );
+    } else {
+      this.logger.debug('No items equipped, no passive effects to apply.');
+    }
     return characterWithEffects;
-  } // applyPassiveEffects vége
+  }
 
   /**
    * Ellenőrzi, hogy egy karakter rendelkezik-e egy adott tárgyból legalább egy darabbal.

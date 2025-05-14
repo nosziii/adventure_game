@@ -3,6 +3,7 @@
     <div class="stats-bar" v-if="stats">
       <span>HP: {{ stats.health }}</span>
       <span v-if="stats.skill !== null"> | Skill: {{ stats.skill }}</span>
+      <span v-if="stats.defense !== null && stats.defense !== undefined"> | Védelem: {{ stats.defense }}</span> <span v-if="stats.luck !== null"> | Luck: {{ stats.luck }}</span>
       <span v-if="stats.luck !== null"> | Luck: {{ stats.luck }}</span>
       <span v-if="stats.stamina !== null"> | Stamina: {{ stats.stamina }}</span>
       <span v-if="stats.level !== null"> | Szint: {{ stats.level }}</span>

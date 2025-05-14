@@ -1,0 +1,1 @@
+{"version":3,"file":"combat.module.js","sourceRoot":"","sources":["../src/combat.module.ts"],"names":[],"mappings":";;;;;;;;;AACA,2CAAoD;AACpD,qDAAiD;AACjD,yDAAqD;AAa9C,IAAM,YAAY,GAAlB,MAAM,YAAY;CAAG,CAAA;AAAf,oCAAY;uBAAZ,YAAY;IATxB,IAAA,eAAM,EAAC;QACN,OAAO,EAAE;YACP,kCAAe;SAGhB;QACD,SAAS,EAAE,CAAC,8BAAa,CAAC;QAC1B,OAAO,EAAE,CAAC,8BAAa,CAAC;KACzB,CAAC;GACW,YAAY,CAAG"}

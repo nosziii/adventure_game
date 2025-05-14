@@ -14,6 +14,7 @@ export interface Character {
     current_node_id: number | null;
     created_at: Date;
     updated_at: Date;
+    defense: number | null;
     equipped_weapon_id: number | null;
     equipped_armor_id: number | null;
 }

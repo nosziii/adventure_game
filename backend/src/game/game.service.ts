@@ -27,6 +27,7 @@ import { StoryNode } from './interfaces/story-node.interface';
 import { ChoiceRecord } from './interfaces/choice-record.interface';
 import { EnemyRecord } from './interfaces/enemy-record.interface';
 import { PlayerProgressRecord } from './interfaces/player-progress.interface';
+import { CombatService, CombatResult } from '../combat.service';
 
 const STARTING_NODE_ID = 1;
 
@@ -37,6 +38,7 @@ export class GameService {
   constructor(
     @Inject(KNEX_CONNECTION) private readonly knex: Knex, // Knex közvetlen injektálása
     private readonly characterService: CharacterService,
+    private readonly combatService: CombatService, // Harc szolgáltatás
   ) {}
 
   // Segédfüggvény a Character -> CharacterStatsDto átalakításhoz
@@ -50,7 +52,85 @@ export class GameService {
       level: character.level,
       xp: character.xp,
       xpToNextLevel: character.xp_to_next_level,
+      defense: character.defense,
     };
+  }
+
+  // A GameController ezt fogja hívni
+  async processCombatAction(
+    userId: number,
+    actionDto: CombatActionDto,
+  ): Promise<GameStateDto> {
+    this.logger.log(`GameService processing combat action for user ${userId}`);
+    // Meghívjuk a CombatService-t
+    const combatResult: CombatResult =
+      await this.combatService.handleCombatAction(userId, actionDto);
+
+    // Lekérdezzük a legfrissebb inventoryt a frissített karakterhez
+    // A combatResult.character már a harc utáni/közbeni állapotot tükrözi
+    const inventory = await this.characterService.getInventory(
+      combatResult.character.id,
+    );
+    const characterForDto = this.mapCharacterToDto(combatResult.character);
+
+    if (combatResult.isCombatOver) {
+      this.logger.log(
+        `Combat finished for user ${userId}. New node: ${combatResult.nextNodeId}`,
+      );
+      // A karakter current_node_id-ja már frissítve van a CombatService által.
+      // Most a getCurrentGameState-et hívjuk, ami az új node-ot adja vissza.
+      // DE! A getCurrentGameState újra lekérdezné a karaktert. Egyszerűbb itt összeállítani.
+
+      const finalNode = combatResult.nextNodeId
+        ? await this.knex<StoryNode>('story_nodes')
+            .where({ id: combatResult.nextNodeId })
+            .first()
+        : null; // Ha valamiért nincs nextNodeId (nem kellene)
+
+      const choicesForFinalNode =
+        finalNode && !finalNode.is_end
+          ? await this.knex<ChoiceRecord>('choices')
+              .where({ source_node_id: finalNode.id })
+              .then((potentialChoices) =>
+                Promise.all(
+                  potentialChoices.map(async (choice) => ({
+                    id: choice.id,
+                    text: choice.text,
+                    isAvailable: await this.checkChoiceAvailability(
+                      choice,
+                      combatResult.character,
+                    ),
+                  })),
+                ),
+              )
+          : [];
+
+      return {
+        node: finalNode
+          ? { id: finalNode.id, text: finalNode.text, image: finalNode.image }
+          : null,
+        choices: choicesForFinalNode,
+        character: characterForDto,
+        combat: null, // Harc véget ért
+        inventory: inventory,
+        messages: combatResult.combatLogMessages,
+        equippedWeaponId: combatResult.character.equipped_weapon_id,
+        equippedArmorId: combatResult.character.equipped_armor_id,
+      };
+    } else {
+      // Harc folytatódik
+      this.logger.log(`Combat continues for user ${userId}.`);
+      return {
+        node: null,
+        choices: [],
+        character: characterForDto,
+        combat: combatResult.enemy ?? null, // A CombatService által visszaadott frissített enemy állapot
+        inventory: inventory,
+        messages: combatResult.combatLogMessages,
+        equippedWeaponId: combatResult.character.equipped_weapon_id,
+        equippedArmorId: combatResult.character.equipped_armor_id,
+      };
+    }
   }
 
   // --- getCurrentGameState ---
@@ -497,348 +577,6 @@ export class GameService {
     );
     return this.getCurrentGameState(userId); // Ez lekéri az aktuális állapotot (ami lehet harc vagy az új node)
   } // makeChoice vége
-
-  async handleCombatAction(
-    userId: number,
-    actionDto: CombatActionDto,
-  ): Promise<GameStateDto> {
-    this.logger.log(
-      `Handling combat action '${actionDto.action}' for user ID: ${userId}`,
-    );
-
-    // 1. Aktív harc és résztvevők adatainak lekérdezése
-    const character = await this.characterService.findOrCreateByUserId(userId);
-    const activeCombat = await this.knex('active_combats')
-      .where({ character_id: character.id })
-      .first();
-
-    // Ellenőrizzük, hogy harcban van-e
-    if (!activeCombat) {
-      this.logger.warn(
-        `User ${userId} tried combat action but is not in combat.`,
-      );
-      throw new ForbiddenException('You are not currently in combat.');
-    }
-
-    // Ellenőrizzük az ellenfél adatait
-    const enemyBaseData = await this.knex<EnemyRecord>('enemies')
-      .where({ id: activeCombat.enemy_id })
-      .first();
-    if (!enemyBaseData) {
-      this.logger.error(
-        `Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`,
-      );
-      await this.knex('active_combats').where({ id: activeCombat.id }).del(); // Töröljük a rossz rekordot
-      throw new InternalServerErrorException(
-        'Combat data corrupted, enemy not found.',
-      );
-    }
-    // Innentől az 'enemyBaseData' biztosan nem undefined a TypeScript számára sem a throw miatt
-
-    let enemyCurrentHealth = activeCombat.enemy_current_health;
-    let playerCurrentHealth = character.health;
-    const combatLogMessages: string[] = [];
-    let playerActionSuccessful = false; // Jelző, hogy az ellenfélnek támadnia kell-e
-
-    // --- 2. Játékos Akciójának Feldolgozása ---
-    if (actionDto.action === 'attack') {
-      combatLogMessages.push(`Megtámadod (${enemyBaseData.name})!`);
-      const playerDice = Math.floor(Math.random() * 6) + 1;
-      const enemyDice = Math.floor(Math.random() * 6) + 1;
-      const playerAttack = (character.skill ?? 0) + playerDice;
-      const enemyDefense = (enemyBaseData.skill ?? 0) + enemyDice;
-
-      if (playerAttack > enemyDefense) {
-        let baseDamage = 1; // Alap ököl sebzés
-        const inventory = await this.characterService.getInventory(
-          character.id,
-        );
-        const weapon = inventory.find((item) => item.type === 'weapon'); // Első fegyver keresése
-
-        if (weapon && typeof weapon.effect === 'string') {
-          this.logger.debug(
-            `Found weapon: ${weapon.name} (Effect: ${weapon.effect})`,
-          );
-          const damageMatch = weapon.effect.match(/damage\+(\d+)/); // 'damage+X' keresése
-          if (damageMatch && damageMatch[1]) {
-            baseDamage = parseInt(damageMatch[1], 10); // Beállítjuk a fegyver sebzését
-            this.logger.debug(`Weapon base damage set to: ${baseDamage}`);
-          } else {
-            this.logger.warn(
-              `Weapon ${weapon.name} found, but no valid 'damage+X' effect string.`,
-            );
-          }
-        } else {
-          this.logger.debug(
-            'No weapon found in inventory, using base unarmed damage.',
-          );
-        }
-
-        // Skill bónusz számítása (ez változatlan)
-        const skillBonus = Math.floor((character.skill ?? 0) / 5);
-        // Teljes sebzés kiszámítása
-        const totalDamage = baseDamage + skillBonus;
-        this.logger.debug(
-          `Calculating player damage: base=${baseDamage}, skillBonus=${skillBonus} (from skill=${character.skill}), total=${totalDamage}`,
-        );
-        enemyCurrentHealth = Math.max(0, enemyCurrentHealth - totalDamage);
-        combatLogMessages.push(
-          `Eltaláltad! Sebzés: ${totalDamage}. Ellenfél HP: ${enemyCurrentHealth}/${enemyBaseData.health}`,
-        );
-        await this.knex('active_combats')
-          .where({ id: activeCombat.id })
-          .update({
-            enemy_current_health: enemyCurrentHealth,
-            last_action_time: new Date(),
-          });
-      } else {
-        combatLogMessages.push(`Támadásod célt tévesztett!`);
-      }
-      playerActionSuccessful = true;
-
-      // Győzelem ellenőrzése KÖZVETLENÜL a játékos támadása után
-      this.logger.debug(
-        `Checking enemy defeat after attack. Current Health: ${enemyCurrentHealth}`,
-      );
-      if (enemyCurrentHealth <= 0) {
-        this.logger.log(
-          `>>> ENEMY DEFEATED BLOCK ENTERED (After Attack) <<< Health: ${enemyCurrentHealth}`,
-        );
-        combatLogMessages.push(
-          `Legyőzted: ${enemyBaseData.name}! ${enemyBaseData.defeat_text ?? ''}`,
-        );
-        await this.knex('active_combats').where({ id: activeCombat.id }).del();
-        const victoryNodeId = 8; // TODO: Konfigurálhatóvá tenni
-
-        // --- XP HOZZÁADÁSA ---
-        if (enemyBaseData.xp_reward > 0) {
-          this.logger.log(
-            `Adding ${enemyBaseData.xp_reward} XP for defeating enemy ${enemyBaseData.id}`,
-          );
-          try {
-            // Meghívjuk az addXp metódust
-            const xpResult = await this.characterService.addXp(
-              character.id,
-              enemyBaseData.xp_reward,
-            );
-            combatLogMessages.push(
-              `Kaptál ${enemyBaseData.xp_reward} tapasztalati pontot.`,
-            );
-            // Hozzáadjuk a szintlépés üzeneteket a harci loghoz
-            if (xpResult.leveledUp && xpResult.messages.length > 0) {
-              combatLogMessages.push(...xpResult.messages);
-            }
-          } catch (xpError) {
-            this.logger.error(
-              `Failed to add XP for character ${character.id}: ${xpError}`,
-            );
-            // Itt nem feltétlenül kell megszakítani a folyamatot
-          }
-        }
-        this.logger.log(
-          `Moving character ${character.id} to victory node ${victoryNodeId}`,
-        );
-
-        if (
-          enemyBaseData.item_drop_id !== null &&
-          enemyBaseData.item_drop_id !== undefined
-        ) {
-          combatLogMessages.push(
-            `Az ellenfél eldobott valamit! (Tárgy ID: ${enemyBaseData.item_drop_id})`,
-          );
-          try {
-            await this.characterService.addItemToInventory(
-              character.id,
-              enemyBaseData.item_drop_id,
-              1,
-            );
-            this.logger.log(
-              `Item ${enemyBaseData.item_drop_id} added to inventory.`,
-            );
-          } catch (itemDropError) {
-            this.logger.error(
-              `Failed to add item drop ${enemyBaseData.item_drop_id}: ${itemDropError}`,
-            );
-          }
-        }
-        await this.characterService.updateCharacter(character.id, {
-          current_node_id: victoryNodeId,
-        });
-
-        // --- Haladás rögzítése győzelem után ---
-        await this.knex('player_progress').insert({
-          character_id: character.id,
-          node_id: victoryNodeId,
-          choice_id_taken: null, // Harc kimenetele, nem direkt választás
-        });
-        const finalState = await this.getCurrentGameState(userId);
-        finalState.messages = combatLogMessages;
-        this.logger.log(
-          '>>> RETURNING FINAL STATE FROM VICTORY BLOCK (After Attack) <<<',
-        );
-        return finalState; // Kilépés a függvényből győzelem esetén
-      }
-    } else if (actionDto.action === 'use_item') {
-      const itemIdToUse = actionDto.itemId;
-      if (!itemIdToUse) {
-        throw new BadRequestException(
-          'No itemId provided for use_item action.',
-        );
-      }
-      combatLogMessages.push(
-        `Megpróbálsz használni egy tárgyat (ID: ${itemIdToUse}).`,
-      );
-
-      const hasItem = await this.characterService.hasItem(
-        character.id,
-        itemIdToUse,
-      );
-      if (!hasItem) {
-        combatLogMessages.push(`Nincs ilyen tárgyad!`);
-        playerActionSuccessful = true; // Sikertelen próbálkozás is egy akció lehet
-      } else {
-        const item = await this.knex('items')
-          .where({ id: itemIdToUse })
-          .first();
-        if (!item) {
-          throw new InternalServerErrorException('Item data inconsistency.');
-        }
-
-        if (!item.usable) {
-          combatLogMessages.push(
-            `Ez a tárgy (${item.name}) nem használható így.`,
-          );
-          playerActionSuccessful = true; // Sikertelen próbálkozás
-        } else if (item.effect && item.effect.startsWith('heal+')) {
-          const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
-          if (healAmount > 0) {
-            const maxHp = 100; // TODO: Használj valós max HP-t
-            const previousPlayerHealth = playerCurrentHealth;
-            playerCurrentHealth = Math.min(
-              maxHp,
-              playerCurrentHealth + healAmount,
-            );
-            const healedAmount = playerCurrentHealth - previousPlayerHealth;
-
-            if (healedAmount > 0) {
-              combatLogMessages.push(
-                `Gyógyító italt használtál (${item.name}). Visszatöltöttél ${healedAmount} életerőt! HP: ${playerCurrentHealth}`,
-              );
-              const updatedCharacterData =
-                await this.characterService.updateCharacter(character.id, {
-                  health: playerCurrentHealth,
-                });
-              playerCurrentHealth = updatedCharacterData.health; // Helyi változó frissítése
-              const removed =
-                await this.characterService.removeItemFromInventory(
-                  character.id,
-                  itemIdToUse,
-                  1,
-                );
-              if (!removed) {
-                this.logger.error(
-                  `Failed to remove item ${itemIdToUse} after use`,
-                );
-              }
-              playerActionSuccessful = true; // Sikeres használat
-            } else {
-              combatLogMessages.push(`Már így is maximum életerőn vagy.`);
-              playerActionSuccessful = true; // Próbálkozás volt, az ellenfél jön
-            }
-          } else {
-            combatLogMessages.push(`Ez a tárgy (${item.name}) nem gyógyít.`);
-            playerActionSuccessful = true; // Próbálkozás volt
-          }
-        } else {
-          combatLogMessages.push(
-            `Ezt a tárgyat (${item.name}) most nem tudod használni.`,
-          );
-          playerActionSuccessful = true; // Próbálkozás volt
-        }
-      }
-    } else {
-      this.logger.error(`Unknown combat action received: ${actionDto.action}`);
-      throw new BadRequestException('Invalid combat action.');
-    }
-
-    // --- 4. Ellenfél Támadása (Csak ha még él ÉS a játékos csinált valamit) ---
-    if (enemyCurrentHealth > 0 && playerActionSuccessful) {
-      combatLogMessages.push(
-        `${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''})!`,
-      );
-      const playerDiceDef = Math.floor(Math.random() * 6) + 1;
-      const enemyDiceAtk = Math.floor(Math.random() * 6) + 1;
-      const enemyAttack = (enemyBaseData.skill ?? 0) + enemyDiceAtk;
-      const playerDefense = (character.skill ?? 0) + playerDiceDef;
-
-      if (enemyAttack > playerDefense) {
-        const enemyDamage = 5;
-        playerCurrentHealth = Math.max(0, playerCurrentHealth - enemyDamage);
-        combatLogMessages.push(
-          `Eltalált! Sebzés: ${enemyDamage}. Életerőd: ${playerCurrentHealth}`,
-        );
-        await this.characterService.updateCharacter(character.id, {
-          health: playerCurrentHealth,
-        });
-      } else {
-        combatLogMessages.push(`Sikeresen kivédted a támadást!`);
-      }
-
-      // --- 5. Ellenőrizzük a Játékost az ellenfél támadása UTÁN ---
-      if (playerCurrentHealth <= 0) {
-        combatLogMessages.push(`Leestél a lábadról... Vége a kalandnak.`);
-        this.logger.log(
-          `Character ${character.id} defeated by enemy ${enemyBaseData.id}.`,
-        );
-        await this.knex('active_combats').where({ id: activeCombat.id }).del();
-        const defeatNodeId = 3; // TODO: Konfigurálhatóvá tenni
-        await this.characterService.updateCharacter(character.id, {
-          current_node_id: defeatNodeId,
-          health: 0,
-        });
-
-        // --- Haladás rögzítése vereség után ---
-        await this.knex('player_progress').insert({
-          character_id: character.id,
-          node_id: defeatNodeId,
-          choice_id_taken: null, // Harc kimenetele
-        });
-
-        const finalState = await this.getCurrentGameState(userId);
-        finalState.messages = combatLogMessages;
-        return finalState; // Kilépés a függvényből vereség esetén
-      }
-    } // Ellenfél támadásának vége
-
-    // --- 6. Ha a harc folytatódik ---
-    // (Ide csak akkor jutunk, ha sem a játékos, sem az ellenfél nem halt meg ebben a körben)
-    this.logger.log(`Combat continues for user ${userId}. Round finished.`);
-    // Újra lekérdezzük a frissített karakter adatokat a válaszhoz
-    const updatedCharacter = await this.characterService.findById(character.id);
-    if (!updatedCharacter)
-      throw new InternalServerErrorException(
-        'Character vanished after combat round!',
-      );
-    const currentInventory = await this.characterService.getInventory(
-      updatedCharacter.id,
-    );
-    const currentCombatState: EnemyDataDto = {
-      id: enemyBaseData.id,
-      name: enemyBaseData.name,
-      health: enemyBaseData.health, // Max HP
-      currentHealth: enemyCurrentHealth, // Frissített aktuális HP
-      skill: enemyBaseData.skill,
-    };
-    const resultState: GameStateDto = {
-      node: null,
-      choices: [],
-      character: this.mapCharacterToDto(updatedCharacter),
-      combat: currentCombatState,
-      inventory: currentInventory,
-      messages: combatLogMessages,
-    };
-    return resultState;
-  } // handleCombatAction vége
 
   async useItemOutOfCombat(
     userId: number,

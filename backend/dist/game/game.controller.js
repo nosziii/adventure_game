@@ -44,7 +44,7 @@ let GameController = GameController_1 = class GameController {
     async handleCombatAction(req, combatActionDto) {
         const userId = req.user.id;
         this.logger.log(`Received combat action: ${combatActionDto.action} from user ID: ${userId}`);
-        return this.gameService.handleCombatAction(userId, combatActionDto);
+        return this.gameService.processCombatAction(userId, combatActionDto);
     }
     async useItem(req, useItemDto) {
         const userId = req.user.id;

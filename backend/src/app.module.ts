@@ -12,6 +12,8 @@ import { CharacterModule } from './character.module'
 import { CharacterService } from './character.service'
 import { CharacterController } from './character.controller';
 import { AdminModule } from './admin/admin.module';
+import { CombatModule } from './combat.module';
+import { CombatService } from './combat.service';
 
 
 @Module({
@@ -24,8 +26,9 @@ import { AdminModule } from './admin/admin.module';
     GameModule,
     CharacterModule,
     AdminModule,
+    CombatModule,
   ],
   controllers: [AppController, UsersController, CharacterController],
-  providers: [AppService, CharacterService],
+  providers: [AppService, CharacterService, CombatService],
 })
 export class AppModule {}

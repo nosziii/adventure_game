@@ -10,6 +10,7 @@ class CharacterStatsDto {
     level;
     xp;
     xpToNextLevel;
+    defense;
 }
 exports.CharacterStatsDto = CharacterStatsDto;
 //# sourceMappingURL=character-stats.dto.js.map

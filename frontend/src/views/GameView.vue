@@ -22,6 +22,13 @@
           <button @click="handleAttack" class="action-button attack-button" :disabled="gameStore.isLoading">
             {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }}
           </button>
+          <button
+            @click="handleDefend"
+            class="action-button defend-button"
+            :disabled="gameStore.isLoading"
+          >
+            {{ gameStore.isLoading ? 'Védekezés...' : 'Védekezés' }}
+          </button>
           </div>
         <div class="combat-log">
             <h4>Harc Napló:</h4>
@@ -75,6 +82,11 @@ const handleAttack = async () => { // Legyen async
   await gameStore.attackEnemy()
   // A view a store állapotának változása miatt automatikusan frissül
 }
+const handleDefend = async () => {
+  console.log('[GameView] Defend button clicked! Calling store action...');
+  await gameStore.defendInCombat();
+  // A view a store állapotának változása miatt automatikusan frissül
+};
 // Minimap megjelenítésének kezelése
 const toggleMinimapHandler = () => {
     gameStore.toggleMinimap();
@@ -147,5 +159,14 @@ const toggleMinimapHandler = () => {
 }
 .minimap-toggle-button:hover {
     background-color: #0056b3;
+}
+
+.defend-button {
+  background-color: #17a2b8; /* Kékeszöld, mint az admin gomb */
+  color: white;
+  border: none;
+}
+.defend-button:hover:not(:disabled) {
+  background-color: #138496;
 }
 </style>

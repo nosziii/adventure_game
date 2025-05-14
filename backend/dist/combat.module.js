@@ -6,21 +6,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GameModule = void 0;
+exports.CombatModule = void 0;
 const common_1 = require("@nestjs/common");
-const game_controller_1 = require("./game.controller");
-const game_service_1 = require("./game.service");
-const auth_module_1 = require("../auth/auth.module");
-const character_module_1 = require("../character.module");
-const combat_module_1 = require("../combat.module");
-let GameModule = class GameModule {
+const combat_service_1 = require("./combat.service");
+const character_module_1 = require("./character.module");
+let CombatModule = class CombatModule {
 };
-exports.GameModule = GameModule;
-exports.GameModule = GameModule = __decorate([
+exports.CombatModule = CombatModule;
+exports.CombatModule = CombatModule = __decorate([
     (0, common_1.Module)({
-        imports: [auth_module_1.AuthModule, character_module_1.CharacterModule, combat_module_1.CombatModule],
-        controllers: [game_controller_1.GameController],
-        providers: [game_service_1.GameService],
+        imports: [
+            character_module_1.CharacterModule,
+        ],
+        providers: [combat_service_1.CombatService],
+        exports: [combat_service_1.CombatService],
     })
-], GameModule);
-//# sourceMappingURL=game.module.js.map
+], CombatModule);
+//# sourceMappingURL=combat.module.js.map

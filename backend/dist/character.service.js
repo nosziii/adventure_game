@@ -181,57 +181,65 @@ let CharacterService = CharacterService_1 = class CharacterService {
     }
     async applyPassiveEffects(character) {
         const characterWithEffects = { ...character };
-        this.logger.debug(`Applying passive effects for character ${character.id}. WeaponID: ${character.equipped_weapon_id}, ArmorID: ${character.equipped_armor_id}`);
+        characterWithEffects.defense = characterWithEffects.defense ?? 0;
+        characterWithEffects.skill = characterWithEffects.skill ?? 0;
+        characterWithEffects.luck = characterWithEffects.luck ?? 0;
+        characterWithEffects.stamina = characterWithEffects.stamina ?? 100;
+        this.logger.debug(`Applying passive effects for char ${character.id}. Base Skill: ${character.skill}, Base Defense: ${character.defense}`);
         const equippedItemIds = [
             character.equipped_weapon_id,
             character.equipped_armor_id,
         ].filter((id) => id !== null && id !== undefined);
-        if (equippedItemIds.length === 0) {
-            this.logger.debug('No items equipped, no passive effects to apply.');
-            return characterWithEffects;
-        }
-        const equippedItems = await this.knex('items').whereIn('id', equippedItemIds);
-        for (const item of equippedItems) {
-            const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
-            if (isPassiveType &&
-                typeof item.effect === 'string' &&
-                item.effect.length > 0) {
-                this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item ${item.id} (${item.name})`);
-                const effects = item.effect.split(';');
-                for (const effectPart of effects) {
-                    const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
-                    const match = effectPart.trim().match(effectRegex);
-                    if (match) {
-                        const [, statName, operator, valueStr] = match;
-                        const value = parseInt(valueStr, 10);
-                        const modifier = operator === '+' ? value : -value;
-                        this.logger.debug(`Parsed effect part: stat=${statName}, modifier=${modifier}`);
-                        switch (statName.toLowerCase()) {
-                            case 'skill':
-                                characterWithEffects.skill =
-                                    (characterWithEffects.skill ?? 0) + modifier;
-                                this.logger.log(`Applied effect: skill changed to ${characterWithEffects.skill}`);
-                                break;
-                            case 'luck':
-                                characterWithEffects.luck =
-                                    (characterWithEffects.luck ?? 0) + modifier;
-                                this.logger.log(`Applied effect: luck changed to ${characterWithEffects.luck}`);
-                                break;
-                            case 'stamina':
-                                characterWithEffects.stamina =
-                                    (characterWithEffects.stamina ?? 0) + modifier;
-                                this.logger.log(`Applied effect: stamina changed to ${characterWithEffects.stamina}`);
-                                break;
-                            default:
-                                this.logger.warn(`Unknown stat in passive effect: ${statName}`);
-                                break;
+        if (equippedItemIds.length > 0) {
+            const equippedItems = await this.knex('items').whereIn('id', equippedItemIds);
+            this.logger.debug(`Found ${equippedItems.length} equipped items to process effects.`);
+            for (const item of equippedItems) {
+                const isPassiveType = ['weapon', 'armor', 'ring', 'amulet'].includes(item.type?.toLowerCase() ?? '');
+                if (isPassiveType &&
+                    typeof item.effect === 'string' &&
+                    item.effect.length > 0) {
+                    this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item <span class="math-inline">\{item\.id\} \(</span>{item.name})`);
+                    const effects = item.effect.split(';');
+                    for (const effectPart of effects) {
+                        const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                        const match = effectPart.trim().match(effectRegex);
+                        if (match) {
+                            const [, statName, operator, valueStr] = match;
+                            const value = parseInt(valueStr, 10);
+                            const modifier = operator === '+' ? value : -value;
+                            this.logger.debug(`Parsed effect part: stat=<span class="math-inline">\{statName\}, modifier\=</span>{modifier}`);
+                            switch (statName.toLowerCase()) {
+                                case 'skill':
+                                    characterWithEffects.skill =
+                                        (characterWithEffects.skill ?? 0) + modifier;
+                                    break;
+                                case 'luck':
+                                    characterWithEffects.luck =
+                                        (characterWithEffects.luck ?? 0) + modifier;
+                                    break;
+                                case 'stamina':
+                                    characterWithEffects.stamina =
+                                        (characterWithEffects.stamina ?? 0) + modifier;
+                                    break;
+                                case 'defense':
+                                    characterWithEffects.defense =
+                                        (characterWithEffects.defense ?? 0) + modifier;
+                                    break;
+                                default:
+                                    this.logger.warn(`Unknown stat in passive effect: ${statName}`);
+                                    break;
+                            }
                         }
-                    }
-                    else {
-                        this.logger.warn(`Could not parse passive effect part: "${effectPart}"`);
+                        else {
+                            this.logger.warn(`Could not parse passive effect part: "${effectPart}"`);
+                        }
                     }
                 }
             }
+            this.logger.log(`Effects applied. Final stats: Skill=<span class="math-inline">\{characterWithEffects\.skill\}, Def\=</span>{characterWithEffects.defense}, Luck=<span class="math-inline">\{characterWithEffects\.luck\}, Stamina\=</span>{characterWithEffects.stamina}`);
+        }
+        else {
+            this.logger.debug('No items equipped, no passive effects to apply.');
         }
         return characterWithEffects;
     }

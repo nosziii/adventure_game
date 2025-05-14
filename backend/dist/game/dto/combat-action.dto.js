@@ -11,7 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CombatActionDto = void 0;
 const class_validator_1 = require("class-validator");
-const allowedActions = ['attack', 'use_item'];
+const allowedActions = ['attack', 'use_item', 'defend'];
 class CombatActionDto {
     action;
     itemId;

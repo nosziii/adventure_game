@@ -49,6 +49,14 @@ exports.seed = async function (knex) {
       effect: null,
       usable: false
     },
+    {
+      id: 4, // Következő szabad ID
+      name: 'Egyszerű Bőrvért',
+      description: 'Alapvető védelmet nyújt a könnyebb támadások ellen.',
+      type: 'armor',
+      effect: 'defense+3', // +3 védelem
+      usable: false, // Felszerelés
+    }
   ]);
   console.log('Items inserted.');
 
@@ -63,7 +71,12 @@ exports.seed = async function (knex) {
       defeat_text: 'Az ogre nagyot nyögve a földre rogy.',
       item_drop_id: 3, // Rozsdás Kulcs (ha legyőzöd)
       // item_drop_id: 2, // Gyógyító Ital (ha legyőzöd)
-      xp_reward: 50 
+      xp_reward: 50,
+      special_attack_name: 'Bődületes Bunkócsapás',
+      special_attack_damage_multiplier: 2.5, // 2.5x sebzés
+      special_attack_charge_turns: 1, // 1 kör töltés után támad
+      special_attack_telegraph_text: 'Az Ogre mély levegőt vesz, és magasra emeli óriási bunkóját, láthatóan egy hatalmas csapásra készül!',
+      special_attack_execute_text: 'Az Ogre teljes erejéből lesújt rád a Bődületes Bunkócsapással!'
     },
   ]);
   console.log('Enemies inserted.');

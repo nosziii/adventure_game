@@ -66,7 +66,7 @@ export class GameController {
       `Received combat action: ${combatActionDto.action} from user ID: ${userId}`,
     );
     // Meghívjuk a service megfelelő metódusát
-    return this.gameService.handleCombatAction(userId, combatActionDto);
+    return this.gameService.processCombatAction(userId, combatActionDto);
   }
 
   @UseGuards(AuthGuard('jwt'))

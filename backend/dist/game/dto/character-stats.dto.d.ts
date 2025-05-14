@@ -7,4 +7,5 @@ export declare class CharacterStatsDto {
     level: number;
     xp: number;
     xpToNextLevel: number;
+    defense: number | null;
 }

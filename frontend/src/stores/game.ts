@@ -91,6 +91,7 @@ export const useGameStore = defineStore("game", {
             level: data.character.level,
             xp: data.character.xp,
             xpToNextLevel: data.character.xpToNextLevel,
+            defense: data.character.defense,
           }
         : null;
       this.combatState = data.combat;
@@ -352,6 +353,38 @@ export const useGameStore = defineStore("game", {
         this.loadingMinimap = false;
       }
     },
+    // --- Védekezés harcban ---
+    async defendInCombat() {
+      if (!this.combatState) {
+        console.error("defendInCombat action called but not in combat!");
+        this.error = "Nem vagy harcban, nem tudsz védekezni.";
+        return;
+      }
+
+      this.loading = true; // Használhatjuk az általános loading flaget
+      this.error = null;
+      console.log("Executing defend action...");
+      try {
+        // Hívjuk a backend combat/action végpontját 'defend' akcióval
+        const response = await apiClient.post<GameStateResponse>(
+          "/game/combat/action",
+          { action: "defend" } // A CombatActionDto-nak megfelelően
+        );
+
+        // Frissítjük a teljes store állapotot a kapott válasszal
+        this._updateStateFromResponse(response.data);
+        console.log(
+          "Defend action processed, new state received:",
+          response.data
+        );
+      } catch (err: any) {
+        console.error("Failed to execute defend action:", err);
+        this.error =
+          err.response?.data?.message || "A védekezés sikertelen volt.";
+      } finally {
+        this.loading = false;
+      }
+    }, // defendInCombat vége
 
     // --- Minimap láthatóságának váltása ---
     async toggleMinimap() {

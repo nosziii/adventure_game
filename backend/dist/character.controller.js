@@ -53,7 +53,8 @@ let CharacterController = CharacterController_1 = class CharacterController {
             name: updatedCharacterWithEffects.name,
             level: updatedCharacterWithEffects.level,
             xp: updatedCharacterWithEffects.xp,
-            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level
+            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
+            defense: updatedCharacterWithEffects.defense,
         };
     }
     async unequipItem(req, body) {
@@ -69,7 +70,8 @@ let CharacterController = CharacterController_1 = class CharacterController {
             name: updatedCharacterWithEffects.name,
             level: updatedCharacterWithEffects.level,
             xp: updatedCharacterWithEffects.xp,
-            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level
+            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
+            defense: updatedCharacterWithEffects.defense,
         };
     }
 };
