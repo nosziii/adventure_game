@@ -69,6 +69,36 @@ export interface PlayerMapData {
   nodes: PlayerMapNode[];
   edges: PlayerMapEdge[];
 }
+export interface CombatActionRollDetails {
+  actorSkill: number;
+  diceRoll: number;
+  totalValue: number;
+}
+export interface CombatActionDetails {
+  actor: "player" | "enemy";
+  actionType:
+    | "attack"
+    | "defend"
+    | "use_item"
+    | "special_attack_charge"
+    | "special_attack_execute"
+    | "info"
+    | "victory"
+    | "defeat";
+  description: string;
+  attackerRollDetails?: CombatActionRollDetails;
+  defenderRollDetails?: CombatActionRollDetails;
+  outcome: "hit" | "miss" | /*...*/ "info" | "victory" | "defeat"; // Bővített outcome-ok
+  damageDealt?: number;
+  healthHealed?: number;
+  targetActor?: "player" | "enemy";
+  targetCurrentHp?: number;
+  targetMaxHp?: number;
+  itemIdUsed?: number;
+  itemNameUsed?: string;
+  currentChargeTurns?: number;
+  maxChargeTurns?: number;
+}
 
 // A teljes GameState válasz szerkezete a backendtől (DTO alapján)
 export interface GameStateResponse {
@@ -80,4 +110,5 @@ export interface GameStateResponse {
   inventory?: InventoryItem[] | null;
   equippedArmorId?: number | null;
   equippedWeaponId?: number | null;
+  roundActions?: CombatActionDetails[] | null;
 }

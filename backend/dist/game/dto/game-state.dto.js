@@ -6,7 +6,7 @@ class GameStateDto {
     choices;
     character;
     combat;
-    messages;
+    roundActions;
     inventory;
     equippedWeaponId;
     equippedArmorId;

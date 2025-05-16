@@ -113,7 +113,7 @@ export class GameService {
         character: characterForDto,
         combat: null, // Harc véget ért
         inventory: inventory,
-        messages: combatResult.combatLogMessages,
+        roundActions: combatResult.roundActions,
         equippedWeaponId: combatResult.character.equipped_weapon_id,
         equippedArmorId: combatResult.character.equipped_armor_id,
       };
@@ -126,7 +126,7 @@ export class GameService {
         character: characterForDto,
         combat: combatResult.enemy ?? null, // A CombatService által visszaadott frissített enemy állapot
         inventory: inventory,
-        messages: combatResult.combatLogMessages,
+        roundActions: combatResult.roundActions,
         equippedWeaponId: combatResult.character.equipped_weapon_id,
         equippedArmorId: combatResult.character.equipped_armor_id,
       };
@@ -193,7 +193,7 @@ export class GameService {
         character: this.mapCharacterToDto(character), // Használjuk a segédfüggvényt
         combat: enemyData,
         inventory: inventory,
-        messages: [],
+        roundActions: [],
         equippedWeaponId: character.equipped_weapon_id,
         equippedArmorId: character.equipped_armor_id,
       };
@@ -270,7 +270,7 @@ export class GameService {
         character: this.mapCharacterToDto(character), // Használjuk a segédfüggvényt
         combat: null,
         inventory: inventory,
-        messages: [],
+        roundActions: [],
         equippedWeaponId: character.equipped_weapon_id,
         equippedArmorId: character.equipped_armor_id,
       };

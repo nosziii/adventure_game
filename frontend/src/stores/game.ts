@@ -11,12 +11,14 @@ import type {
   PlayerMapNode,
   PlayerMapEdge,
   PlayerMapData,
+  CombatActionDetails,
 } from "../types/game.types";
 
 interface GameState {
   currentNode: StoryNodeData | null;
   currentChoices: Choice[];
   characterStats: CharacterStats | null;
+  currentRoundDetailedActions: CombatActionDetails[];
   loading: boolean;
   error: string | null;
   combatState: EnemyData | null;
@@ -37,6 +39,7 @@ export const useGameStore = defineStore("game", {
     currentNode: null,
     currentChoices: [],
     characterStats: null,
+    currentRoundDetailedActions: [],
     loading: false,
     error: null,
     combatState: null,
@@ -59,7 +62,9 @@ export const useGameStore = defineStore("game", {
     getChoices: (state): Choice[] => state.currentChoices, // Típus itt is frissül
     isLoading: (state): boolean => state.loading,
     getError: (state): string | null => state.error,
-    getCombatLog: (state): string[] => state.combatLogMessages, // Getter a harci üzenetekhez
+    // getCombatLog: (state): string[] => state.combatLogMessages, // Getter a harci üzenetekhez
+    getRoundActions: (state): CombatActionDetails[] =>
+      state.currentRoundDetailedActions,
     isInCombat: (state): boolean => !!state.combatState, // Getter a harc állapot ellenőrzésére
     getCombatState: (state): EnemyData | null => state.combatState, // Getter a harc adatokhoz
     getInventory: (state): InventoryItem[] => state.inventory, // Getter az inventoryhoz
@@ -98,19 +103,7 @@ export const useGameStore = defineStore("game", {
       this.inventory = data.inventory ?? [];
       this.equippedWeaponId = data.equippedWeaponId ?? null;
       this.equippedArmorId = data.equippedArmorId ?? null;
-      // Ha vannak üzenetek a válaszban, felülírjuk a logot, különben töröljük  **skipped**
-      // this.combatLogMessages = data.messages ?? [] // todo nem tudom melyiket használjam még
-      // Hozzáadjuk az új üzeneteket a meglévőkhöz?
-      if (data.messages) {
-        this.combatLogMessages.push(...data.messages);
-        // Opcionálisan limitálhatjuk a log hosszát
-        if (this.combatLogMessages.length > 20) {
-          this.combatLogMessages.splice(0, this.combatLogMessages.length - 20);
-        }
-      } else if (!this.combatState) {
-        // Ha nincs harc, töröljük a logot
-        this.combatLogMessages = [];
-      }
+      this.currentRoundDetailedActions = data.roundActions ?? [];
     },
 
     async fetchGameState() {

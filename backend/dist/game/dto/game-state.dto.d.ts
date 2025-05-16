@@ -2,6 +2,7 @@ import { ChoiceDto } from './choice.dto';
 import { EnemyDataDto } from './enemy-data.dto';
 import { CharacterStatsDto } from './character-stats.dto';
 import { InventoryItemDto } from './inventory-item.dto';
+import { CombatActionDetailsDto } from '../../combat/dto/combat-action-details.dto';
 interface StoryNodeData {
     id: number;
     text: string;
@@ -13,7 +14,7 @@ export declare class GameStateDto {
     choices: ChoiceDto[];
     character: CharacterStatsDto;
     combat: EnemyDataDto | null;
-    messages?: string[];
+    roundActions?: CombatActionDetailsDto[] | null;
     inventory: InventoryItemDto[] | null;
     equippedWeaponId?: number | null;
     equippedArmorId?: number | null;

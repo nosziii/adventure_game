@@ -33,11 +33,40 @@
             {{ gameStore.isLoading ? 'Védekezés...' : 'Védekezés' }}
           </button>
           </div>
-        <div class="combat-log">
-            <h4>Harc Napló:</h4>
-            <p v-for="(message, index) in gameStore.getCombatLog" :key="index"> {{ message }} </p>
-            <p v-if="gameStore.getCombatLog.length === 0"><i>A harc elkezdődött...</i></p>
-        </div>
+        <div v-if="gameStore.isInCombat" class="combat-log">
+      <h4>Harc Napló:</h4>
+      <div v-if="gameStore.getRoundActions.length === 0 && gameStore.getCombatState">
+        <p><i>A harc elkezdődött {{ gameStore.getCombatState.name }} ellen...</i></p>
+      </div>
+      <div v-for="(action, index) in gameStore.getRoundActions" :key="`action-${index}`" class="log-entry">
+        <p :class="`actor-${action.actor}`">
+          <strong>{{ action.actor === 'player' ? 'Te' : gameStore.getCombatState?.name ?? 'Ellenfél' }}:</strong>
+          {{ action.description }}
+        </p>
+        <ul v-if="action.attackerRollDetails" class="roll-details">
+          <li>
+            Támadó dobás:
+            {{ action.attackerRollDetails.actorSkill }} (skill) +
+            {{ action.attackerRollDetails.diceRoll }} (kocka) =
+            <strong>{{ action.attackerRollDetails.totalValue }}</strong>
+          </li>
+          <li v-if="action.defenderRollDetails">
+            Védekező dobás:
+            {{ action.defenderRollDetails.actorSkill }} (skill) +
+            {{ action.defenderRollDetails.diceRoll }} (kocka) =
+            <strong>{{ action.defenderRollDetails.totalValue }}</strong>
+          </li>
+        </ul>
+        <p v-if="action.damageDealt !== undefined" class="damage-info">
+          Sebzés: <span class="damage">{{ action.damageDealt }}</span>.
+          {{ action.targetActor === 'player' ? 'Te' : gameStore.getCombatState?.name ?? 'Ellenfél' }} új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
+        </p>
+        <p v-if="action.healthHealed !== undefined" class="heal-info">
+          Gyógyulás: <span class="heal">+{{ action.healthHealed }}</span>.
+          Új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
+        </p>
+      </div>
+    </div>
 
         <InventoryDisplay :inventory="gameStore.getInventory" />
         </div>
@@ -48,10 +77,7 @@
         <hr />
         <ChoiceList :choices="gameStore.getChoices" @choice-selected="handleChoiceSelection" />
       </div>
-
-      <div v-else> Nem található játékállapot. </div>
     </div>
-
   </div>
 </template>
 
@@ -186,4 +212,46 @@ const toggleMinimapHandler = () => {
 .telegraph-message p {
     margin: 0;
 }
+
+.combat-log {
+  margin-top: 15px;
+  border: 1px solid #eee; /* Kicsit szolidabb keret */
+  padding: 10px;
+  max-height: 200px; /* Vagy amennyi kényelmes */
+  overflow-y: auto;
+  background-color: #f8f9fa; /* Világos háttér */
+  border-radius: 4px;
+}
+.combat-log h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 5px;
+}
+.log-entry {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dotted #ddd;
+}
+.log-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.log-entry p {
+  margin: 2px 0;
+  font-size: 0.9em;
+}
+.log-entry .actor-player { color: navy; }
+.log-entry .actor-enemy { color: darkred; }
+.roll-details {
+  list-style: none;
+  padding-left: 15px;
+  font-size: 0.8em;
+  color: #555;
+}
+.damage-info .damage { font-weight: bold; color: red; }
+.heal-info .heal { font-weight: bold; color: green; }
 </style>

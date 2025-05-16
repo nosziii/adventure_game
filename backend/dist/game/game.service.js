@@ -72,7 +72,7 @@ let GameService = GameService_1 = class GameService {
                 character: characterForDto,
                 combat: null,
                 inventory: inventory,
-                messages: combatResult.combatLogMessages,
+                roundActions: combatResult.roundActions,
                 equippedWeaponId: combatResult.character.equipped_weapon_id,
                 equippedArmorId: combatResult.character.equipped_armor_id,
             };
@@ -85,7 +85,7 @@ let GameService = GameService_1 = class GameService {
                 character: characterForDto,
                 combat: combatResult.enemy ?? null,
                 inventory: inventory,
-                messages: combatResult.combatLogMessages,
+                roundActions: combatResult.roundActions,
                 equippedWeaponId: combatResult.character.equipped_weapon_id,
                 equippedArmorId: combatResult.character.equipped_armor_id,
             };
@@ -125,7 +125,7 @@ let GameService = GameService_1 = class GameService {
                 character: this.mapCharacterToDto(character),
                 combat: enemyData,
                 inventory: inventory,
-                messages: [],
+                roundActions: [],
                 equippedWeaponId: character.equipped_weapon_id,
                 equippedArmorId: character.equipped_armor_id,
             };
@@ -173,7 +173,7 @@ let GameService = GameService_1 = class GameService {
                 character: this.mapCharacterToDto(character),
                 combat: null,
                 inventory: inventory,
-                messages: [],
+                roundActions: [],
                 equippedWeaponId: character.equipped_weapon_id,
                 equippedArmorId: character.equipped_armor_id,
             };

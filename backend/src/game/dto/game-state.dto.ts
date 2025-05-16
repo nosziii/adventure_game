@@ -1,23 +1,23 @@
-import { ChoiceDto } from './choice.dto'
-import { EnemyDataDto } from './enemy-data.dto'
-import { CharacterStatsDto } from './character-stats.dto'
-import { InventoryItemDto } from './inventory-item.dto'
+import { ChoiceDto } from './choice.dto';
+import { EnemyDataDto } from './enemy-data.dto';
+import { CharacterStatsDto } from './character-stats.dto';
+import { InventoryItemDto } from './inventory-item.dto';
+import { CombatActionDetailsDto } from '../../combat/dto/combat-action-details.dto';
 
 interface StoryNodeData {
-    id: number
-    text: string
-    image: string | null
-    is_end?: boolean
+  id: number;
+  text: string;
+  image: string | null;
+  is_end?: boolean;
 }
 
-
 export class GameStateDto {
-  node: StoryNodeData | null
-  choices: ChoiceDto[]
-  character: CharacterStatsDto
-  combat: EnemyDataDto | null
-  messages?: string[]
-  inventory: InventoryItemDto[] | null
-  equippedWeaponId?: number | null
-  equippedArmorId?: number | null
+  node: StoryNodeData | null;
+  choices: ChoiceDto[];
+  character: CharacterStatsDto;
+  combat: EnemyDataDto | null;
+  roundActions?: CombatActionDetailsDto[] | null;
+  inventory: InventoryItemDto[] | null;
+  equippedWeaponId?: number | null;
+  equippedArmorId?: number | null;
 }
