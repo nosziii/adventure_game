@@ -10,3 +10,4 @@ export * from './player-progress-step.dto';
 export * from './player-map-node.dto';
 export * from './player-map-edge.dto';
 export * from './player-map-data.dto';
+export * from './story-info.dto';

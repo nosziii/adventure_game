@@ -22,6 +22,7 @@ import {
   PlayerMapDataDto,
   PlayerMapNodeDto,
   PlayerMapEdgeDto,
+  StoryInfoDto,
 } from './dto';
 import { StoryNode } from './interfaces/story-node.interface';
 import { ChoiceRecord } from './interfaces/choice-record.interface';
@@ -783,5 +784,26 @@ export class GameService {
     );
 
     return { nodes: mapNodes, edges: uniqueEdges };
+  }
+
+  async getPublishedStories(): Promise<StoryInfoDto[]> {
+    this.logger.log('Fetching published stories for players');
+    try {
+      const stories = await this.knex('stories') // A tábla neve 'stories'
+        .where({ is_published: true })
+        .select('id', 'title', 'description')
+        .orderBy('title', 'asc'); // Cím szerint rendezve
+
+      // Manuális mappolás DTO-ra, ha a DB oszlopnevek eltérnek vagy extra logika kell
+      // Jelen esetben a select miatt a nevek egyeznek a DTO-val (feltéve, hogy a DTO-ban is id, title, description van)
+      return stories.map((s) => ({
+        id: s.id,
+        title: s.title,
+        description: s.description,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to fetch published stories', error.stack);
+      throw new InternalServerErrorException('Could not retrieve stories.');
+    }
   }
 } // GameService vége

@@ -495,6 +495,24 @@ let GameService = GameService_1 = class GameService {
             self.findIndex((e) => e.from === edge.from && e.to === edge.to));
         return { nodes: mapNodes, edges: uniqueEdges };
     }
+    async getPublishedStories() {
+        this.logger.log('Fetching published stories for players');
+        try {
+            const stories = await this.knex('stories')
+                .where({ is_published: true })
+                .select('id', 'title', 'description')
+                .orderBy('title', 'asc');
+            return stories.map((s) => ({
+                id: s.id,
+                title: s.title,
+                description: s.description,
+            }));
+        }
+        catch (error) {
+            this.logger.error('Failed to fetch published stories', error.stack);
+            throw new common_1.InternalServerErrorException('Could not retrieve stories.');
+        }
+    }
 };
 exports.GameService = GameService;
 exports.GameService = GameService = GameService_1 = __decorate([

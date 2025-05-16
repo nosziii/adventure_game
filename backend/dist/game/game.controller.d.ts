@@ -1,5 +1,5 @@
 import { GameService } from './game.service';
-import { GameStateDto, MakeChoiceDto, UseItemDto, CharacterStatsDto, CombatActionDto, PlayerMapDataDto } from './dto';
+import { GameStateDto, MakeChoiceDto, UseItemDto, CharacterStatsDto, CombatActionDto, PlayerMapDataDto, StoryInfoDto } from './dto';
 export declare class GameController {
     private readonly gameService;
     private readonly logger;
@@ -9,4 +9,5 @@ export declare class GameController {
     handleCombatAction(req: any, combatActionDto: CombatActionDto): Promise<GameStateDto>;
     useItem(req: any, useItemDto: UseItemDto): Promise<CharacterStatsDto>;
     getPlayerMapProgress(req: any): Promise<PlayerMapDataDto>;
+    listPublishedStories(): Promise<StoryInfoDto[]>;
 }

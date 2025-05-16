@@ -57,6 +57,10 @@ let GameController = GameController_1 = class GameController {
         this.logger.log(`Received request for player map progress from user ID: ${userId}`);
         return this.gameService.getPlayerProgress(userId);
     }
+    async listPublishedStories() {
+        this.logger.log('Request received for published stories');
+        return this.gameService.getPublishedStories();
+    }
 };
 exports.GameController = GameController;
 __decorate([
@@ -102,6 +106,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GameController.prototype, "getPlayerMapProgress", null);
+__decorate([
+    (0, common_1.Get)('stories'),
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GameController.prototype, "listPublishedStories", null);
 exports.GameController = GameController = GameController_1 = __decorate([
     (0, common_1.Controller)('game'),
     __metadata("design:paramtypes", [game_service_1.GameService])
