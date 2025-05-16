@@ -8,6 +8,7 @@
         <li><router-link to="/admin/items">Tárgyak Kezelése</router-link></li>
          <li><router-link to="/admin/enemies">Ellenségek Kezelése</router-link></li>
          <li><router-link to="/admin/map">Történet Térkép Megtekintése</router-link></li>
+         <li><router-link to="/admin/stories">Sztorik Kezelése</router-link></li>
         </nav>
   </div>
 </template>

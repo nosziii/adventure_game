@@ -83,7 +83,9 @@
       <div v-else>
           Nem található játékállapot. Indíts új játékot?
       </div>
-    </div> </div> </template>
+    </div>
+  </div>
+ </template>
 
 <script setup lang="ts">
 import { onMounted, watch, ref } from 'vue';

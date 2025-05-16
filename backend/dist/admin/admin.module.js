@@ -16,6 +16,8 @@ const items_controller_1 = require("./items/items.controller");
 const items_service_1 = require("./items/items.service");
 const enemies_controller_1 = require("./enemies/enemies.controller");
 const enemies_service_1 = require("./enemies/enemies.service");
+const stories_controller_1 = require("./stories/stories.controller");
+const stories_service_1 = require("./stories/stories.service");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
@@ -26,12 +28,14 @@ exports.AdminModule = AdminModule = __decorate([
             choices_controller_1.AdminChoicesController,
             items_controller_1.AdminItemsController,
             enemies_controller_1.AdminEnemiesController,
+            stories_controller_1.AdminStoriesController,
         ],
         providers: [
             nodes_service_1.AdminNodesService,
             choices_service_1.AdminChoicesService,
             items_service_1.AdminItemsService,
             enemies_service_1.AdminEnemiesService,
+            stories_service_1.AdminStoriesService,
         ],
     })
 ], AdminModule);

@@ -98,8 +98,27 @@ export interface AdminCreateEnemyPayload {
   specialAttackExecuteText?: string | null;
 }
 
+export interface AdminStoryData {
+  id: number;
+  title: string;
+  description: string | null;
+  startingNodeId: number;
+  isPublished: boolean;
+  createdAt: string; // Vagy Date
+  updatedAt: string; // Vagy Date
+}
+
+// Story létrehozásához payload
+export interface AdminCreateStoryPayload {
+  title: string;
+  description?: string | null;
+  startingNodeId: number;
+  isPublished?: boolean;
+}
+
 // Node frissítéséhez küldendő adatok (minden mező opcionális)
 export type AdminUpdateNodePayload = Partial<AdminCreateNodePayload>;
 export type AdminUpdateChoicePayload = Partial<AdminCreateChoicePayload>;
 export type AdminUpdateItemPayload = Partial<AdminCreateItemPayload>;
 export type AdminUpdateEnemyPayload = Partial<AdminCreateEnemyPayload>;
+export type AdminUpdateStoryPayload = Partial<AdminCreateStoryPayload>;

@@ -13,6 +13,8 @@ exports.seed = async function (knex) {
   await knex('active_combats').del();
   // Aztán a choice-ok (amik story_node-ra és item-re hivatkoznak)
   await knex('choices').del();
+  // Aztán a story_node_item (amik story_node-ra és item-re hivatkoznak)
+  await knex('stories').del(); 
   // Aztán a story_node-ok (amik enemy-re és item-re hivatkoznak)
   await knex('story_nodes').del();
   // Aztán az enemies (amik item-re hivatkoznak)
@@ -157,5 +159,22 @@ exports.seed = async function (knex) {
   ]);
   console.log('Choices inserted.');
 
+  await knex('stories').insert([
+    {
+      id: 1, // Adjunk neki explicit ID-t a könnyebb hivatkozásért
+      title: 'Az Elveszett Kaland Kezdete',
+      description: 'Egy klasszikus kaland egy sötét erdőben, egy rejtélyes kunyhóval, ogréval és egy barátságos manóval.',
+      starting_node_id: 1, // Feltételezzük, hogy a Node ID 1 a kezdőpontja ennek a sztorinak
+      is_published: true   // Legyen publikált, hogy a játékosok lássák
+    },
+    // Ide vehetsz fel majd másik sztorit is teszteléshez, pl.:
+    // {
+    //   id: 2,
+    //   title: 'A Vár Titka (Készülőben)',
+    //   description: 'Fedezd fel egy ősi vár elhagyatott termeit...',
+    //   starting_node_id: X, // Ehhez kellene egy új kezdő node ID
+    //   is_published: false
+    // }
+]);
   console.log('Seeding complete!');
 };

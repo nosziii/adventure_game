@@ -19,6 +19,9 @@ import AdminItemEditView from "../views/admin/items/AdminItemEditView.vue";
 import AdminEnemyListView from "../views/admin/enemies/AdminEnemyListView.vue";
 import AdminEnemyEditView from "../views/admin/enemies/AdminEnemyEditView.vue";
 
+import AdminStoryListView from "../views/admin/stories/AdminStoryListView.vue";
+import AdminStoryEditView from "../views/admin/stories/AdminStoryEditView.vue";
+
 import AdminMapView from "../views/admin/map/AdminMapView.vue";
 
 const router = createRouter({
@@ -114,6 +117,21 @@ const router = createRouter({
           component: AdminEnemyEditView,
         },
         { path: "map", name: "admin-map-view", component: AdminMapView },
+        {
+          path: "stories",
+          name: "admin-stories-list",
+          component: AdminStoryListView,
+        },
+        {
+          path: "stories/new",
+          name: "admin-stories-new",
+          component: AdminStoryEditView,
+        },
+        {
+          path: "stories/:id/edit",
+          name: "admin-stories-edit",
+          component: AdminStoryEditView,
+        },
       ],
     },
   ],
