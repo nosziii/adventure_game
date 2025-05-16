@@ -8,8 +8,12 @@
     </div>
     <PlayerMinimap v-if="gameStore.isMinimapVisible" />
 
-    <div v-if="gameStore.isLoading && !gameStore.isInCombat" class="loading"> Töltés... </div>
-    <div v-else-if="gameStore.getError" class="error"> Hiba történt: {{ gameStore.getError }} </div>
+    <div v-if="gameStore.isLoading && !gameStore.isInCombat && !gameStore.isLoadingMinimap" class="loading">
+      Töltés...
+    </div>
+    <div v-else-if="gameStore.getError" class="error-message">
+      Hiba történt: {{ gameStore.getError }}
+    </div>
 
     <div v-else>
       <div v-if="gameStore.isInCombat && gameStore.getCombatState" class="combat-view">
@@ -18,58 +22,56 @@
           <h3>Ellenfél: {{ gameStore.getCombatState.name }}</h3>
           <p>Életerő: {{ gameStore.getCombatState.currentHealth }} / {{ gameStore.getCombatState.health }}</p>
         </div>
+
         <div v-if="gameStore.getCombatState.isChargingSpecial && gameStore.getCombatState.specialAttackTelegraphText" class="telegraph-message">
           <p><strong>Figyelem!</strong> {{ gameStore.getCombatState.specialAttackTelegraphText }}</p>
-          </div>
+          <p v-if="gameStore.getCombatState.currentChargeTurns && gameStore.getCombatState.maxChargeTurns">
+            Töltés: {{ gameStore.getCombatState.currentChargeTurns }} / {{ gameStore.getCombatState.maxChargeTurns }}
+          </p>
+        </div>
+
         <div class="combat-actions">
-          <button @click="handleAttack" class="action-button attack-button" :disabled="gameStore.isLoading">
+          <button @click="handleAttack" class="action-button attack-button" :disabled="gameStore.isLoading || isDisplayingActions">
             {{ gameStore.isLoading ? 'Támadás...' : 'Támadás!' }}
           </button>
-          <button
-            @click="handleDefend"
-            class="action-button defend-button"
-            :disabled="gameStore.isLoading"
-          >
+          <button @click="handleDefend" class="action-button defend-button" :disabled="gameStore.isLoading || isDisplayingActions">
             {{ gameStore.isLoading ? 'Védekezés...' : 'Védekezés' }}
           </button>
-          </div>
-        <div v-if="gameStore.isInCombat" class="combat-log">
-      <h4>Harc Napló:</h4>
-      <div v-if="gameStore.getRoundActions.length === 0 && gameStore.getCombatState">
-        <p><i>A harc elkezdődött {{ gameStore.getCombatState.name }} ellen...</i></p>
-      </div>
-      <div v-for="(action, index) in gameStore.getRoundActions" :key="`action-${index}`" class="log-entry">
-        <p :class="`actor-${action.actor}`">
-          <strong>{{ action.actor === 'player' ? 'Te' : gameStore.getCombatState?.name ?? 'Ellenfél' }}:</strong>
-          {{ action.description }}
-        </p>
-        <ul v-if="action.attackerRollDetails" class="roll-details">
-          <li>
-            Támadó dobás:
-            {{ action.attackerRollDetails.actorSkill }} (skill) +
-            {{ action.attackerRollDetails.diceRoll }} (kocka) =
-            <strong>{{ action.attackerRollDetails.totalValue }}</strong>
-          </li>
-          <li v-if="action.defenderRollDetails">
-            Védekező dobás:
-            {{ action.defenderRollDetails.actorSkill }} (skill) +
-            {{ action.defenderRollDetails.diceRoll }} (kocka) =
-            <strong>{{ action.defenderRollDetails.totalValue }}</strong>
-          </li>
-        </ul>
-        <p v-if="action.damageDealt !== undefined" class="damage-info">
-          Sebzés: <span class="damage">{{ action.damageDealt }}</span>.
-          {{ action.targetActor === 'player' ? 'Te' : gameStore.getCombatState?.name ?? 'Ellenfél' }} új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
-        </p>
-        <p v-if="action.healthHealed !== undefined" class="heal-info">
-          Gyógyulás: <span class="heal">+{{ action.healthHealed }}</span>.
-          Új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
-        </p>
-      </div>
-    </div>
-
-        <InventoryDisplay :inventory="gameStore.getInventory" />
         </div>
+
+        <div class="combat-log">
+          <h4>Harc Napló:</h4>
+          <div v-if="displayedLogEntries.length === 0 && !gameStore.isLoadingMinimap && !isDisplayingActions">
+            <p><i>Válassz egy akciót...</i></p>
+          </div>
+          <div v-for="(action, index) in displayedLogEntries" :key="`log-${index}`" class="log-entry">
+            <p :class="`actor-${action.actor}`">
+              <strong>{{ action.actor === 'player' ? 'Te' : gameStore.getCombatState?.name ?? 'Ellenfél' }}:</strong>
+              {{ action.description }}
+            </p>
+            <ul v-if="action.attackerRollDetails" class="roll-details">
+              <li>
+                Támadó: {{ action.attackerRollDetails.actorSkill }}(skill) + {{ action.attackerRollDetails.diceRoll }}(kocka) = <strong>{{ action.attackerRollDetails.totalValue }}</strong>
+              </li>
+              <li v-if="action.defenderRollDetails">
+                Védekező: {{ action.defenderRollDetails.actorSkill }}(skill) + {{ action.defenderRollDetails.diceRoll }}(kocka) = <strong>{{ action.defenderRollDetails.totalValue }}</strong>
+              </li>
+            </ul>
+            <p v-if="action.damageDealt !== undefined" class="damage-info">
+              Sebzés: <span class="damage">{{ action.damageDealt }}</span>.
+              Célpont új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
+            </p>
+            <p v-if="action.healthHealed !== undefined" class="heal-info">
+              Gyógyulás: <span class="heal">+{{ action.healthHealed }}</span>.
+              Új HP: {{ action.targetCurrentHp }}/{{ action.targetMaxHp }}
+            </p>
+            <p v-if="action.actionType === 'special_attack_charge'" class="charge-info">
+                Töltés: {{action.currentChargeTurns}} / {{action.maxChargeTurns}}
+            </p>
+          </div>
+        </div>
+        <InventoryDisplay :inventory="gameStore.getInventory" />
+      </div>
 
       <div v-else-if="gameStore.currentNode" class="game-content">
         <NodeDisplay :node="gameStore.currentNode" />
@@ -77,12 +79,14 @@
         <hr />
         <ChoiceList :choices="gameStore.getChoices" @choice-selected="handleChoiceSelection" />
       </div>
-    </div>
-  </div>
-</template>
+
+      <div v-else>
+          Nem található játékállapot. Indíts új játékot?
+      </div>
+    </div> </div> </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch, ref } from 'vue';
 import { useGameStore } from '../stores/game' // Vagy relatív útvonal
 // Importáljuk az új komponenseket
 import StatsBar from '../components/StatsBar.vue'
@@ -91,6 +95,7 @@ import ChoiceList from '../components/ChoiceList.vue'
 import InventoryDisplay from '../components/InventoryDisplay.vue'
 // import CombatDisplay from '@/components/CombatDisplay.vue'; // Később kell majd
 import PlayerMinimap from '../components/PlayerMinimap.vue'
+import type { CombatActionDetails } from '../types/game.types'
 
 const gameStore = useGameStore()
 
@@ -120,6 +125,35 @@ const handleDefend = async () => {
 const toggleMinimapHandler = () => {
     gameStore.toggleMinimap();
 };
+
+// Új reaktív változók a harci napló késleltetett megjelenítéséhez
+const displayedLogEntries = ref<CombatActionDetails[]>([]);
+const isDisplayingActions = ref(false); // Jelzi, hogy éppen fut-e az eseménymegjelenítő sorozat
+
+// Figyeljük a store-ban lévő teljes körös akciókat
+watch(() => gameStore.getRoundActions, (newActions, oldActions) => {
+  // Csak akkor indítsuk a szekvenciát, ha új akciók érkeztek
+  // és nem ugyanaz a tömb referencia (bár a tartalom változhatott)
+  if (newActions && newActions.length > 0 && newActions !== oldActions) {
+    displayedLogEntries.value = []; // Előző kör logjának törlése
+    isDisplayingActions.value = true; // Jelezzük, hogy a megjelenítés elkezdődött
+    
+    let delay = 0;
+    newActions.forEach((action, index) => {
+      setTimeout(() => {
+        displayedLogEntries.value.push(action);
+        // Ha ez volt az utolsó akció, jelezzük, hogy a megjelenítés befejeződött
+        if (index === newActions.length - 1) {
+          isDisplayingActions.value = false;
+        }
+      }, delay);
+      delay += 1500; // 1.5 másodperc késleltetés az események között (állítsd be ízlés szerint)
+    });
+  } else if (newActions && newActions.length === 0 && !gameStore.isInCombat) {
+      // Ha a harc véget ért és a roundActions üres, töröljük a logot
+      displayedLogEntries.value = [];
+  }
+}, { deep: true }); // deep: true fontos, hogy a tömb tartalmának változását is figyelje
 </script>
 
 <style scoped>
@@ -254,4 +288,10 @@ const toggleMinimapHandler = () => {
 }
 .damage-info .damage { font-weight: bold; color: red; }
 .heal-info .heal { font-weight: bold; color: green; }
+
+.charge-info { font-style: italic; color: #660066; }
+.combat-actions button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
 </style>

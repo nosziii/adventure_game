@@ -495,17 +495,17 @@ let CombatService = CombatService_1 = class CombatService {
             .first();
         let enemyDtoForReturn = undefined;
         if (finalActiveCombatState) {
+            const currentCharge = finalActiveCombatState.enemy_charge_turns_current ?? 0;
+            const maxCharge = enemyBaseData.special_attack_charge_turns ?? 0;
             enemyDtoForReturn = {
                 id: enemyBaseData.id,
                 name: enemyBaseData.name,
                 health: enemyBaseData.health,
                 currentHealth: finalActiveCombatState.enemy_current_health,
                 skill: enemyBaseData.skill,
-                isChargingSpecial: (finalActiveCombatState.enemy_charge_turns_current ?? 0) > 0 &&
-                    (finalActiveCombatState.enemy_charge_turns_current ?? 0) <
-                        (enemyBaseData.special_attack_charge_turns ?? Infinity),
+                isChargingSpecial: currentCharge > 0,
                 currentChargeTurns: finalActiveCombatState.enemy_charge_turns_current,
-                maxChargeTurns: enemyBaseData.special_attack_charge_turns,
+                maxChargeTurns: maxCharge,
                 specialAttackTelegraphText: (finalActiveCombatState.enemy_charge_turns_current ?? 0) > 0
                     ? enemyBaseData.special_attack_telegraph_text
                     : null,
