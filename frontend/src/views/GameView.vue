@@ -174,8 +174,8 @@ watch(() => gameStore.getRoundActions, (newActions, oldActions) => {
 }
 
 .game-view {
-  width: 100%;
-  max-width: 800px; /* Kicsit szélesebb lehet, vagy akár 90% */
+  width: 100%; /* Teljes szélesség */
+  max-width: 1400px; /* Kicsit szélesebb lehet, vagy akár 90% */
   margin: 20px; /* Térköz a széleken */
   padding: 25px 30px;
   background: var(--panel-bg); /* Sötét, áttetsző panel háttér */

@@ -1,79 +1,78 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap");
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* Új lila téma CSS változói */
+  --bg-deep-dark: #080510; /* Nagyon sötét lila/fekete */
+  --bg-glow-center: #2a0f40; /* Enyhe lila ragyogás középen */
+  
+  --text-primary: #d8c8e8;
+  --text-secondary: #a090b0;
+  --accent-primary: #b388ff;   /* Élénkebb, de nem túl világos lila */
+  --accent-secondary: #8a5ac7; /* Sötétebb lila */
+  
+  --panel-bg: rgba(20, 10, 35, 0.7); 
+  --panel-border: rgba(179, 136, 255, 0.3);
+  
+  --button-bg: var(--accent-secondary);
+  --button-text: #f0e8ff;
+  --button-hover-bg: var(--accent-primary);
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  --input-bg: rgba(255, 255, 255, 0.05); /* Maradhat ez, vagy lila árnyalat */
+  --input-border: rgba(160, 32, 240, 0.2);
+  --input-focus-border: var(--accent-secondary);
+  --input-text: #f0e6ff;
+  --placeholder-text: #b0b0d0;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --header-bg: rgba(13, 0, 20, 0.9); /* Nagyon sötét lila header */
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* A .light-mode itt most nem releváns, ha csak sötét témát csinálunk,
+   de ha meg akarod tartani a váltót, akkor ahhoz is új színeket kell definiálni. */
+.light-mode {
+  --bg-gradient-start: #e0e0e0;
+  --bg-gradient-end: #f9f9f9;
+  --text-primary: #1f1f2e;
+  --text-secondary: #333;
+  --accent-primary: #c06000; /* Sötétebb narancs világos témához */
+  --accent-secondary: #d35400;
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-border: rgba(0, 0, 0, 0.1);
+  --button-bg: var(--accent-primary);
+  --button-text: #fff;
+  --button-hover-bg: var(--accent-secondary);
+  --input-bg: rgba(0, 0, 0, 0.03);
+  --input-border: rgba(0, 0, 0, 0.15);
+  --input-focus-border: var(--accent-primary);
+  --input-text: #111;
+  --placeholder-text: #777;
+  --header-bg: rgba(240, 240, 240, 0.9);
 }
-a:hover {
-  color: #535bf2;
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  font-family: "EB Garamond", serif; /* Új alap betűtípus */
+   background: radial-gradient(ellipse at 50% 40%, var(--bg-glow-center) 0%, var(--bg-deep-dark) 65%, #000000 100%);
+  color: var(--text-primary);
+  transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  padding: 0;
   min-height: 100vh;
+  line-height: 1.6;
+  overflow-x: hidden;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+* {
+  box-sizing: border-box;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+a {
+  color: var(--accent-secondary); /* Linkek színe */
+  text-decoration: none;
 }
 
-.card {
-  padding: 2em;
-}
-
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+a:hover {
+  text-decoration: underline;
 }

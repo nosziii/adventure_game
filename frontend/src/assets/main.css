@@ -1,29 +1,31 @@
 @import url("https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap");
 
 :root {
-  /* Új, sötét misztikus téma CSS változói */
-  --bg-gradient-start: #0d122b; /* Sötét éjkék */
-  --bg-gradient-end: #1a1a2e; /* Sötét lila-kék */
-  --text-primary: #e0e0e0; /* Világos szürke/fehér szöveg */
-  --text-secondary: #b0b0c0; /* Halványabb szürke */
-  --accent-primary: #ffd700; /* Arany kiemelés */
-  --accent-secondary: #e6a756; /* Narancsosabb arany/bronz */
+  /* Új lila téma CSS változói */
+  --bg-gradient-deep-purple: #2c003e; /* Nagyon sötét lila */
+  --bg-gradient-mid-purple: #56006b;  /* Közepes, élénkebb lila */
+  --bg-gradient-glow-purple: #a020f0; /* Izzó lila (óvatosan) */
+  --bg-gradient-light-purple: #c389f2; /* Világosabb lila a fényekhez */
 
-  --panel-bg: rgba(20, 20, 45, 0.75); /* Sötét, félig áttetsző panel háttér */
-  --panel-border: rgba(255, 215, 0, 0.2); /* Finom arany keret */
+  --text-primary: #f0e6ff;     /* Nagyon világos lila/fehér szöveg */
+  --text-secondary: #d8bfff;   /* Halványabb lila szöveg */
+  --accent-primary: #e6a756;   /* Arany/bronz kiemelés (a tekercs végeihez hasonló) */
+  --accent-secondary: #ffd700; /* Élénkebb arany */
 
-  --button-bg: var(--accent-primary);
-  --button-text: #0d122b; /* Sötét szöveg az arany gombon */
-  --button-hover-bg: var(--accent-secondary);
+  --panel-bg: rgba(44, 0, 62, 0.85); /* Sötét lila, áttetsző panel ( --bg-gradient-deep-purple-hez hasonló) */
+  --panel-border: rgba(160, 32, 240, 0.3); /* Finom izzó lila keret ( --bg-gradient-glow-purple-ből) */
 
-  --input-bg: rgba(255, 255, 255, 0.05);
-  --input-border: rgba(255, 255, 255, 0.2);
-  --input-focus-border: var(--accent-primary);
-  --input-text: #fff;
-  --placeholder-text: #aaa;
+  --button-bg: var(--accent-secondary);
+  --button-text: #2c003e; /* Sötét lila szöveg az arany gombon */
+  --button-hover-bg: var(--accent-primary);
 
-  /* Headerhez (ha az AppHeader.vue is ezt használná) */
-  --header-bg: rgba(5, 5, 15, 0.9);
+  --input-bg: rgba(255, 255, 255, 0.05); /* Maradhat ez, vagy lila árnyalat */
+  --input-border: rgba(160, 32, 240, 0.2);
+  --input-focus-border: var(--accent-secondary);
+  --input-text: #f0e6ff;
+  --placeholder-text: #b0b0d0;
+
+  --header-bg: rgba(13, 0, 20, 0.9); /* Nagyon sötét lila header */
 }
 
 /* A .light-mode itt most nem releváns, ha csak sötét témát csinálunk,
@@ -54,11 +56,7 @@ html {
 
 body {
   font-family: "EB Garamond", serif; /* Új alap betűtípus */
-  background: linear-gradient(
-    to bottom,
-    var(--bg-gradient-start),
-    var(--bg-gradient-end)
-  );
+  background: radial-gradient(ellipse at center, var(--bg-gradient-mid-purple) 0%, var(--bg-gradient-deep-purple) 70%, #000000 100%);
   color: var(--text-primary);
   transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
   margin: 0;

@@ -1,9 +1,9 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
+// import "vis-network/styles/vis-network.css";
 import "./style.css";
 import App from "./App.vue";
 import router from "./router";
-import "vis-network/styles/vis-network.css";
 
 // import './assets/main.css'
 
