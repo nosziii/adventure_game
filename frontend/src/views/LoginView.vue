@@ -76,7 +76,7 @@
       if (authStore.isAdmin) {
         router.push({ name: 'admin-dashboard' }) // Vagy '/admin'
       } else {
-        router.push({ name: 'game' }) // Vagy '/'
+        router.push({ name: 'dashboard' }) // Vagy '/'
     }
     } catch (error: any) {
       errorMessage.value =

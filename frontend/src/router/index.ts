@@ -24,6 +24,8 @@ import AdminStoryEditView from "../views/admin/stories/AdminStoryEditView.vue";
 
 import AdminMapView from "../views/admin/map/AdminMapView.vue";
 
+import DashboardView from "../views/DashboardView.vue";
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // HTML5 history mód
   routes: [
@@ -37,6 +39,12 @@ const router = createRouter({
       path: "/login",
       name: "login",
       component: LoginView,
+    },
+    {
+      path: "/dashboard", // <-- ÚJ DASHBOARD ÚTVONAL
+      name: "dashboard",
+      component: DashboardView,
+      meta: { requiresAuth: true },
     },
     {
       path: "/register",

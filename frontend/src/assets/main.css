@@ -1,0 +1,54 @@
+
+:root {
+  --bg: linear-gradient(
+    to bottom,
+    #0d0d0d,
+    #1a1a1a
+  ); /* Alapértelmezett sötét mód */
+  --text: #fff;
+  --accent: #ff5c00; /* Narancsos kiemelő */
+  --card-bg: #111;
+  --info-bg: #1f1f1f;
+  --header-bg: #000; /* Fejléc háttér */
+  --button-text: #fff;
+}
+
+.light-mode {
+  /* Világos mód felülírja a változókat */
+  --bg: #f9f9f9;
+  --text: #111;
+  --accent: #d35400; /* Sötétebb narancs világos módban */
+  --card-bg: #ffffff;
+  --info-bg: #eeeeee;
+  --header-bg: #f0f0f0; /* Világos fejléc háttér */
+  --button-text: #fff; /* Gomb szöveg maradhat fehér, vagy igazítsd */
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Arial", sans-serif; /* Ezt később lecserélhetjük a Dashboardon belüli specifikusabb fontokra */
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s ease-in-out, color 0.3s ease-in-out; /* Finomabb átmenet */
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Alapvető resetek és globális stílusok, ha kellenek */
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

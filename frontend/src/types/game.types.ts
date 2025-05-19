@@ -112,3 +112,9 @@ export interface GameStateResponse {
   equippedWeaponId?: number | null;
   roundActions?: CombatActionDetails[] | null;
 }
+
+export interface StoryInfo {
+  id: number;
+  title: string;
+  description: string | null;
+}
