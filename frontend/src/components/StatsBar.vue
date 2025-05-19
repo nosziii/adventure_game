@@ -3,27 +3,22 @@
     <div class="stats-bar" v-if="stats">
       <span>HP: {{ stats.health }}</span>
       <span v-if="stats.skill !== null"> | Skill: {{ stats.skill }}</span>
-      <span v-if="stats.defense !== null && stats.defense !== undefined"> | Védelem: {{ stats.defense }}</span> <span v-if="stats.luck !== null"> | Luck: {{ stats.luck }}</span>
+      <span v-if="stats.defense !== null && stats.defense !== undefined"> | Védelem: {{ stats.defense }}</span>
       <span v-if="stats.luck !== null"> | Luck: {{ stats.luck }}</span>
       <span v-if="stats.stamina !== null"> | Stamina: {{ stats.stamina }}</span>
       <span v-if="stats.level !== null"> | Szint: {{ stats.level }}</span>
       <span v-if="stats.xp !== null && stats.xpToNextLevel !== null"> | XP: {{ stats.xp }} / {{ stats.xpToNextLevel }}</span>
     </div>
-        <div class="action-buttons">
-      <router-link
-        v-if="authStore.isAuthenticated && authStore.isAdmin"
-        :to="{ name: 'admin-dashboard' }"
-        class="admin-button"
-      >
-        Admin Felület
+    <div class="action-buttons">
+      <router-link v-if="authStore.isAuthenticated && authStore.isAdmin" :to="{ name: 'admin-dashboard' }" class="themed-button admin-button-stats">
+        Admin
       </router-link>
-
-      <button v-if="authStore.isAuthenticated" @click="handleLogout" class="logout-button">
-        Kijelentkezés
+      <button v-if="authStore.isAuthenticated" @click="handleLogout" class="themed-button logout-button-stats">
+        Kilépés
       </button>
     </div>
   </div>
-  <hr v-if="stats || authStore.isAuthenticated" />
+  <hr v-if="stats || authStore.isAuthenticated" class="stats-hr" />
 </template>
   
   <script setup lang="ts">
@@ -51,60 +46,79 @@ const handleLogout = () => {
   </script>
   
   <style scoped>
-  .stats-bar-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #f0f0f0; /* Kicsit világosabb háttér */
-    padding: 8px 15px;
-    border-radius: 4px;
-    margin-bottom: 10px; /* Kisebb margó alul */
-    flex-wrap: wrap; /* Tördelés kisebb képernyőn */
+.stats-bar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0,0,0,0.25); /* Sötétebb, áttetsző sáv */
+  padding: 10px 20px;
+  border-radius: 6px;
+  margin-bottom: 0; /* Az hr adja a térközt */
+  border: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+  gap: 10px; /* Térköz a statok és a gombok között, ha tördelődik */
 }
 .stats-bar {
-    display: flex; /* Statok is egymás mellett */
-    flex-wrap: wrap; /* Tördelés kisebb képernyőn */
-    gap: 0 10px; /* Kis térköz a statok között */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px; /* Térköz a statok között */
+  color: var(--text-secondary);
 }
 .stats-bar span {
-  /* margin: 0 8px; -> kiváltva gap-pel */
-  font-weight: bold;
+  font-weight: 500; /* Normál vastagság, a szín kiemeli */
   font-size: 0.9em;
-  white-space: nowrap; /* Ne tördelődjenek a stat nevek/értékek */
+  white-space: nowrap;
+  color: var(--text-primary); /* Jól olvasható legyen */
 }
+.stats-bar span:not(:first-child)::before {
+    content: "|"; /* Elválasztó */
+    margin-right: 12px;
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
 .action-buttons {
-    display: flex; /* Gombok egymás mellett */
-    align-items: center;
-    gap: 10px; /* Térköz a gombok között */
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.admin-button,
-.logout-button {
-    padding: 6px 12px;
-    font-size: 0.85em;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    text-decoration: none; /* router-link esetén */
-    display: inline-block; /* router-link esetén */
-    transition: background-color 0.2s;
+
+/* .themed-button stílus a GameView-ból (vagy globálisból) öröklődhet,
+   vagy itt definiáljuk újra/felülírjuk. */
+.themed-button { /* Alap stílus a gomboknak itt is */
+  padding: 6px 12px;
+  font-size: 0.85em;
+  color: var(--button-text); /* Sötét szöveg, ha az accent világos */
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+  transition: background-color 0.2s, transform 0.1s ease;
 }
-.admin-button {
-    background-color: #17a2b8; /* Másik szín az admin gombnak */
+.admin-button-stats {
+  background-color: var(--accent-secondary); /* Bronzosabb */
 }
-.admin-button:hover {
-    background-color: #138496;
+.admin-button-stats:hover {
+  background-color: var(--accent-primary);
+  transform: translateY(-1px);
 }
-.logout-button {
-    background-color: #6c757d;
+.logout-button-stats {
+  background-color: #6c757d; /* Szürke */
+   color: white;
 }
-.logout-button:hover {
-    background-color: #5a6268;
+.logout-button-stats:hover {
+  background-color: #5a6268;
+  transform: translateY(-1px);
 }
-hr {
-    margin-top: 0; /* Az elválasztó közvetlenül a sáv alatt */
-    margin-bottom: 20px;
-    border: 0;
-    border-top: 1px solid #ccc;
+
+.stats-hr {
+  margin-top: 15px; /* Térköz a sáv után */
+  margin-bottom: 25px;
+  border: 0;
+  border-top: 1px solid var(--panel-border);
+  opacity: 0.5;
 }
   </style>

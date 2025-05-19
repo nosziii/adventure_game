@@ -1,21 +1,30 @@
 <template>
  <main>
-  <AppHeader />
+  <AppHeader v-if="showHeader"/>
     <router-view />
   </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useAuthStore } from './stores/auth'
-import AppHeader from './components/AppHeader.vue';
+import AppHeader from './components/AppHeader.vue'
+import { RouterView, useRoute } from 'vue-router'
 
+const route = useRoute()
 const authStore = useAuthStore()
 
 onMounted(async () => {
   await authStore.checkAuth()
   console.log('Initial auth check complete in App.vue.')
 })
+
+const showHeader = computed(() => {
+  // Azoknak az útvonalaknak a neve, ahol NEM akarjuk megjeleníteni a headert
+  const nonHeaderRoutes = ['login', 'register', 'game'];
+  // Ha az aktuális útvonal neve benne van a listában, akkor false, egyébként true
+  return !nonHeaderRoutes.includes(route.name as string);
+});
 </script>
 
 <style scoped>

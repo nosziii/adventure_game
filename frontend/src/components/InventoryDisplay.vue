@@ -110,68 +110,99 @@ const determineUseButtonTitle = (itemId: number): string => {
 
 <style scoped>
 .inventory-display {
-  border: 1px solid #ddd;
-  padding: 15px;
-  margin-top: 20px;
-  background-color: #f9f9f9;
-  border-radius: 5px;
+  background-color: var(--panel-bg); /* Sötét, áttetsző panel háttér */
+  border: 1px solid var(--panel-border); /* Témához illő keret */
+  padding: 20px;
+  margin-top: 25px; /* Térköz a felette lévő elemtől */
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  color: var(--text-primary);
 }
+
 .inventory-display h3 {
+  font-family: 'Cinzel Decorative', cursive; /* Díszesebb font */
+  color: var(--accent-primary); /* Arany */
   margin-top: 0;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 5px;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--panel-border);
+  text-align: center;
+  font-size: 1.4em;
 }
+
 ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-li {
-  padding: 5px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.use-button {
-  padding: 2px 6px;
-  font-size: 0.8em;
-  cursor: pointer;
-  margin-left: 10px;
-}
- .use-button:disabled {
-     cursor: not-allowed;
-     opacity: 0.5;
- }
 
- li { /* Flexbox a jobb elrendezéshez */
+li {
+  padding: 10px 5px; /* Több vertikális padding */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 0;
+  border-bottom: 1px solid rgba(var(--panel-border-rgb, 70, 62, 82), 0.3); /* Halványabb elválasztó, feltéve, hogy --panel-border-rgb létezik, vagy használj egy fix színt pl. #443e52 opacity-vel */
+  /* Ha nincs --panel-border-rgb: border-bottom: 1px solid rgba(100, 100, 120, 0.2); */
 }
-.item-actions button { /* Gombok egymás mellett */
+
+li:last-child {
+  border-bottom: none;
+}
+
+li span:first-child { /* Tárgy neve és mennyisége */
+  flex-grow: 1;
+  font-size: 0.95em;
+}
+
+.equipped-marker {
+  color: #4CAF50; /* Élénk zöld a felszerelt jelzéshez */
+  /* Vagy használhatod var(--accent-secondary) is */
+  font-weight: bold;
   margin-left: 8px;
+  font-size: 0.8em;
+  text-transform: uppercase;
 }
-.equip-button {
-  padding: 2px 6px;
+
+.item-actions button {
+  margin-left: 10px;
+  padding: 5px 10px;
   font-size: 0.8em;
   cursor: pointer;
-  border: 1px solid #ccc;
-  background-color: #eee;
+  border-radius: 4px;
+  font-family: 'EB Garamond', serif;
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid var(--accent-secondary);
+  background-color: transparent;
+  color: var(--accent-secondary);
 }
-.equip-button.equipped { /* Stílus a felszerelt tárgy levétel gombjához */
-    background-color: #adb5bd;
-    color: white;
+
+.item-actions button:hover:not(:disabled) {
+  background-color: var(--accent-secondary);
+  color: var(--button-text); /* Sötét szöveg a kiemelő színen */
 }
-.equip-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
+
+.item-actions button:disabled {
+  border-color: #555;
+  color: #777;
+  background-color: rgba(0,0,0,0.1);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
-.equipped-marker {
-    color: green;
-    font-weight: bold;
-    margin-left: 5px;
-    font-size: 0.8em;
+
+.item-actions .equip-button.equipped { /* Levétel gomb stílusa */
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--button-text); /* Sötét szöveg */
+}
+.item-actions .equip-button.equipped:hover:not(:disabled) {
+  background-color: var(--accent-secondary);
+}
+
+.inventory-display p { /* "A leltárad üres" üzenet */
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 10px 0;
 }
 </style>
