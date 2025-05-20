@@ -1,5 +1,10 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+} from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useGameStore } from "../stores/game";
 
 import HomeView from "../views/HomeView.vue";
 import LoginView from "../views/LoginView.vue";
@@ -145,60 +150,100 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to: RouteLocationNormalized, from, next) => {
   const authStore = useAuthStore();
+  const gameStore = useGameStore(); // Szükségünk lesz rá a currentNode ellenőrzéséhez
 
-  // Ha van token, de a user adatok még nincsenek betöltve ÉS nem fut már a betöltés
+  // Biztosítjuk, hogy az auth állapot (user adatok, role) betöltődjön, ha van token
   if (authStore.token && !authStore.user && !authStore.isLoadingUser) {
     console.log(
-      "[Guard] User data not loaded, token exists. Running checkAuth..."
+      "[Guard] User data not loaded from token, running checkAuth..."
     );
     try {
-      await authStore.checkAuth(); // Megvárjuk, amíg a user adatok (és a role) betöltődnek
+      await authStore.checkAuth();
       console.log(
-        "[Guard] checkAuth completed inside guard. User role:",
+        "[Guard] checkAuth completed in guard. User role:",
         authStore.user
       );
+      // Ha a checkAuth után még mindig nincs user, az probléma lehet (pl. token lejárt)
+      // Ezt az authStore.isAuthenticated már figyelembe veszi
     } catch (e) {
-      console.error("[Guard] Error during checkAuth in guard, logging out:", e);
-      authStore.logout();
-      if (to.name !== "login") {
-        next({ name: "login", query: { redirect: to.fullPath } });
-        return; // Fontos a return
-      }
-      // Ha már a login oldalon voltunk és hiba történt, ne csináljunk semmit (vagy next())
-      // De a logout miatt valószínűleg a requiresAuth ág fogja elkapni
+      console.error("[Guard] Error during checkAuth, logging out:", e);
+      // Hiba esetén kijelentkeztetjük, a további logika kezeli a loginra irányítást
+      // Nincs szükség itt explicit next({name: 'login'})-re, mert az isAuthenticated false lesz
     }
   }
 
-  // Most olvassuk ki a (potenciálisan frissített) állapotokat
+  // Friss állapotok kiolvasása az esetleges checkAuth után
   const isAuthenticated = authStore.isAuthenticated;
   const isAdmin = authStore.isAdmin;
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
 
   console.log(
-    `[Guard Decision] Path: ${to.path} | reqAuth: ${requiresAuth} | reqAdmin: ${requiresAdmin} | isAuth: ${isAuthenticated} | isAdmin: ${isAdmin}`
+    `[Guard Decision] Path: ${to.path} (Name: ${String(
+      to.name
+    )}) | reqAuth: ${requiresAuth} | reqAdmin: ${requiresAdmin} | isAuth: ${isAuthenticated} | isAdmin: ${isAdmin} | gameNode: ${
+      gameStore.currentNode?.id
+    }`
   );
 
+  // 1. Ha admin oldalt akar elérni
   if (requiresAdmin) {
     if (isAuthenticated && isAdmin) {
-      next();
+      console.log("[Guard] Admin access GRANTED.");
+      next(); // Admin és be van lépve -> mehet
+    } else if (isAuthenticated && !isAdmin) {
+      console.log(
+        "[Guard] Admin access DENIED (not admin). Redirecting to dashboard."
+      );
+      next({ name: "dashboard" }); // Be van lépve, de nem admin -> dashboard
     } else {
-      next({ name: "login", query: { redirect: to.fullPath } });
+      console.log(
+        "[Guard] Admin access DENIED (not authenticated). Redirecting to login."
+      );
+      next({ name: "login", query: { redirect: to.fullPath } }); // Nincs bejelentkezve -> login
     }
-  } else if (requiresAuth) {
+  }
+  // 2. Ha bejelentkezett felhasználó a login vagy register oldalra téved
+  else if ((to.name === "login" || to.name === "register") && isAuthenticated) {
+    console.log(
+      "[Guard] User already authenticated. Redirecting from login/register to dashboard."
+    );
+    next({ name: "dashboard" }); // Mindig a dashboardra, onnan mehet adminba vagy játékba
+  }
+  // 3. Ha "sima" védett oldalt akar elérni (ami nem admin, pl. /dashboard, /game)
+  else if (requiresAuth) {
     if (isAuthenticated) {
-      next();
+      // Speciális ellenőrzés a /game útvonalra: csak akkor engedjük, ha van aktív játék
+      if (to.name === "game") {
+        // Ha a gameStore még tölti az adatokat, várjunk (ezt az App.vue onMounted kezeli jobban)
+        // Itt feltételezzük, hogy az App.vue onMounted már lefutott és a gameStore állapota releváns
+        if (!gameStore.currentNode && !gameStore.isLoading) {
+          // és nem épp tölt
+          console.log(
+            "[Guard] Accessing /game but no active story (no currentNode). Redirecting to dashboard."
+          );
+          next({ name: "dashboard" });
+        } else {
+          console.log("[Guard] Authenticated access to /game GRANTED.");
+          next(); // Van aktív játék, vagy épp tölt -> engedjük
+        }
+      } else {
+        // Más védett oldal (pl. /dashboard)
+        console.log("[Guard] Authenticated access GRANTED.");
+        next();
+      }
     } else {
-      next({ name: "login", query: { redirect: to.fullPath } });
+      console.log(
+        "[Guard] Authenticated access DENIED (not authenticated). Redirecting to login."
+      );
+      next({ name: "login", query: { redirect: to.fullPath } }); // Nincs bejelentkezve -> login
     }
-  } else if (
-    (to.name === "login" || to.name === "register") &&
-    isAuthenticated
-  ) {
-    next(isAdmin ? { name: "admin-dashboard" } : { name: "game" });
-  } else {
+  }
+  // 4. Publikus oldalak (ha lennének, a login/register már le van kezelve)
+  else {
+    console.log("[Guard] Public route or unhandled case. Allowing navigation.");
     next();
   }
 });

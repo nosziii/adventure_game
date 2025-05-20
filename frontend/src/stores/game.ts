@@ -19,6 +19,7 @@ interface GameState {
   currentChoices: Choice[];
   characterStats: CharacterStats | null;
   currentRoundDetailedActions: CombatActionDetails[];
+  messages: string[];
   loading: boolean;
   error: string | null;
   combatState: EnemyData | null;
@@ -40,6 +41,7 @@ export const useGameStore = defineStore("game", {
     currentChoices: [],
     characterStats: null,
     currentRoundDetailedActions: [],
+    messages: [],
     loading: false,
     error: null,
     combatState: null,
@@ -65,6 +67,7 @@ export const useGameStore = defineStore("game", {
     // getCombatLog: (state): string[] => state.combatLogMessages, // Getter a harci üzenetekhez
     getRoundActions: (state): CombatActionDetails[] =>
       state.currentRoundDetailedActions,
+    getGameMessages: (state): string[] => state.messages,
     isInCombat: (state): boolean => !!state.combatState, // Getter a harc állapot ellenőrzésére
     getCombatState: (state): EnemyData | null => state.combatState, // Getter a harc adatokhoz
     getInventory: (state): InventoryItem[] => state.inventory, // Getter az inventoryhoz
@@ -104,6 +107,7 @@ export const useGameStore = defineStore("game", {
       this.equippedWeaponId = data.equippedWeaponId ?? null;
       this.equippedArmorId = data.equippedArmorId ?? null;
       this.currentRoundDetailedActions = data.roundActions ?? [];
+      this.messages = data.messages ?? [];
     },
 
     async fetchGameState() {
@@ -389,6 +393,42 @@ export const useGameStore = defineStore("game", {
         this.visitedPath.length === 0 /* || mindig_frissit_flag */
       ) {
         await this.fetchPlayerMapData();
+      }
+    },
+
+    async selectAndStartStory(storyId: number): Promise<boolean> {
+      this.loading = true;
+      this.error = null;
+      console.log(`Attempting to start story ID: ${storyId} via API...`);
+      try {
+        // Hívjuk az új backend végpontot, ami beállítja az aktív sztorit
+        // és visszaadja az új, kezdő GameStateDto-t.
+        const response = await apiClient.post<GameStateResponse>(
+          `/character/story/${storyId}/start`,
+          {}
+        );
+
+        // Közvetlenül frissítjük a teljes store állapotot a kapott válasszal
+        this._updateStateFromResponse(response.data);
+        console.log(
+          `Story ${storyId} started successfully, new game state received:`,
+          response.data
+        );
+
+        // Nincs szükség külön fetchGameState-re, mert a válasz már a friss állapot
+        // Átirányítás a játékra
+        // A routert itt közvetlenül ne használjuk, ha lehet, inkább a komponensből indítsuk az átirányítást
+        // De ha a store felelős érte, akkor itt kell a router példány.
+        // Jobb, ha az akció csak visszaad egy sikerességet, és a komponens navigál.
+        return true;
+      } catch (err: any) {
+        console.error(`Failed to start story ${storyId}:`, err);
+        this.error =
+          err.response?.data?.message ||
+          `Nem sikerült elindítani a(z) ${storyId} ID-jú sztorit.`;
+        return false;
+      } finally {
+        this.loading = false;
       }
     },
   }, // actions vége

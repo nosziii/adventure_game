@@ -1,10 +1,21 @@
 <template>
-  <div class="image-gallery-teaser">
-    <div v-for="n in 8" :key="n" class="gallery-item">
-      <a href="#" @click.prevent="imageClicked(n)">
-        <img :src="`https://picsum.photos/seed/img${n}/400/300`" :alt="`Kép ${n}`" />
-        <div class="item-overlay"><span>Részletek...</span></div>
-      </a>
+  <div class="gallery-teaser-wrapper">
+    <h2 class="section-title">Pillantás a Világokba</h2>
+    <div class="image-gallery-grid">
+      <div
+        v-for="n in 6"
+        :key="n"
+        class="gallery-item"
+        @click="imageClicked(n)"
+        role="link"
+        tabindex="0"
+        :aria-label="`Galéria kép ${n}`"
+      >
+        <img :src="`/images/gallery/teaser-${n}.jpg`" :alt="`Hangulatkép ${n}`" class="gallery-image" />
+        <div class="item-overlay">
+          <span class="overlay-text">Felfedezés...</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -17,47 +28,80 @@ const imageClicked = (imageNumber: number) => {
 </script>
 
 <style scoped>
-.image-gallery-teaser {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+.gallery-teaser-wrapper {
   width: 100%;
-  max-width: 1100px; /* Illeszkedjen a többi tartalomhoz */
-  margin: 0 auto; /* Középre */
+  max-width: 1100px; /* Illeszkedjen a Dashboard többi eleméhez */
+  margin: 40px auto;
+  padding: 0 20px; /* Oldalsó padding */
 }
+
+.section-title { /* Ezt a stílust már a DashboardView-ban is használhattuk */
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  color: var(--accent-primary); /* Arany kiemelés */
+  text-align: center;
+  margin-bottom: 30px;
+  text-shadow: 0 0 8px rgba(0,0,0,0.5);
+}
+
+.image-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Reszponzív rács */
+  gap: 25px;
+}
+
 .gallery-item {
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  border: 2px solid var(--accent);
+  cursor: pointer;
+  aspect-ratio: 4 / 3; /* Képarány tartása */
+  background-color: var(--panel-bg); /* Háttér, amíg a kép töltődik */
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
 }
-.gallery-item img {
+
+.gallery-item:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(var(--accent-rgb, 255, 215, 0), 0.2); /* Finom arany glow hoverre */
+}
+
+.gallery-image {
   display: block;
   width: 100%;
-  height: auto;
-  transition: transform 0.4s ease;
+  height: 100%;
+  object-fit: cover; /* Kép méretezése, hogy kitöltse a konténert vágás nélkül */
+  transition: opacity 0.3s ease-in-out;
 }
-.gallery-item:hover img {
-  transform: scale(1.1);
+
+.gallery-item:hover .gallery-image {
+  opacity: 0.8;
 }
-.gallery-item a {
-    display: block; /* Hogy a kép kitöltse */
-}
+
 .item-overlay {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: rgba(0,0,0,0.6);
-  color: white;
-  padding: 10px;
+  background: linear-gradient(to top, rgba(13, 18, 43, 0.9) 0%, transparent 100%); /* Sötét átmenet alulról */
+  color: var(--text-primary);
+  padding: 20px 15px 15px 15px;
   text-align: center;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  font-family: 'Cinzel', serif;
+  opacity: 0; /* Alapból rejtett */
+  transform: translateY(20px); /* Alulról jön be */
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
 }
+
 .gallery-item:hover .item-overlay {
   opacity: 1;
+  transform: translateY(0);
+}
+
+.overlay-text {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1em;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(0,0,0,0.7);
 }
 </style>

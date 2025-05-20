@@ -16,7 +16,7 @@ exports.CombatModule = CombatModule;
 exports.CombatModule = CombatModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            character_module_1.CharacterModule,
+            (0, common_1.forwardRef)(() => character_module_1.CharacterModule),
         ],
         providers: [combat_service_1.CombatService],
         exports: [combat_service_1.CombatService],

@@ -71,7 +71,6 @@
     </section>
 
      <section class="image-gallery-teaser-section" id="gallery-teaser-section">
-      <h2 class="section-title">Pillantás a Világokba</h2>
       <ImageGalleryTeaser />
       </section>
 
@@ -100,12 +99,12 @@ import { useAuthStore } from '../stores/auth';
 import { useStoryStore } from '../stores/story';
 import ImageGalleryTeaser from '../components/ImageGalleryTeaser.vue';
 import CharacterSlider from '../components/CharacterSlider.vue'; 
-// import { useGameStore } from '@/stores/game'; // Ha a start game logikához kell majd
+import { useGameStore } from '../stores/game';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const storyStore = useStoryStore();
-// const gameStore = useGameStore();
+const gameStore = useGameStore();
 
 onMounted(() => {
   storyStore.fetchAvailableStories();
@@ -116,13 +115,15 @@ const truncateText = (text: string, length: number): string => {
 };
 
 const handleStartStory = async (storyId: number) => {
-  console.log(`Starting story with ID: ${storyId}`);
-  // TODO: Backend hívás a karakter current_node_id-jának beállítására a story.starting_node_id alapján
-  // Pl. await gameStore.selectStoryAndStart(storyId);
-  alert(`Sztori indítása (ID: ${storyId}) - A karakter kezdőpozíciójának beállítása a backend oldalon még szükséges!`);
-  // Ha a backend beállította, akkor navigálhatunk:
-  // router.push({ name: 'game' });
+  console.log(`[DashboardView] handleStartStory called with ID: ${storyId}`);
+  const success = await gameStore.selectAndStartStory(storyId); // Hívjuk a gameStore akcióját
+  if (success) {
+    // Ha a store akció sikeres volt (és frissítette az állapotot), navigáljunk a játékra
+    router.push({ name: 'game' });
+  }
+  // A hibaüzenetet a store error állapotából olvashatja ki a template, ha van
 };
+
 
 const goToAdmin = () => { router.push({ name: 'admin-dashboard' }); };
 const showHelp = () => alert('Súgó funkció fejlesztés alatt!');

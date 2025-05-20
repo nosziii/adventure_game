@@ -6,11 +6,14 @@ import {
   Logger,
   InternalServerErrorException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from './database/database.module'; // Ellenőrizd az útvonalat!
 import { InventoryItem } from './types/character.interfaces';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
+import { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
+import { StoryRecord } from './game/interfaces/story-record.interface';
 
 export interface Character {
   id: number;
@@ -32,6 +35,15 @@ export interface Character {
 }
 
 const STARTING_NODE_ID = 1;
+
+const DEFAULT_HEALTH = 100;
+const DEFAULT_SKILL = 10;
+const DEFAULT_LUCK = 5;
+const DEFAULT_STAMINA = 100;
+const DEFAULT_DEFENSE = 0;
+const DEFAULT_LEVEL = 1;
+const DEFAULT_XP = 0;
+const DEFAULT_XP_TO_NEXT_LEVEL = 100;
 
 @Injectable()
 export class CharacterService {
@@ -311,7 +323,7 @@ export class CharacterService {
   // TODO: Később ezt is bővíteni kellene
 
   // --- applyPassiveEffects : Már csak a felszerelt tárgyakat nézi ---
-  private async applyPassiveEffects(character: Character): Promise<Character> {
+  public async applyPassiveEffects(character: Character): Promise<Character> {
     const characterWithEffects = { ...character }; // Másolat
     // Alapértelmezett defense érték beállítása, ha null (a DB defaultja 0 kellene legyen)
     characterWithEffects.defense = characterWithEffects.defense ?? 0;
@@ -348,7 +360,7 @@ export class CharacterService {
           item.effect.length > 0
         ) {
           this.logger.debug(
-            `Parsing passive effect "${item.effect}" from equipped item <span class="math-inline">\{item\.id\} \(</span>{item.name})`,
+            `Parsing passive effect "${item.effect}" from equipped item ID: ${item.id} (Name: ${item.name})`,
           );
           const effects = item.effect.split(';');
           for (const effectPart of effects) {
@@ -359,7 +371,7 @@ export class CharacterService {
               const value = parseInt(valueStr, 10);
               const modifier = operator === '+' ? value : -value;
               this.logger.debug(
-                `Parsed effect part: stat=<span class="math-inline">\{statName\}, modifier\=</span>{modifier}`,
+                `Parsed effect part: stat=${statName}, modifier=${modifier}`,
               );
 
               switch (statName.toLowerCase()) {
@@ -394,7 +406,7 @@ export class CharacterService {
         } // if isPassiveType
       } // for item
       this.logger.log(
-        `Effects applied. Final stats: Skill=<span class="math-inline">\{characterWithEffects\.skill\}, Def\=</span>{characterWithEffects.defense}, Luck=<span class="math-inline">\{characterWithEffects\.luck\}, Stamina\=</span>{characterWithEffects.stamina}`,
+        `Effects applied. Final stats: Skill=${characterWithEffects.skill}, Def=${characterWithEffects.defense}, Luck=${characterWithEffects.luck}, Stamina=${characterWithEffects.stamina}`,
       );
     } else {
       this.logger.debug('No items equipped, no passive effects to apply.');
@@ -607,4 +619,166 @@ export class CharacterService {
       );
     }
   } // addXp vége
+
+  async getActiveStoryProgress(
+    characterId: number,
+  ): Promise<CharacterStoryProgressRecord | null> {
+    this.logger.debug(
+      `Workspaceing active story progress for character ID: ${characterId}`,
+    );
+    const progress = await this.knex<CharacterStoryProgressRecord>(
+      'character_story_progress',
+    )
+      .where({ character_id: characterId, is_active: true })
+      .first();
+    return progress || null;
+  }
+
+  async startOrContinueStory(
+    characterId: number,
+    storyId: number,
+  ): Promise<CharacterStoryProgressRecord> {
+    this.logger.log(
+      `Character ${characterId} starting/continuing story ID: ${storyId}`,
+    );
+
+    // 1. Sztori adatainak lekérése
+    const story = await this.knex<StoryRecord>('stories')
+      .where({ id: storyId })
+      .first();
+    if (!story) {
+      this.logger.warn(`Story with ID ${storyId} not found.`);
+      throw new NotFoundException(`Story with ID ${storyId} not found.`);
+    }
+    if (!story.is_published) {
+      // TODO: Adminoknak engedélyezni a nem publikált sztorik tesztelését?
+      this.logger.warn(`Story with ID ${storyId} is not published.`);
+      throw new ForbiddenException(
+        `Story with ID ${storyId} is not available.`,
+      );
+    }
+
+    const startingNodeId = story.starting_node_id;
+
+    // Tranzakció indítása
+    const progressRecord = await this.knex.transaction(async (trx) => {
+      this.logger.debug(
+        `Clearing any existing active combat for character ${characterId} before starting/continuing story ${storyId}`,
+      );
+      await trx('active_combats').where({ character_id: characterId }).del();
+      // 2. Minden más aktív sztori progresszió inaktiválása ennél a karakternél
+      await trx('character_story_progress')
+        .where({ character_id: characterId, is_active: true })
+        .andWhereNot({ story_id: storyId }) // Ne inaktiváljuk, ha már ez volt az aktív
+        .update({ is_active: false, updated_at: new Date() });
+
+      // 3. Meglévő progresszió keresése ehhez a sztorihoz
+      let currentProgress: CharacterStoryProgressRecord | undefined =
+        await trx<CharacterStoryProgressRecord>('character_story_progress')
+          .where({ character_id: characterId, story_id: storyId })
+          .first();
+
+      if (currentProgress) {
+        // Ha van, aktiváljuk és frissítjük a last_played_at-et
+        this.logger.log(
+          `Continuing existing progress for story ${storyId} for character ${characterId}`,
+        );
+        const updatedRows = await trx('character_story_progress')
+          .where({ id: currentProgress.id }) // Itt a currentProgress biztosan nem undefined
+          .update({
+            is_active: true,
+            last_played_at: new Date(),
+            updated_at: new Date(),
+          })
+          .returning('*');
+
+        if (!updatedRows || updatedRows.length === 0 || !updatedRows[0]) {
+          // Szigorúbb ellenőrzés
+          this.logger.error(
+            `Failed to update or retrieve character_story_progress for id ${currentProgress.id}.`,
+          );
+          throw new InternalServerErrorException(
+            'Failed to update story progress.',
+          );
+        }
+        currentProgress = updatedRows[0]; // Most már biztosan CharacterStoryProgressRecord
+      } else {
+        // Ha nincs, létrehozunk egy újat
+        this.logger.log(
+          `Creating new progress for story ${storyId} for character ${characterId}`,
+        );
+        const insertedRows = await trx('character_story_progress')
+          .insert({
+            character_id: characterId,
+            story_id: storyId,
+            current_node_id: startingNodeId, // startingNodeId a függvény elejéről
+            health: DEFAULT_HEALTH,
+            skill: DEFAULT_SKILL,
+            luck: DEFAULT_LUCK,
+            stamina: DEFAULT_STAMINA,
+            defense: DEFAULT_DEFENSE,
+            level: DEFAULT_LEVEL,
+            xp: DEFAULT_XP,
+            xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
+            is_active: true,
+            // equipped_weapon_id és equipped_armor_id alapból NULL
+          })
+          .returning('*');
+
+        if (!insertedRows || insertedRows.length === 0 || !insertedRows[0]) {
+          // Szigorúbb ellenőrzés
+          this.logger.error(
+            `Failed to insert or retrieve new character_story_progress for char ${characterId}, story ${storyId}.`,
+          );
+          throw new InternalServerErrorException(
+            'Failed to create new story progress.',
+          );
+        }
+        currentProgress = insertedRows[0]; // Most már biztosan CharacterStoryProgressRecord
+
+        // Új kezdőpozíció rögzítése a player_progress táblában az új progress ID-val
+        // Itt a 'currentProgress' már biztosan nem undefined az előző ellenőrzés és hibadobás miatt
+        await trx('player_progress').insert({
+          character_story_progress_id:
+            currentProgress?.id ??
+            (() => {
+              throw new InternalServerErrorException(
+                'currentProgress is undefined.',
+              );
+            })(),
+          node_id: startingNodeId,
+          choice_id_taken: null,
+        });
+        this.logger.debug(
+          `Initial player_progress logged for new story progress ${currentProgress.id}`,
+        );
+      }
+      // Ebben a pontban a 'currentProgress' már biztosan CharacterStoryProgressRecord típusú,
+      // mert minden olyan ág, ahol 'undefined' maradhatna, már hibát dobott és kilépett a tranzakcióból.
+      this.logger.debug(
+        '[startOrContinueStory] Progress before returning from transaction:',
+        JSON.stringify(currentProgress, null, 2),
+      );
+      return currentProgress; // A tranzakció ezt adja vissza
+    }); // Tranzakció vége
+
+    // A 'progressRecord' itt már a tranzakció által visszaadott (és nem undefined) érték lesz,
+    // mivel a tranzakción belüli logika vagy sikeresen visszaad egy rekordot, vagy hibát dob.
+    // A startOrContinueStory metódus `Promise<CharacterStoryProgressRecord>` visszatérési típusa így teljesül.
+
+    if (!progressRecord) {
+      throw new InternalServerErrorException(
+        'Failed to retrieve story progress.',
+      );
+    }
+    this.logger.debug(
+      '[startOrContinueStory] Progress record after transaction:',
+      JSON.stringify(progressRecord, null, 2),
+    );
+    return progressRecord;
+  }
+
+  // TODO: async resetStoryProgress(characterId: number, storyId: number): Promise<void>
+  // Ez törölné a character_story_progress, character_story_inventory, player_progress bejegyzéseket
+  // az adott characterId + storyId pároshoz, és újra létrehozná az alap character_story_progress-t.
 }

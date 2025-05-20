@@ -18,6 +18,7 @@ const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const character_service_1 = require("./character.service");
 const class_validator_1 = require("class-validator");
+const game_service_1 = require("./game/game.service");
 class EquipItemDto {
     itemId;
 }
@@ -36,9 +37,11 @@ __decorate([
 ], UnequipItemDto.prototype, "itemType", void 0);
 let CharacterController = CharacterController_1 = class CharacterController {
     characterService;
+    gameService;
     logger = new common_1.Logger(CharacterController_1.name);
-    constructor(characterService) {
+    constructor(characterService, gameService) {
         this.characterService = characterService;
+        this.gameService = gameService;
     }
     async equipItem(req, body) {
         const userId = req.user.id;
@@ -74,6 +77,15 @@ let CharacterController = CharacterController_1 = class CharacterController {
             defense: updatedCharacterWithEffects.defense,
         };
     }
+    async startStory(req, storyId) {
+        const userId = req.user.id;
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        this.logger.log(`User ${userId} (Character ${character.id}) requested to start/continue story ${storyId}`);
+        await this.characterService.startOrContinueStory(character.id, storyId);
+        this.logger.log(`Story ${storyId} activated for character ${character.id}. Fetching initial game state.`);
+        const newGameState = await this.gameService.getCurrentGameState(userId);
+        return newGameState;
+    }
 };
 exports.CharacterController = CharacterController;
 __decorate([
@@ -94,8 +106,18 @@ __decorate([
     __metadata("design:paramtypes", [Object, UnequipItemDto]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "unequipItem", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Post)('story/:storyId/start'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('storyId', common_1.ParseIntPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Number]),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "startStory", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([
     (0, common_1.Controller)('character'),
-    __metadata("design:paramtypes", [character_service_1.CharacterService])
+    __metadata("design:paramtypes", [character_service_1.CharacterService,
+        game_service_1.GameService])
 ], CharacterController);
 //# sourceMappingURL=character.controller.js.map

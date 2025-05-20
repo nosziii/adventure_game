@@ -20,4 +20,5 @@ export class GameStateDto {
   inventory: InventoryItemDto[] | null;
   equippedWeaponId?: number | null;
   equippedArmorId?: number | null;
+  messages?: string[];
 }

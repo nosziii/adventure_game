@@ -10,11 +10,13 @@ exports.CharacterModule = void 0;
 const common_1 = require("@nestjs/common");
 const character_service_1 = require("./character.service");
 const character_controller_1 = require("./character.controller");
+const game_module_1 = require("./game/game.module");
 let CharacterModule = class CharacterModule {
 };
 exports.CharacterModule = CharacterModule;
 exports.CharacterModule = CharacterModule = __decorate([
     (0, common_1.Module)({
+        imports: [(0, common_1.forwardRef)(() => game_module_1.GameModule)],
         providers: [character_service_1.CharacterService],
         exports: [character_service_1.CharacterService],
         controllers: [character_controller_1.CharacterController],

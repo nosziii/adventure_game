@@ -1,31 +1,33 @@
-import { Module, Logger } from '@nestjs/common'
-import { AuthService } from './auth.service'
-import { AuthController } from './auth.controller'
-import { UsersModule } from '../users/users.module'
-import { JwtModule } from '@nestjs/jwt'
-import { ConfigModule, ConfigService } from '@nestjs/config'
-import { JwtStrategy } from './jwt.strategy'
-import { CharacterModule } from '../character.module'
+import { Module, Logger, forwardRef } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
+import { UsersModule } from '../users/users.module';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtStrategy } from './jwt.strategy';
+import { CharacterModule } from '../character.module';
 
 @Module({
   imports: [
     UsersModule,
-    CharacterModule,
+    forwardRef(() => CharacterModule),
     // A JWT titkos kulcs és lejárati idő beállítása környezeti változókból
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
-        const secret = configService.get<string>('JWT_SECRET')
-        const expiresIn = configService.get<string>('JWT_EXPIRATION_TIME')
+        const secret = configService.get<string>('JWT_SECRET');
+        const expiresIn = configService.get<string>('JWT_EXPIRATION_TIME');
 
         // Logoljuk ki az értékeket
         const logger = new Logger('JwtModule_Config');
-        logger.log(`JWT Secret loaded: ${secret ? 'OK' : 'MISSING!'}`)
-        logger.log(`JWT ExpiresIn value read from env: ->${expiresIn}<-`)
+        logger.log(`JWT Secret loaded: ${secret ? 'OK' : 'MISSING!'}`);
+        logger.log(`JWT ExpiresIn value read from env: ->${expiresIn}<-`);
 
-        if (!secret ||!expiresIn) {
-          logger.error('JWT_EXPIRATION_TIME is missing or empty in environment variables!')
+        if (!secret || !expiresIn) {
+          logger.error(
+            'JWT_EXPIRATION_TIME is missing or empty in environment variables!',
+          );
         }
 
         return {
@@ -38,10 +40,7 @@ import { CharacterModule } from '../character.module'
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy
-  ],
-  exports: [AuthService]
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService],
 })
 export class AuthModule {}

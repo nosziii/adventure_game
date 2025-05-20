@@ -18,9 +18,14 @@ let GameModule = class GameModule {
 exports.GameModule = GameModule;
 exports.GameModule = GameModule = __decorate([
     (0, common_1.Module)({
-        imports: [auth_module_1.AuthModule, character_module_1.CharacterModule, combat_module_1.CombatModule],
+        imports: [
+            (0, common_1.forwardRef)(() => auth_module_1.AuthModule),
+            combat_module_1.CombatModule,
+            (0, common_1.forwardRef)(() => character_module_1.CharacterModule),
+        ],
         controllers: [game_controller_1.GameController],
         providers: [game_service_1.GameService],
+        exports: [game_service_1.GameService],
     })
 ], GameModule);
 //# sourceMappingURL=game.module.js.map

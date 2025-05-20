@@ -10,6 +10,7 @@ class GameStateDto {
     inventory;
     equippedWeaponId;
     equippedArmorId;
+    messages;
 }
 exports.GameStateDto = GameStateDto;
 //# sourceMappingURL=game-state.dto.js.map

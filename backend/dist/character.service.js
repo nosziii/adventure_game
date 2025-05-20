@@ -18,6 +18,14 @@ const common_1 = require("@nestjs/common");
 const knex_1 = require("knex");
 const database_module_1 = require("./database/database.module");
 const STARTING_NODE_ID = 1;
+const DEFAULT_HEALTH = 100;
+const DEFAULT_SKILL = 10;
+const DEFAULT_LUCK = 5;
+const DEFAULT_STAMINA = 100;
+const DEFAULT_DEFENSE = 0;
+const DEFAULT_LEVEL = 1;
+const DEFAULT_XP = 0;
+const DEFAULT_XP_TO_NEXT_LEVEL = 100;
 let CharacterService = CharacterService_1 = class CharacterService {
     knex;
     logger = new common_1.Logger(CharacterService_1.name);
@@ -198,7 +206,7 @@ let CharacterService = CharacterService_1 = class CharacterService {
                 if (isPassiveType &&
                     typeof item.effect === 'string' &&
                     item.effect.length > 0) {
-                    this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item <span class="math-inline">\{item\.id\} \(</span>{item.name})`);
+                    this.logger.debug(`Parsing passive effect "${item.effect}" from equipped item ID: ${item.id} (Name: ${item.name})`);
                     const effects = item.effect.split(';');
                     for (const effectPart of effects) {
                         const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
@@ -207,7 +215,7 @@ let CharacterService = CharacterService_1 = class CharacterService {
                             const [, statName, operator, valueStr] = match;
                             const value = parseInt(valueStr, 10);
                             const modifier = operator === '+' ? value : -value;
-                            this.logger.debug(`Parsed effect part: stat=<span class="math-inline">\{statName\}, modifier\=</span>{modifier}`);
+                            this.logger.debug(`Parsed effect part: stat=${statName}, modifier=${modifier}`);
                             switch (statName.toLowerCase()) {
                                 case 'skill':
                                     characterWithEffects.skill =
@@ -236,7 +244,7 @@ let CharacterService = CharacterService_1 = class CharacterService {
                     }
                 }
             }
-            this.logger.log(`Effects applied. Final stats: Skill=<span class="math-inline">\{characterWithEffects\.skill\}, Def\=</span>{characterWithEffects.defense}, Luck=<span class="math-inline">\{characterWithEffects\.luck\}, Stamina\=</span>{characterWithEffects.stamina}`);
+            this.logger.log(`Effects applied. Final stats: Skill=${characterWithEffects.skill}, Def=${characterWithEffects.defense}, Luck=${characterWithEffects.luck}, Stamina=${characterWithEffects.stamina}`);
         }
         else {
             this.logger.debug('No items equipped, no passive effects to apply.');
@@ -372,6 +380,95 @@ let CharacterService = CharacterService_1 = class CharacterService {
             this.logger.error(`Failed to update character ${characterId} after XP gain/level up: ${error}`, error.stack);
             throw new common_1.InternalServerErrorException('Failed to save character progression.');
         }
+    }
+    async getActiveStoryProgress(characterId) {
+        this.logger.debug(`Workspaceing active story progress for character ID: ${characterId}`);
+        const progress = await this.knex('character_story_progress')
+            .where({ character_id: characterId, is_active: true })
+            .first();
+        return progress || null;
+    }
+    async startOrContinueStory(characterId, storyId) {
+        this.logger.log(`Character ${characterId} starting/continuing story ID: ${storyId}`);
+        const story = await this.knex('stories')
+            .where({ id: storyId })
+            .first();
+        if (!story) {
+            this.logger.warn(`Story with ID ${storyId} not found.`);
+            throw new common_1.NotFoundException(`Story with ID ${storyId} not found.`);
+        }
+        if (!story.is_published) {
+            this.logger.warn(`Story with ID ${storyId} is not published.`);
+            throw new common_1.ForbiddenException(`Story with ID ${storyId} is not available.`);
+        }
+        const startingNodeId = story.starting_node_id;
+        const progressRecord = await this.knex.transaction(async (trx) => {
+            this.logger.debug(`Clearing any existing active combat for character ${characterId} before starting/continuing story ${storyId}`);
+            await trx('active_combats').where({ character_id: characterId }).del();
+            await trx('character_story_progress')
+                .where({ character_id: characterId, is_active: true })
+                .andWhereNot({ story_id: storyId })
+                .update({ is_active: false, updated_at: new Date() });
+            let currentProgress = await trx('character_story_progress')
+                .where({ character_id: characterId, story_id: storyId })
+                .first();
+            if (currentProgress) {
+                this.logger.log(`Continuing existing progress for story ${storyId} for character ${characterId}`);
+                const updatedRows = await trx('character_story_progress')
+                    .where({ id: currentProgress.id })
+                    .update({
+                    is_active: true,
+                    last_played_at: new Date(),
+                    updated_at: new Date(),
+                })
+                    .returning('*');
+                if (!updatedRows || updatedRows.length === 0 || !updatedRows[0]) {
+                    this.logger.error(`Failed to update or retrieve character_story_progress for id ${currentProgress.id}.`);
+                    throw new common_1.InternalServerErrorException('Failed to update story progress.');
+                }
+                currentProgress = updatedRows[0];
+            }
+            else {
+                this.logger.log(`Creating new progress for story ${storyId} for character ${characterId}`);
+                const insertedRows = await trx('character_story_progress')
+                    .insert({
+                    character_id: characterId,
+                    story_id: storyId,
+                    current_node_id: startingNodeId,
+                    health: DEFAULT_HEALTH,
+                    skill: DEFAULT_SKILL,
+                    luck: DEFAULT_LUCK,
+                    stamina: DEFAULT_STAMINA,
+                    defense: DEFAULT_DEFENSE,
+                    level: DEFAULT_LEVEL,
+                    xp: DEFAULT_XP,
+                    xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
+                    is_active: true,
+                })
+                    .returning('*');
+                if (!insertedRows || insertedRows.length === 0 || !insertedRows[0]) {
+                    this.logger.error(`Failed to insert or retrieve new character_story_progress for char ${characterId}, story ${storyId}.`);
+                    throw new common_1.InternalServerErrorException('Failed to create new story progress.');
+                }
+                currentProgress = insertedRows[0];
+                await trx('player_progress').insert({
+                    character_story_progress_id: currentProgress?.id ??
+                        (() => {
+                            throw new common_1.InternalServerErrorException('currentProgress is undefined.');
+                        })(),
+                    node_id: startingNodeId,
+                    choice_id_taken: null,
+                });
+                this.logger.debug(`Initial player_progress logged for new story progress ${currentProgress.id}`);
+            }
+            this.logger.debug('[startOrContinueStory] Progress before returning from transaction:', JSON.stringify(currentProgress, null, 2));
+            return currentProgress;
+        });
+        if (!progressRecord) {
+            throw new common_1.InternalServerErrorException('Failed to retrieve story progress.');
+        }
+        this.logger.debug('[startOrContinueStory] Progress record after transaction:', JSON.stringify(progressRecord, null, 2));
+        return progressRecord;
     }
 };
 exports.CharacterService = CharacterService;

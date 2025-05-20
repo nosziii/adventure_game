@@ -93,76 +93,123 @@ let GameService = GameService_1 = class GameService {
     }
     async getCurrentGameState(userId) {
         this.logger.log(`Workspaceing game state for user ID: ${userId}`);
-        const character = await this.characterService.findOrCreateByUserId(userId);
-        this.logger.debug('Character data fetched/created:', JSON.stringify(character, null, 2));
-        const activeCombat = await this.knex('active_combats')
-            .where({ character_id: character.id })
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const activeStoryProgress = await this.characterService.getActiveStoryProgress(baseCharacter.id);
+        if (!activeStoryProgress) {
+            this.logger.warn(`No active story progress found for character ${baseCharacter.id}. User should select a story.`);
+            return {
+                node: null,
+                choices: [],
+                character: this.mapCharacterToDto({
+                    ...baseCharacter,
+                    health: 0,
+                    skill: 0,
+                    luck: 0,
+                    stamina: 0,
+                    defense: 0,
+                    level: 0,
+                    xp: 0,
+                    xp_to_next_level: 0,
+                    current_node_id: null,
+                    equipped_weapon_id: null,
+                    equipped_armor_id: null,
+                }),
+                combat: null,
+                inventory: [],
+                roundActions: null,
+                equippedWeaponId: null,
+                equippedArmorId: null,
+            };
+        }
+        this.logger.debug(`Active story progress ID: ${activeStoryProgress.id}, Story ID: ${activeStoryProgress.story_id}, Current Node: ${activeStoryProgress.current_node_id}`);
+        let characterForState = {
+            ...baseCharacter,
+            health: activeStoryProgress.health,
+            skill: activeStoryProgress.skill,
+            luck: activeStoryProgress.luck,
+            stamina: activeStoryProgress.stamina,
+            defense: activeStoryProgress.defense,
+            level: activeStoryProgress.level,
+            xp: activeStoryProgress.xp,
+            xp_to_next_level: activeStoryProgress.xp_to_next_level,
+            current_node_id: activeStoryProgress.current_node_id,
+            equipped_weapon_id: activeStoryProgress.equipped_weapon_id,
+            equipped_armor_id: activeStoryProgress.equipped_armor_id,
+        };
+        characterForState =
+            await this.characterService.applyPassiveEffects(characterForState);
+        const inventory = await this.characterService.getInventory(baseCharacter.id);
+        this.logger.debug('Inventory fetched (using base character_id for now):', JSON.stringify(inventory));
+        const activeCombatDbRecord = await this.knex('active_combats')
+            .where({ character_id: baseCharacter.id })
             .first();
-        let inventory = null;
-        this.logger.debug(`Workspaceing inventory for character ID: ${character.id}`);
-        if (activeCombat) {
-            this.logger.log(`User ${userId} is in active combat (Combat ID: ${activeCombat.id}, Enemy ID: ${activeCombat.enemy_id})`);
+        if (activeCombatDbRecord) {
+            this.logger.log(`User ${userId} is in active combat (Combat ID: ${activeCombatDbRecord.id})`);
             const enemyBaseData = await this.knex('enemies')
-                .where({ id: activeCombat.enemy_id })
+                .where({ id: activeCombatDbRecord.enemy_id })
                 .first();
             if (!enemyBaseData) {
-                this.logger.error(`Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`);
-                await this.knex('active_combats').where({ id: activeCombat.id }).del();
-                throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found.');
+                await this.knex('active_combats')
+                    .where({ id: activeCombatDbRecord.id })
+                    .del();
+                throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found during active combat check.');
             }
-            inventory = await this.characterService.getInventory(character.id);
-            this.logger.debug('Inventory data fetched:', JSON.stringify(inventory, null, 2));
             const enemyData = {
                 id: enemyBaseData.id,
                 name: enemyBaseData.name,
                 health: enemyBaseData.health,
-                currentHealth: activeCombat.enemy_current_health,
+                currentHealth: activeCombatDbRecord.enemy_current_health,
                 skill: enemyBaseData.skill,
+                isChargingSpecial: (activeCombatDbRecord.enemy_charge_turns_current ?? 0) > 0,
+                currentChargeTurns: activeCombatDbRecord.enemy_charge_turns_current,
+                maxChargeTurns: enemyBaseData.special_attack_charge_turns,
+                specialAttackTelegraphText: (activeCombatDbRecord.enemy_charge_turns_current ?? 0) > 0
+                    ? enemyBaseData.special_attack_telegraph_text
+                    : null,
             };
             return {
                 node: null,
                 choices: [],
-                character: this.mapCharacterToDto(character),
+                character: this.mapCharacterToDto(characterForState),
                 combat: enemyData,
                 inventory: inventory,
-                roundActions: [],
-                equippedWeaponId: character.equipped_weapon_id,
-                equippedArmorId: character.equipped_armor_id,
+                roundActions: null,
+                equippedWeaponId: characterForState.equipped_weapon_id,
+                equippedArmorId: characterForState.equipped_armor_id,
             };
         }
         else {
-            this.logger.log(`User ${userId} is not in combat. Current node: ${character.current_node_id}`);
-            let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
-            inventory = await this.characterService.getInventory(character.id);
-            if (character.current_node_id !== currentNodeId) {
-                this.logger.warn(`Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`);
-                const updatedCharacter = await this.characterService.updateCharacter(character.id, { current_node_id: currentNodeId });
-                Object.assign(character, updatedCharacter);
+            const currentNodeId = characterForState.current_node_id;
+            if (!currentNodeId) {
+                this.logger.error(`Character ${baseCharacter.id} (ProgressID: ${activeStoryProgress.id}) has no current_node_id in active story! Defaulting to STARTING_NODE_ID.`);
+                return {
+                    node: null,
+                    choices: [],
+                    character: this.mapCharacterToDto(characterForState),
+                    combat: null,
+                    inventory: inventory,
+                    roundActions: null,
+                    equippedWeaponId: characterForState.equipped_weapon_id,
+                    equippedArmorId: characterForState.equipped_armor_id,
+                    messages: [
+                        'Hiba: Nincs aktuális pozíció a sztoriban. Válassz sztorit a kezdőpanelen!',
+                    ],
+                };
             }
-            this.logger.debug(`Workspaceing story node with ID: ${currentNodeId}`);
             const currentNode = await this.knex('story_nodes')
                 .where({ id: currentNodeId })
                 .first();
             if (!currentNode) {
-                this.logger.error(`Story node ${currentNodeId} not found!`);
-                throw new common_1.NotFoundException(`Story node ${currentNodeId} not found.`);
+                throw new common_1.NotFoundException(`Story node ${currentNodeId} not found for active story progress.`);
             }
-            this.logger.debug(`Found story node: ${currentNode.id}`);
-            this.logger.debug(`Workspaceing and evaluating choices for source node ID: ${currentNodeId}`);
             const potentialChoices = await this.knex('choices').where({
                 source_node_id: currentNodeId,
             });
-            const availableChoicesPromises = potentialChoices.map(async (choice) => {
-                const isAvailable = await this.checkChoiceAvailability(choice, character);
-                this.logger.debug(`Choice ${choice.id} (${choice.text}) - Evaluated Availability: ${isAvailable}`);
-                return {
-                    id: choice.id,
-                    text: choice.text,
-                    isAvailable: isAvailable,
-                };
-            });
-            const availableChoices = await Promise.all(availableChoicesPromises);
-            this.logger.debug(`Evaluated ${availableChoices.length} choices.`);
+            const availableChoices = await Promise.all(potentialChoices.map(async (choice) => ({
+                id: choice.id,
+                text: choice.text,
+                isAvailable: await this.checkChoiceAvailability(choice, characterForState),
+            })));
             return {
                 node: {
                     id: currentNode.id,
@@ -170,12 +217,12 @@ let GameService = GameService_1 = class GameService {
                     image: currentNode.image,
                 },
                 choices: availableChoices,
-                character: this.mapCharacterToDto(character),
+                character: this.mapCharacterToDto(characterForState),
                 combat: null,
                 inventory: inventory,
-                roundActions: [],
-                equippedWeaponId: character.equipped_weapon_id,
-                equippedArmorId: character.equipped_armor_id,
+                roundActions: null,
+                equippedWeaponId: characterForState.equipped_weapon_id,
+                equippedArmorId: characterForState.equipped_armor_id,
             };
         }
     }

@@ -56,7 +56,6 @@ export class GameService {
       defense: character.defense,
     };
   }
-
   // A GameController ezt fogja hívni
   async processCombatAction(
     userId: number,
@@ -137,129 +136,170 @@ export class GameService {
   // --- getCurrentGameState ---
   async getCurrentGameState(userId: number): Promise<GameStateDto> {
     this.logger.log(`Workspaceing game state for user ID: ${userId}`);
-    const character = await this.characterService.findOrCreateByUserId(userId);
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId); // Alap adatok: id, user_id, name, role
+
+    const activeStoryProgress =
+      await this.characterService.getActiveStoryProgress(baseCharacter.id);
+
+    if (!activeStoryProgress) {
+      this.logger.warn(
+        `No active story progress found for character ${baseCharacter.id}. User should select a story.`,
+      );
+      // Olyan állapotot adunk vissza, amit a frontend Dashboardként tud értelmezni
+      return {
+        node: null,
+        choices: [],
+        character: this.mapCharacterToDto({
+          // Minimális karakter adatok
+          ...baseCharacter,
+          health: 0,
+          skill: 0,
+          luck: 0,
+          stamina: 0,
+          defense: 0,
+          level: 0,
+          xp: 0,
+          xp_to_next_level: 0,
+          current_node_id: null,
+          equipped_weapon_id: null,
+          equipped_armor_id: null,
+        } as Character), // Típus kényszerítés, mert a baseCharacter nem teljes
+        combat: null,
+        inventory: [],
+        roundActions: null,
+        equippedWeaponId: null,
+        equippedArmorId: null,
+      };
+    }
+
     this.logger.debug(
-      'Character data fetched/created:',
-      JSON.stringify(character, null, 2),
+      `Active story progress ID: ${activeStoryProgress.id}, Story ID: ${activeStoryProgress.story_id}, Current Node: ${activeStoryProgress.current_node_id}`,
     );
 
-    // Ellenőrizzük az aktív harcot
-    const activeCombat = await this.knex('active_combats')
-      .where({ character_id: character.id })
+    // Karakter objektum összeállítása a sztori-specifikus adatokkal
+    let characterForState: Character = {
+      ...baseCharacter, // Globális adatok (id, user_id, name, role, created_at, updated_at)
+      health: activeStoryProgress.health,
+      skill: activeStoryProgress.skill,
+      luck: activeStoryProgress.luck,
+      stamina: activeStoryProgress.stamina,
+      defense: activeStoryProgress.defense,
+      level: activeStoryProgress.level,
+      xp: activeStoryProgress.xp,
+      xp_to_next_level: activeStoryProgress.xp_to_next_level,
+      current_node_id: activeStoryProgress.current_node_id,
+      equipped_weapon_id: activeStoryProgress.equipped_weapon_id,
+      equipped_armor_id: activeStoryProgress.equipped_armor_id,
+    };
+    characterForState =
+      await this.characterService.applyPassiveEffects(characterForState); // Effektek alkalmazása
+
+    // TODO: Inventory lekérdezése a character_story_inventory táblából, character_story_progress_id alapján.
+    // Egyelőre a régi, character_id alapú lekérdezést használjuk.
+    const inventory = await this.characterService.getInventory(
+      baseCharacter.id,
+    );
+    this.logger.debug(
+      'Inventory fetched (using base character_id for now):',
+      JSON.stringify(inventory),
+    );
+
+    // TODO: Active_combats táblának is character_story_progress_id-t kellene használnia.
+    // Egyelőre a character_id-t használjuk.
+    const activeCombatDbRecord = await this.knex('active_combats')
+      .where({ character_id: baseCharacter.id })
       .first();
 
-    let inventory: InventoryItemDto[] | null = null;
-
-    this.logger.debug(
-      `Workspaceing inventory for character ID: ${character.id}`,
-    );
-
-    if (activeCombat) {
-      // --- HARCBAN VAN ---
+    if (activeCombatDbRecord) {
       this.logger.log(
-        `User ${userId} is in active combat (Combat ID: ${activeCombat.id}, Enemy ID: ${activeCombat.enemy_id})`,
+        `User ${userId} is in active combat (Combat ID: ${activeCombatDbRecord.id})`,
       );
       const enemyBaseData = await this.knex<EnemyRecord>('enemies')
-        .where({ id: activeCombat.enemy_id })
+        .where({ id: activeCombatDbRecord.enemy_id })
         .first();
-
       if (!enemyBaseData) {
-        this.logger.error(
-          `Enemy data not found for active combat! Enemy ID: ${activeCombat.enemy_id}`,
-        );
-        await this.knex('active_combats').where({ id: activeCombat.id }).del();
+        await this.knex('active_combats')
+          .where({ id: activeCombatDbRecord.id })
+          .del();
         throw new InternalServerErrorException(
-          'Combat data corrupted, enemy not found.',
+          'Combat data corrupted, enemy not found during active combat check.',
         );
       }
 
-      inventory = await this.characterService.getInventory(character.id);
-      this.logger.debug(
-        'Inventory data fetched:',
-        JSON.stringify(inventory, null, 2),
-      );
-
-      // EnemyDataDto összeállítása
       const enemyData: EnemyDataDto = {
         id: enemyBaseData.id,
         name: enemyBaseData.name,
         health: enemyBaseData.health,
-        currentHealth: activeCombat.enemy_current_health,
+        currentHealth: activeCombatDbRecord.enemy_current_health,
         skill: enemyBaseData.skill,
+        isChargingSpecial:
+          (activeCombatDbRecord.enemy_charge_turns_current ?? 0) > 0,
+        currentChargeTurns: activeCombatDbRecord.enemy_charge_turns_current,
+        maxChargeTurns: enemyBaseData.special_attack_charge_turns,
+        specialAttackTelegraphText:
+          (activeCombatDbRecord.enemy_charge_turns_current ?? 0) > 0
+            ? enemyBaseData.special_attack_telegraph_text
+            : null,
       };
 
       return {
         node: null,
         choices: [],
-        character: this.mapCharacterToDto(character), // Használjuk a segédfüggvényt
+        character: this.mapCharacterToDto(characterForState),
         combat: enemyData,
         inventory: inventory,
-        roundActions: [],
-        equippedWeaponId: character.equipped_weapon_id,
-        equippedArmorId: character.equipped_armor_id,
+        roundActions: null, // Általános állapotlekéréskor nincs specifikus kör akció
+        equippedWeaponId: characterForState.equipped_weapon_id,
+        equippedArmorId: characterForState.equipped_armor_id,
       };
     } else {
-      // --- NINCS HARCBAN ---
-      this.logger.log(
-        `User ${userId} is not in combat. Current node: ${character.current_node_id}`,
-      );
-      let currentNodeId = character.current_node_id ?? STARTING_NODE_ID;
-      inventory = await this.characterService.getInventory(character.id);
-
-      if (character.current_node_id !== currentNodeId) {
-        this.logger.warn(
-          `Character ${character.id} had null current_node_id, setting to STARTING_NODE_ID ${STARTING_NODE_ID}`,
+      // NINCS HARCBAN
+      const currentNodeId = characterForState.current_node_id; // Ezt használjuk a sztori progresszióból
+      if (!currentNodeId) {
+        // Ennek nem szabadna előfordulnia, ha a startOrContinueStory helyesen beállítja a kezdő node-ot.
+        this.logger.error(
+          `Character ${baseCharacter.id} (ProgressID: ${activeStoryProgress.id}) has no current_node_id in active story! Defaulting to STARTING_NODE_ID.`,
         );
-        // Frissítés és a frissített karakteradatok lekérése
-        const updatedCharacter = await this.characterService.updateCharacter(
-          character.id,
-          { current_node_id: currentNodeId },
-        );
-        // Biztosítjuk, hogy a 'character' változó a legfrissebb adatokat tartalmazza
-        Object.assign(character, updatedCharacter); // Frissítjük a meglévő objektumot, vagy használjuk közvetlenül az updatedCharacter-t
+        // Dönthetünk úgy, hogy hibát dobunk, vagy egy default node-ra tesszük.
+        // Most egy "limbo" állapotot adunk vissza, a frontendnek kell kezelnie.
+        return {
+          node: null,
+          choices: [],
+          character: this.mapCharacterToDto(characterForState),
+          combat: null,
+          inventory: inventory,
+          roundActions: null,
+          equippedWeaponId: characterForState.equipped_weapon_id,
+          equippedArmorId: characterForState.equipped_armor_id,
+          messages: [
+            'Hiba: Nincs aktuális pozíció a sztoriban. Válassz sztorit a kezdőpanelen!',
+          ], // Extra üzenet
+        };
       }
 
-      this.logger.debug(`Workspaceing story node with ID: ${currentNodeId}`);
-      const currentNode = await this.knex<StoryNode>('story_nodes') // Használjuk a this.knex-et
+      const currentNode = await this.knex<StoryNode>('story_nodes')
         .where({ id: currentNodeId })
         .first();
-
       if (!currentNode) {
-        this.logger.error(`Story node ${currentNodeId} not found!`);
-        throw new NotFoundException(`Story node ${currentNodeId} not found.`);
+        throw new NotFoundException(
+          `Story node ${currentNodeId} not found for active story progress.`,
+        );
       }
-      this.logger.debug(`Found story node: ${currentNode.id}`);
 
-      this.logger.debug(
-        `Workspaceing and evaluating choices for source node ID: ${currentNodeId}`,
-      );
       const potentialChoices = await this.knex<ChoiceRecord>('choices').where({
         source_node_id: currentNodeId,
       });
-
-      // Mivel a checkChoiceAvailability aszinkron lett, Promise.all-t használunk
-      const availableChoicesPromises = potentialChoices.map(async (choice) => {
-        const isAvailable = await this.checkChoiceAvailability(
-          choice,
-          character,
-        ); // await itt!
-        this.logger.debug(
-          `Choice ${choice.id} (${choice.text}) - Evaluated Availability: ${isAvailable}`,
-        );
-        return {
-          // Visszaadjuk a teljes ChoiceDto-t
+      const availableChoices = await Promise.all(
+        potentialChoices.map(async (choice) => ({
           id: choice.id,
           text: choice.text,
-          isAvailable: isAvailable,
-        };
-      });
-
-      // Megvárjuk az összes ellenőrzést
-      const availableChoices: ChoiceDto[] = await Promise.all(
-        availableChoicesPromises,
+          isAvailable: await this.checkChoiceAvailability(
+            choice,
+            characterForState,
+          ), // A sztori-specifikus karaktert adjuk át
+        })),
       );
-
-      this.logger.debug(`Evaluated ${availableChoices.length} choices.`);
 
       return {
         node: {
@@ -268,14 +308,14 @@ export class GameService {
           image: currentNode.image,
         },
         choices: availableChoices,
-        character: this.mapCharacterToDto(character), // Használjuk a segédfüggvényt
+        character: this.mapCharacterToDto(characterForState),
         combat: null,
         inventory: inventory,
-        roundActions: [],
-        equippedWeaponId: character.equipped_weapon_id,
-        equippedArmorId: character.equipped_armor_id,
+        roundActions: null,
+        equippedWeaponId: characterForState.equipped_weapon_id,
+        equippedArmorId: characterForState.equipped_armor_id,
       };
-    } // if (activeCombat) vége
+    }
   } // getCurrentGameState vége
 
   // --- checkChoiceAvailability ---

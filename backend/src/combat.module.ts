@@ -7,9 +7,7 @@ import { CharacterModule } from './character.module'; // Szükség lesz a Charac
 
 @Module({
   imports: [
-    CharacterModule, // Hogy a CombatService hozzáférjen a CharacterService-hez
-    // DatabaseModule itt nem kell, ha a Knex-et providerként adjuk át,
-    // vagy ha a CharacterService-n keresztül éri el (de jobb a direkt injektálás)
+    forwardRef(() => CharacterModule), // Hogy a CombatService hozzáférjen a CharacterService-hez
   ],
   providers: [CombatService],
   exports: [CombatService], // Exportáljuk, hogy a GameService használhassa
