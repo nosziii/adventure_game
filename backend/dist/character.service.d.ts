@@ -42,4 +42,5 @@ export declare class CharacterService {
     }>;
     getActiveStoryProgress(characterId: number): Promise<CharacterStoryProgressRecord | null>;
     startOrContinueStory(characterId: number, storyId: number): Promise<CharacterStoryProgressRecord>;
+    resetStoryProgress(characterId: number, storyId: number): Promise<void>;
 }

@@ -13,6 +13,7 @@ import type {
   PlayerMapData,
   CombatActionDetails,
 } from "../types/game.types";
+import { useStoryStore } from "./story";
 
 interface GameState {
   currentNode: StoryNodeData | null;
@@ -434,6 +435,39 @@ export const useGameStore = defineStore("game", {
           err.response?.data?.message ||
           `Nem sikerült elindítani a(z) ${storyId} ID-jú sztorit.`;
         return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async resetStoryProgress(storyId: number): Promise<boolean> {
+      this.loading = true; // Általános loading state használata
+      this.error = null;
+      const storyStore = useStoryStore(); // Hozzáférés a storyStore-hoz
+
+      console.log(
+        `[GameStore] Attempting to reset progress for story ID: ${storyId}`
+      );
+      try {
+        // Hívjuk a backend POST /api/character/story/:storyId/reset végpontját
+        await apiClient.post(`/character/story/${storyId}/reset`, {}); // Üres body, ha nem vár semmit
+
+        console.log(
+          `Story progress for ID: ${storyId} reset successfully on backend.`
+        );
+
+        // Sikeres reset után frissítjük a Dashboardon megjelenő sztorik listáját,
+        await storyStore.fetchAvailableStories();
+
+        // Ha az aktuálisan aktív sztorit reseteltük, akkor a játékos állapotát is "semlegesíteni" kell
+        // (pl. mintha nem lenne aktív játéka, a dashboardra kellene kerülnie)
+        return true; // Jelezzük a sikert
+      } catch (err: any) {
+        console.error(`Failed to reset story progress for ID ${storyId}:`, err);
+        this.error =
+          err.response?.data?.message ||
+          `Nem sikerült újrakezdeni a(z) ${storyId} ID-jú sztorit.`;
+        return false; // Jelezzük a hibát
       } finally {
         this.loading = false;
       }

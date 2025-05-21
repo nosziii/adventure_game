@@ -9,6 +9,9 @@ import {
   ValidationPipe,
   Param,
   ParseIntPipe,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
 } from '@nestjs/common'; // Szükséges importok
 import { AuthGuard } from '@nestjs/passport';
 import { CharacterService, Character } from './character.service';
@@ -174,5 +177,27 @@ export class CharacterController {
     const newGameState = await this.gameService.getCurrentGameState(userId);
 
     return newGameState;
+  }
+
+  // --- ÚJ VÉGPONT: Sztori Haladásának Resetelése ---
+  @Post('story/:storyId/reset') // POST /api/character/story/1/reset
+  @HttpCode(HttpStatus.NO_CONTENT) // 204 No Content sikeres esetben
+  async resetStory(
+    @Request() req,
+    @Param('storyId', ParseIntPipe) storyId: number,
+  ): Promise<void> {
+    // Nem adunk vissza tartalmat
+    const userId = req.user.id;
+    const character = await this.characterService.findOrCreateByUserId(userId);
+    if (!character) {
+      // Ennek nem szabadna előfordulnia a findOrCreateByUserId miatt
+      throw new NotFoundException('Character not found for this user.');
+    }
+
+    this.logger.log(
+      `User ${userId} (Character ${character.id}) requested to reset story ${storyId}`,
+    );
+    await this.characterService.resetStoryProgress(character.id, storyId);
+    // Nincs visszatérési érték, a 204-et a @HttpCode állítja be
   }
 }

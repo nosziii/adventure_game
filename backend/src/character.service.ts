@@ -742,6 +742,58 @@ export class CharacterService {
     return progressRecord;
   }
 
+  async resetStoryProgress(
+    characterId: number,
+    storyId: number,
+  ): Promise<void> {
+    this.logger.log(
+      `Character ${characterId} attempting to reset progress for story ID: ${storyId}`,
+    );
+
+    await this.knex.transaction(async (trx) => {
+      const progress = await trx<CharacterStoryProgressRecord>(
+        'character_story_progress',
+      )
+        .where({ character_id: characterId, story_id: storyId })
+        .first('id'); // Csak az ID-ra van szükségünk a hivatkozott táblákhoz
+
+      if (progress && progress.id) {
+        const progressId = progress.id;
+        this.logger.debug(`Found story progress ID: ${progressId} to reset.`);
+
+        // 1. Kapcsolódó player_progress bejegyzések törlése
+        await trx('player_progress')
+          .where({ character_story_progress_id: progressId })
+          .del();
+        this.logger.debug(
+          `Deleted player_progress entries for progress ID: ${progressId}`,
+        );
+
+        // 2. Kapcsolódó character_story_inventory bejegyzések törlése
+        await trx('character_story_inventory')
+          .where({ character_story_progress_id: progressId })
+          .del();
+        this.logger.debug(
+          `Deleted character_story_inventory entries for progress ID: ${progressId}`,
+        );
+
+        // 3. Maga a character_story_progress bejegyzés törlése
+        await trx('character_story_progress').where({ id: progressId }).del();
+        this.logger.log(
+          `Story progress ID: ${progressId} has been reset for character ${characterId}.`,
+        );
+
+        // Opcionális: Ha ez volt az aktív sztori, és nincs más aktív,
+        // akkor itt nem állítunk be újat, a játékos a dashboardra kerül.
+      } else {
+        this.logger.warn(
+          `No story progress found for character ${characterId} and story ${storyId} to reset.`,
+        );
+        // Nem dobunk hibát, ha nincs mit resetelni, egyszerűen nem történik semmi.
+      }
+    });
+  }
+
   // TODO: async resetStoryProgress(characterId: number, storyId: number): Promise<void>
   // Ez törölné a character_story_progress, character_story_inventory, player_progress bejegyzéseket
   // az adott characterId + storyId pároshoz, és újra létrehozná az alap character_story_progress-t.

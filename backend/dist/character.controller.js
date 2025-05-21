@@ -120,6 +120,15 @@ let CharacterController = CharacterController_1 = class CharacterController {
         const newGameState = await this.gameService.getCurrentGameState(userId);
         return newGameState;
     }
+    async resetStory(req, storyId) {
+        const userId = req.user.id;
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        if (!character) {
+            throw new common_1.NotFoundException('Character not found for this user.');
+        }
+        this.logger.log(`User ${userId} (Character ${character.id}) requested to reset story ${storyId}`);
+        await this.characterService.resetStoryProgress(character.id, storyId);
+    }
 };
 exports.CharacterController = CharacterController;
 __decorate([
@@ -147,6 +156,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "startStory", null);
+__decorate([
+    (0, common_1.Post)('story/:storyId/reset'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('storyId', common_1.ParseIntPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Number]),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "resetStory", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([
     (0, common_1.Controller)('character'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),

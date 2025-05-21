@@ -16,5 +16,6 @@ export declare class CharacterController {
     equipItem(req: any, body: EquipItemDto): Promise<CharacterStatsDto>;
     unequip(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
     startStory(req: any, storyId: number): Promise<GameStateDto>;
+    resetStory(req: any, storyId: number): Promise<void>;
 }
 export {};

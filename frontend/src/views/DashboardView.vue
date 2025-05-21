@@ -130,12 +130,16 @@ const handleStartOrContinueStory = async (storyId: number) => {
 const handleResetStory = async (storyId: number, storyTitle: string) => {
     if (confirm(`Biztosan újra akarod kezdeni a "${storyTitle}" kalandot? Minden eddigi haladásod ebben a sztoriban elveszik!`)) {
         console.log(`[DashboardView] User confirmed reset for story ID: ${storyId}`);
-        // TODO: Hívd meg a gameStore.resetStoryProgress(storyId) akciót.
-        alert(`Sztori Újrakezdése (ID: ${storyId}) - A 'resetStoryProgress' store akció és a backend végpont implementálása még szükséges!`);
-        // const resetSuccess = await gameStore.resetStoryProgress(storyId);
-        // if (resetSuccess) {
-        //   await storyStore.fetchAvailableStories();
-        // }
+        
+        const success = await gameStore.resetStoryProgress(storyId); // Hívjuk a gameStore akcióját
+        
+        if (success) {
+            alert(`A "${storyTitle}" kaland sikeresen újrakezdve!`); // Vagy egy szebb notification
+        } else {
+            if (gameStore.getError) {
+                alert(`Hiba történt az újrakezdés során: ${gameStore.getError}`);
+            }
+        }
     } else {
         console.log(`[DashboardView] User cancelled reset for story ID: ${storyId}`);
     }

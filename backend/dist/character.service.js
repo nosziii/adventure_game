@@ -456,6 +456,31 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.debug('[startOrContinueStory] Progress record after transaction:', JSON.stringify(progressRecord, null, 2));
         return progressRecord;
     }
+    async resetStoryProgress(characterId, storyId) {
+        this.logger.log(`Character ${characterId} attempting to reset progress for story ID: ${storyId}`);
+        await this.knex.transaction(async (trx) => {
+            const progress = await trx('character_story_progress')
+                .where({ character_id: characterId, story_id: storyId })
+                .first('id');
+            if (progress && progress.id) {
+                const progressId = progress.id;
+                this.logger.debug(`Found story progress ID: ${progressId} to reset.`);
+                await trx('player_progress')
+                    .where({ character_story_progress_id: progressId })
+                    .del();
+                this.logger.debug(`Deleted player_progress entries for progress ID: ${progressId}`);
+                await trx('character_story_inventory')
+                    .where({ character_story_progress_id: progressId })
+                    .del();
+                this.logger.debug(`Deleted character_story_inventory entries for progress ID: ${progressId}`);
+                await trx('character_story_progress').where({ id: progressId }).del();
+                this.logger.log(`Story progress ID: ${progressId} has been reset for character ${characterId}.`);
+            }
+            else {
+                this.logger.warn(`No story progress found for character ${characterId} and story ${storyId} to reset.`);
+            }
+        });
+    }
 };
 exports.CharacterService = CharacterService;
 exports.CharacterService = CharacterService = CharacterService_1 = __decorate([
