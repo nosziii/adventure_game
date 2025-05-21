@@ -118,3 +118,8 @@ export interface StoryInfo {
   title: string;
   description: string | null;
 }
+export interface PlayerStoryListItem extends StoryInfo {
+  lastPlayedAt: string | null; // A Date stringgé konvertálódik JSON-ben
+  currentNodeIdInStory: number | null;
+  isActive: boolean;
+}

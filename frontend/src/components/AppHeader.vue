@@ -74,7 +74,7 @@ onMounted(() => {
   position: fixed; /* Vagy fixed, ha mindig látszódjon görgetésnél */
   top: 0;
   left: 0;
-  width: 98%;
+  width: 100%;
   z-index: 1000;
   display: flex;
   justify-content: space-between;
@@ -82,7 +82,10 @@ onMounted(() => {
   padding: 1rem 2rem; /* A HTML-ből */
   color: var(--text);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Finom elválasztó */
-  background: rgba(0,0,0,0.2);
+  /* background: rgba(0,0,0,0.2); */
+  background: var(--header-bg, rgba(5,5,15,0.85)); /* Háttér a sticky headernek, hogy ne legyen átlátszó */
+  backdrop-filter: blur(5px); /* Finom blur a sticky header mögött */
+  z-index: 900; /* Alacsonyabb, mint a minimap */
 }
 .main-navigation a { /* Legyenek gomb-szerűbbek vagy sima linkek */
   cursor: pointer;
@@ -96,6 +99,8 @@ onMounted(() => {
     padding: 0.5rem 1rem;
     border-radius: 5px;
     cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s;
     margin-left: 15px;
     font-weight: bold;
 }

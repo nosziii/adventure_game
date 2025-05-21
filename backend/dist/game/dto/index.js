@@ -27,4 +27,5 @@ __exportStar(require("./player-map-node.dto"), exports);
 __exportStar(require("./player-map-edge.dto"), exports);
 __exportStar(require("./player-map-data.dto"), exports);
 __exportStar(require("./story-info.dto"), exports);
+__exportStar(require("./player-story-list-item.dto"), exports);
 //# sourceMappingURL=index.js.map

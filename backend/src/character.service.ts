@@ -14,6 +14,7 @@ import { InventoryItem } from './types/character.interfaces';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
 import { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
 import { StoryRecord } from './game/interfaces/story-record.interface';
+import { ItemRecord } from './game/interfaces/item-record.interface';
 
 export interface Character {
   id: number;
@@ -68,6 +69,149 @@ export class CharacterService {
       .where({ id: id })
       .first();
     return character ? await this.applyPassiveEffects(character) : undefined;
+  }
+  async getStoryInventory(progressId: number): Promise<InventoryItemDto[]> {
+    this.logger.debug(
+      `Workspaceing inventory for story progress ID: ${progressId}`,
+    );
+    // JOIN az items táblával a tárgy nevének, leírásának stb. lekéréséhez
+    return this.knex('character_story_inventory as csi')
+      .join('items', 'items.id', 'csi.item_id')
+      .where('csi.character_story_progress_id', progressId)
+      .andWhere('csi.quantity', '>', 0)
+      .select(
+        'items.id as itemId',
+        'items.name',
+        'items.description',
+        'items.type',
+        'items.effect',
+        'items.usable',
+        'csi.quantity',
+      );
+  }
+
+  async hasStoryItem(
+    progressId: number,
+    itemId: number,
+    quantity: number = 1,
+  ): Promise<boolean> {
+    this.logger.debug(
+      `Checking if story progress ID ${progressId} has item ${itemId} (quantity: ${quantity})`,
+    );
+    const itemEntry = await this.knex('character_story_inventory')
+      .where({
+        character_story_progress_id: progressId,
+        item_id: itemId,
+      })
+      .andWhere('quantity', '>=', quantity)
+      .first();
+    return !!itemEntry; // Igaz, ha van ilyen bejegyzés elegendő mennyiséggel
+  }
+
+  async addStoryItem(
+    progressId: number,
+    itemId: number,
+    quantity: number = 1,
+  ): Promise<void> {
+    if (quantity <= 0) return;
+    this.logger.log(
+      `Adding item ${itemId} (quantity ${quantity}) to story progress ID: ${progressId}`,
+    );
+
+    const existingEntry = await this.knex('character_story_inventory')
+      .where({ character_story_progress_id: progressId, item_id: itemId })
+      .first();
+
+    if (existingEntry) {
+      await this.knex('character_story_inventory')
+        .where({ id: existingEntry.id })
+        .increment('quantity', quantity)
+        .update({ updated_at: new Date() });
+      this.logger.debug(
+        `Incremented quantity for item ${itemId} for progress ${progressId}`,
+      );
+    } else {
+      await this.knex('character_story_inventory').insert({
+        character_story_progress_id: progressId,
+        item_id: itemId,
+        quantity: quantity,
+      });
+      this.logger.debug(
+        `Inserted new item ${itemId} for progress ${progressId}`,
+      );
+    }
+  }
+
+  async removeStoryItem(
+    progressId: number,
+    itemId: number,
+    quantity: number = 1,
+  ): Promise<boolean> {
+    if (quantity <= 0) return true; // Nincs mit eltávolítani
+    this.logger.log(
+      `Removing item ${itemId} (quantity ${quantity}) from story progress ID: ${progressId}`,
+    );
+
+    const existingEntry = await this.knex('character_story_inventory')
+      .where({ character_story_progress_id: progressId, item_id: itemId })
+      .first();
+
+    if (existingEntry && existingEntry.quantity >= quantity) {
+      const newQuantity = existingEntry.quantity - quantity;
+      if (newQuantity > 0) {
+        await this.knex('character_story_inventory')
+          .where({ id: existingEntry.id })
+          .update({ quantity: newQuantity, updated_at: new Date() });
+        this.logger.debug(
+          `Decremented quantity for item ${itemId} to ${newQuantity} for progress ${progressId}`,
+        );
+      } else {
+        await this.knex('character_story_inventory')
+          .where({ id: existingEntry.id })
+          .del();
+        this.logger.debug(
+          `Removed item ${itemId} (quantity reached 0) for progress ${progressId}`,
+        );
+      }
+      return true; // Sikeres eltávolítás/csökkentés
+    } else {
+      this.logger.warn(
+        `Failed to remove item ${itemId}: not enough quantity or item not found for progress ${progressId}.`,
+      );
+      return false; // Nem sikerült az eltávolítás
+    }
+  }
+
+  // --- Sztori Progresszió Frissítése ---
+  async updateStoryProgress(
+    progressId: number,
+    updates: Partial<
+      Omit<
+        CharacterStoryProgressRecord,
+        'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'
+      >
+    >,
+  ): Promise<CharacterStoryProgressRecord> {
+    this.logger.debug(
+      `Updating story progress ID: ${progressId} with data: ${JSON.stringify(updates)}`,
+    );
+    const finalUpdates = { ...updates, updated_at: new Date() };
+
+    const [updatedRecord] = await this.knex('character_story_progress')
+      .where({ id: progressId })
+      .update(finalUpdates)
+      .returning('*');
+
+    if (!updatedRecord) {
+      this.logger.error(
+        `Failed to update story progress ${progressId}, record not found.`,
+      );
+      throw new NotFoundException(
+        `Story progress with ID ${progressId} not found for update.`,
+      );
+    }
+    this.logger.debug(`Story progress ${progressId} updated successfully.`);
+    return updatedRecord;
   }
 
   // Új karakter létrehozása
@@ -158,161 +302,104 @@ export class CharacterService {
     return character;
   }
 
-  /**
-   * Lekérdezi egy karakter teljes leltárát, joinolva az item adatokkal.
-   */
-  async getInventory(characterId: number): Promise<InventoryItemDto[]> {
-    this.logger.debug(
-      `Workspaceing inventory for character ID: ${characterId}`,
-    );
-    try {
-      const inventory = await this.knex('character_inventory as ci')
-        .join('items as i', 'ci.item_id', '=', 'i.id') // Összekapcsolás az items táblával
-        .select<InventoryItemDto[]>(
-          'ci.item_id as itemId', // Aliasok a camelCase konvencióhoz
-          'ci.quantity',
-          'i.name',
-          'i.description',
-          'i.type',
-          'i.effect',
-          'i.usable',
-        )
-        .where('ci.character_id', characterId);
-      return inventory;
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch inventory for character ${characterId}: ${error}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Could not retrieve inventory.');
-    }
-  }
-
   // --- Tárgy felszerelése - JAVÍTOTT ---
-  async equipItem(characterId: number, itemId: number): Promise<Character> {
-    // Visszatérési típus: Promise<Character>
+  async equipItem(
+    characterId: number,
+    itemId: number,
+  ): Promise<CharacterStoryProgressRecord> {
     this.logger.log(
-      `Attempting to equip item ${itemId} for character ${characterId}`,
+      `Character ${characterId} attempting to equip item ${itemId} for their active story.`,
     );
-
-    const hasItemInInventory = await this.hasItem(characterId, itemId);
-    if (!hasItemInInventory) {
-      throw new BadRequestException(
-        `Character ${characterId} does not possess item ${itemId}.`,
+    const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+    if (!activeStoryProgress) {
+      throw new NotFoundException(
+        'No active story progress found for character to equip item.',
       );
     }
 
-    const item = await this.knex('items').where({ id: itemId }).first();
-    if (!item) {
-      throw new InternalServerErrorException('Item data not found.');
+    const progressId = activeStoryProgress.id;
+
+    // 1. Ellenőrizzük, megvan-e a tárgy a sztori-specifikus leltárban
+    const hasItemInStoryInventory = await this.hasStoryItem(progressId, itemId);
+    if (!hasItemInStoryInventory) {
+      this.logger.warn(
+        `Item ${itemId} not found in story inventory for progress ${progressId}.`,
+      );
+      throw new BadRequestException(
+        `You do not possess this item in the current story's inventory.`,
+      );
     }
 
-    let equipSlotColumn: 'equipped_weapon_id' | 'equipped_armor_id' | null =
-      null;
-    let updateData: Partial<Character> = {}; // Objektum a frissítendő adatoknak
+    // 2. Kérjük le a tárgy típusát
+    const item = await this.knex<ItemRecord>('items')
+      .where({ id: itemId })
+      .first();
+    if (!item) {
+      // Ennek nem szabadna előfordulnia, ha a hasStoryItem igazat adott
+      throw new InternalServerErrorException(
+        `Item data for ID ${itemId} not found.`,
+      );
+    }
+
+    let equipSlotColumn: keyof CharacterStoryProgressRecord | null = null;
+    let updates: Partial<CharacterStoryProgressRecord> = {};
 
     if (item.type === 'weapon') {
       equipSlotColumn = 'equipped_weapon_id';
-      updateData.equipped_weapon_id = itemId;
+      updates.equipped_weapon_id = itemId;
     } else if (item.type === 'armor') {
       equipSlotColumn = 'equipped_armor_id';
-      updateData.equipped_armor_id = itemId;
+      updates.equipped_armor_id = itemId;
+    } else {
+      this.logger.warn(
+        `Item ${itemId} (${item.name}) of type ${item.type} is not equippable.`,
+      );
+      throw new BadRequestException(`Item ${item.name} is not equippable.`);
     }
 
-    if (!equipSlotColumn) {
-      throw new BadRequestException(
-        `Item ${itemId} (${item.name}) is not equippable.`,
-      );
-    }
-
-    try {
-      this.logger.debug(
-        `Equipping item ${itemId} into slot ${equipSlotColumn} for character ${characterId}`,
-      );
-      // Használjuk az updateCharacter metódust a frissítéshez
-      const updatedCharacter = await this.updateCharacter(
-        characterId,
-        updateData,
-      );
-      this.logger.log(
-        `Item ${itemId} equipped successfully for character ${characterId}`,
-      );
-      // Alkalmazzuk az effekteket és adjuk vissza a végső karakter állapotot
-      return await this.applyPassiveEffects(updatedCharacter); // <-- RETURN itt van!
-    } catch (error) {
-      this.logger.error(
-        `Failed to equip item ${itemId} for character ${characterId}: ${error}`,
-        error.stack,
-      );
-      // A hiba továbbdobása vagy specifikusabb hibakezelés
-      if (
-        error instanceof NotFoundException ||
-        error instanceof InternalServerErrorException
-      ) {
-        throw error; // Dobjuk tovább a már ismert hibákat
-      }
-      throw new InternalServerErrorException(
-        'Failed to equip item due to an unexpected error.',
-      );
-    }
+    // 3. Frissítjük a character_story_progress rekordot
+    this.logger.debug(
+      `Equipping item ${itemId} into slot ${equipSlotColumn} for story progress ${progressId}`,
+    );
+    return this.updateStoryProgress(progressId, updates);
   }
 
   // --- Tárgy levétele - JAVÍTOTT ---
   async unequipItem(
     characterId: number,
     itemType: 'weapon' | 'armor',
-  ): Promise<Character> {
-    // Visszatérési típus: Promise<Character>
+  ): Promise<CharacterStoryProgressRecord> {
     this.logger.log(
-      `Attempting to unequip item type ${itemType} for character ${characterId}`,
+      `Character ${characterId} attempting to unequip item type ${itemType} for their active story.`,
     );
-    let equipSlotColumn: 'equipped_weapon_id' | 'equipped_armor_id' | null =
-      null;
-    let updateData: Partial<Character> = {};
+    const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+    if (!activeStoryProgress) {
+      throw new NotFoundException(
+        'No active story progress found for character to unequip item.',
+      );
+    }
+    const progressId = activeStoryProgress.id;
+
+    let equipSlotColumn: keyof CharacterStoryProgressRecord | null = null;
+    let updates: Partial<CharacterStoryProgressRecord> = {};
 
     if (itemType === 'weapon') {
       equipSlotColumn = 'equipped_weapon_id';
-      updateData.equipped_weapon_id = null; // NULL-ra állítjuk
+      updates.equipped_weapon_id = null;
     } else if (itemType === 'armor') {
       equipSlotColumn = 'equipped_armor_id';
-      updateData.equipped_armor_id = null; // NULL-ra állítjuk
-    }
-
-    if (!equipSlotColumn) {
+      updates.equipped_armor_id = null;
+    } else {
+      // Ezt a DTO validációnak kellene elkapnia, de itt is jó egy ellenőrzés
       throw new BadRequestException(
         `Invalid item type "${itemType}" for unequipping.`,
       );
     }
 
-    try {
-      this.logger.debug(
-        `Unequipping slot ${equipSlotColumn} for character ${characterId}`,
-      );
-      // Használjuk az updateCharacter metódust a frissítéshez (NULL-ra állításhoz)
-      const updatedCharacter = await this.updateCharacter(
-        characterId,
-        updateData,
-      );
-      this.logger.log(
-        `Item type ${itemType} unequipped successfully for character ${characterId}`,
-      );
-      // Alkalmazzuk az effekteket (most már a levett tárgy nélkül) és adjuk vissza
-      return await this.applyPassiveEffects(updatedCharacter); // <-- RETURN itt van!
-    } catch (error) {
-      this.logger.error(
-        `Failed to unequip item type ${itemType} for character ${characterId}: ${error}`,
-        error.stack,
-      );
-      if (
-        error instanceof NotFoundException ||
-        error instanceof InternalServerErrorException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        'Failed to unequip item due to an unexpected error.',
-      );
-    }
+    this.logger.debug(
+      `Unequipping slot ${equipSlotColumn} for story progress ${progressId}`,
+    );
+    return this.updateStoryProgress(progressId, updates);
   }
 
   /**
@@ -414,129 +501,6 @@ export class CharacterService {
     return characterWithEffects;
   }
 
-  /**
-   * Ellenőrzi, hogy egy karakter rendelkezik-e egy adott tárgyból legalább egy darabbal.
-   */
-  async hasItem(characterId: number, itemId: number): Promise<boolean> {
-    this.logger.debug(
-      `Checking if character ${characterId} has item ${itemId}`,
-    );
-    const itemEntry = await this.knex('character_inventory')
-      .where({
-        character_id: characterId,
-        item_id: itemId,
-      })
-      .andWhere('quantity', '>', 0)
-      .first(); // Elég csak megnézni, hogy létezik-e sor
-    return !!itemEntry; // Igaz, ha van találat, hamis, ha nincs
-  }
-
-  /**
-   * Hozzáad egy tárgyat a karakter leltárához, vagy növeli a mennyiségét, ha már van.
-   */
-  async addItemToInventory(
-    characterId: number,
-    itemId: number,
-    quantityToAdd: number = 1,
-  ): Promise<void> {
-    if (quantityToAdd <= 0) {
-      this.logger.warn(
-        `Attempted to add non-positive quantity (${quantityToAdd}) of item ${itemId} for character ${characterId}`,
-      );
-      return;
-    }
-
-    this.logger.log(
-      `Adding item ${itemId} (quantity: ${quantityToAdd}) to inventory for character ${characterId}`,
-    );
-
-    // Tranzakció használata az atomicitás érdekében (opcionális, de ajánlott)
-    await this.knex.transaction(async (trx) => {
-      const existingEntry = await trx('character_inventory')
-        .where({ character_id: characterId, item_id: itemId })
-        .first();
-
-      if (existingEntry) {
-        // Növeljük a mennyiséget
-        this.logger.debug(
-          `Item ${itemId} exists, incrementing quantity by ${quantityToAdd}.`,
-        );
-        const affectedRows = await trx('character_inventory')
-          .where({ character_id: characterId, item_id: itemId })
-          .increment('quantity', quantityToAdd);
-        if (affectedRows === 0) {
-          // Előfordulhat race condition esetén? Biztonsági check.
-          throw new Error('Failed to increment item quantity.');
-        }
-      } else {
-        // Új bejegyzés beszúrása
-        this.logger.debug(`Item ${itemId} not found, inserting new entry.`);
-        await trx('character_inventory').insert({
-          character_id: characterId,
-          item_id: itemId,
-          quantity: quantityToAdd,
-        });
-      }
-    }); // Tranzakció vége
-
-    this.logger.log(
-      `Item ${itemId} successfully added/updated for character ${characterId}`,
-    );
-  }
-
-  /**
-   * Eltávolít egy tárgyat a karakter leltárából, vagy csökkenti a mennyiségét.
-   * Visszaadja, hogy sikeres volt-e a művelet (pl. volt-e elég tárgy).
-   */
-  async removeItemFromInventory(
-    characterId: number,
-    itemId: number,
-    quantityToRemove: number = 1,
-  ): Promise<boolean> {
-    if (quantityToRemove <= 0) return true; // 0 vagy negatív mennyiség eltávolítása mindig "sikeres"
-
-    this.logger.log(
-      `Removing item ${itemId} (quantity: ${quantityToRemove}) from inventory for character ${characterId}`,
-    );
-    let success = false;
-
-    await this.knex.transaction(async (trx) => {
-      const existingEntry = await trx('character_inventory')
-        .where({ character_id: characterId, item_id: itemId })
-        .forUpdate()
-        .first();
-
-      if (existingEntry && existingEntry.quantity >= quantityToRemove) {
-        const newQuantity = existingEntry.quantity - quantityToRemove;
-        if (newQuantity > 0) {
-          // Csak csökkentjük a mennyiséget
-          this.logger.debug(
-            `Decreasing quantity of item ${itemId} to ${newQuantity}`,
-          );
-          await trx('character_inventory')
-            .where({ character_id: characterId, item_id: itemId })
-            .update({ quantity: newQuantity });
-        } else {
-          // Töröljük a sort, ha a mennyiség 0 vagy kevesebb lesz
-          this.logger.debug(
-            `Removing item ${itemId} completely (quantity reached zero).`,
-          );
-          await trx('character_inventory')
-            .where({ character_id: characterId, item_id: itemId })
-            .del();
-        }
-        success = true; // Sikeres volt a művelet
-      } else {
-        // Nincs ilyen tárgy, vagy nincs elég belőle
-        this.logger.warn(
-          `Failed to remove item ${itemId}: Not found or insufficient quantity for character ${characterId}.`,
-        );
-        success = false; // Sikertelen volt
-      }
-    }); // Tranzakció vége
-
-    return success;
-  }
   // XP Hozzáadása és Szintlépés Kezelése ---
   async addXp(
     characterId: number,

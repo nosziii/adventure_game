@@ -129,6 +129,13 @@ export const useGameStore = defineStore("game", {
     },
 
     async makeChoice(choiceId: number) {
+      const payload = { choiceId: choiceId };
+      console.log(
+        "Frontend: Sending makeChoice payload:",
+        payload,
+        "Type of choiceId:",
+        typeof choiceId
+      );
       this.loading = true;
       this.error = null;
       console.log(`Making choice ID: ${choiceId}`);

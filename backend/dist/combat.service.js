@@ -38,6 +38,7 @@ let CombatService = CombatService_1 = class CombatService {
         const actionDetail = {
             actor: 'player',
             actionType: 'attack',
+            outcome: 'miss',
             description: `Megtámadod (${enemyBaseData.name})! Dobás: ${playerAttackVal} vs ${enemyDefenseVal}.`,
             attackerRollDetails: {
                 actorSkill: playerSkill,
@@ -49,7 +50,6 @@ let CombatService = CombatService_1 = class CombatService {
                 diceRoll: enemyDice,
                 totalValue: enemyDefenseVal,
             },
-            outcome: 'miss',
         };
         let updatedEnemyHealth = currentEnemyHealth;
         if (playerAttackVal > enemyDefenseVal) {
@@ -88,26 +88,23 @@ let CombatService = CombatService_1 = class CombatService {
         }
         return { actionDetail, updatedEnemyHealth };
     }
-    async _resolvePlayerItemUse(characterInput, itemIdToUse) {
-        let character = { ...characterInput };
+    async _resolvePlayerItemUse(character, activeStoryProgressId, itemIdToUse) {
         let playerActionTookTurn = true;
-        let itemRemoved = false;
+        let characterStateChanged = false;
         const initialActionDetail = {
             actor: 'player',
             actionType: 'use_item',
             itemIdUsed: itemIdToUse,
         };
-        const hasItem = await this.characterService.hasItem(character.id, itemIdToUse);
+        const hasItem = await this.characterService.hasStoryItem(activeStoryProgressId, itemIdToUse);
         if (!hasItem) {
-            const actionDetail = {
-                ...initialActionDetail,
-                description: `Nincs ilyen tárgyad (ID: ${itemIdToUse})!`,
-                outcome: 'item_use_failed',
-            };
             return {
-                actionDetail,
-                updatedCharacter: character,
-                itemRemoved,
+                actionDetail: {
+                    ...initialActionDetail,
+                    description: `Nincs ilyen tárgyad (ID: ${itemIdToUse})!`,
+                    outcome: 'item_use_failed',
+                },
+                characterStateChanged,
                 playerActionTookTurn,
             };
         }
@@ -120,85 +117,77 @@ let CombatService = CombatService_1 = class CombatService {
         }
         initialActionDetail.itemNameUsed = item.name;
         if (!item.usable) {
-            const actionDetail = {
-                ...initialActionDetail,
-                description: `Ez a tárgy (${item.name}) nem használható így.`,
-                outcome: 'item_use_failed',
-            };
             return {
-                actionDetail,
-                updatedCharacter: character,
-                itemRemoved,
+                actionDetail: {
+                    ...initialActionDetail,
+                    description: `Ez a tárgy (${item.name}) nem használható így.`,
+                    outcome: 'item_use_failed',
+                },
+                characterStateChanged,
                 playerActionTookTurn,
             };
         }
-        if (item.effect && item.effect.startsWith('heal+')) {
+        if (item.effect?.startsWith('heal+')) {
             const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
             if (healAmount > 0) {
                 const maxHp = character.stamina ?? 100;
-                const previousPlayerHealth = character.health;
-                const newPlayerHealth = Math.min(maxHp, character.health + healAmount);
-                const healedAmount = newPlayerHealth - previousPlayerHealth;
+                const currentHp = character.health;
+                const newHp = Math.min(maxHp, currentHp + healAmount);
+                const healedAmount = newHp - currentHp;
                 if (healedAmount > 0) {
-                    character = await this.characterService.updateCharacter(character.id, { health: newPlayerHealth });
-                    itemRemoved = await this.characterService.removeItemFromInventory(character.id, itemIdToUse, 1);
-                    if (!itemRemoved)
+                    await this.characterService.updateStoryProgress(activeStoryProgressId, { health: newHp });
+                    characterStateChanged = true;
+                    const removed = await this.characterService.removeStoryItem(activeStoryProgressId, itemIdToUse, 1);
+                    if (!removed) {
                         this.logger.error(`Failed to remove item ${itemIdToUse} after use!`);
-                    const actionDetail = {
-                        ...initialActionDetail,
-                        description: `Gyógyító italt használtál (${item.name}). Visszatöltöttél ${healedAmount} életerőt! Jelenlegi HP: ${newPlayerHealth}.`,
-                        outcome: 'item_used_successfully',
-                        healthHealed: healedAmount,
-                        targetActor: 'player',
-                        targetCurrentHp: newPlayerHealth,
-                        targetMaxHp: maxHp,
-                    };
+                    }
                     return {
-                        actionDetail,
-                        updatedCharacter: character,
-                        itemRemoved: itemRemoved,
+                        actionDetail: {
+                            ...initialActionDetail,
+                            description: `Gyógyító italt használtál (${item.name}). Visszatöltöttél ${healedAmount} életerőt! Jelenlegi HP: ${newHp}.`,
+                            outcome: 'item_used_successfully',
+                            healthHealed: healedAmount,
+                            targetActor: 'player',
+                            targetCurrentHp: newHp,
+                            targetMaxHp: maxHp,
+                        },
+                        characterStateChanged,
                         playerActionTookTurn,
                     };
                 }
                 else {
-                    const actionDetail = {
-                        ...initialActionDetail,
-                        description: `Már maximum életerőn vagy (${item.name} használata nem szükséges).`,
-                        outcome: 'no_effect',
-                    };
                     playerActionTookTurn = false;
                     return {
-                        actionDetail,
-                        updatedCharacter: character,
-                        itemRemoved,
+                        actionDetail: {
+                            ...initialActionDetail,
+                            description: `Már teljes életerőn vagy, (${item.name}) nem volt hatással rád.`,
+                            outcome: 'no_effect',
+                        },
+                        characterStateChanged,
                         playerActionTookTurn,
                     };
                 }
             }
             else {
-                const actionDetail = {
-                    ...initialActionDetail,
-                    description: `Ez a tárgy (${item.name}) nem fejt ki gyógyító hatást.`,
-                    outcome: 'no_effect',
-                };
                 return {
-                    actionDetail,
-                    updatedCharacter: character,
-                    itemRemoved,
+                    actionDetail: {
+                        ...initialActionDetail,
+                        description: `Ez a tárgy (${item.name}) nem fejt ki gyógyító hatást.`,
+                        outcome: 'no_effect',
+                    },
+                    characterStateChanged,
                     playerActionTookTurn,
                 };
             }
         }
         else {
-            const actionDetail = {
-                ...initialActionDetail,
-                description: `Ezt a tárgyat (${item.name}) most nem tudod használni, vagy nincs implementálva a hatása.`,
-                outcome: 'item_use_failed',
-            };
             return {
-                actionDetail,
-                updatedCharacter: character,
-                itemRemoved,
+                actionDetail: {
+                    ...initialActionDetail,
+                    description: `Ezt a tárgyat (${item.name}) most nem tudod használni, vagy nincs implementálva a hatása.`,
+                    outcome: 'item_use_failed',
+                },
+                characterStateChanged,
                 playerActionTookTurn,
             };
         }
@@ -216,17 +205,18 @@ let CombatService = CombatService_1 = class CombatService {
         };
         return { actionDetail, playerActionTookTurn: true };
     }
-    async _resolveEnemyAction(characterInput, enemyBaseData, activeCombatState) {
+    async _resolveEnemyAction(characterInput, activeStoryProgressId, enemyBaseData, activeCombatCurrentState) {
         let character = { ...characterInput };
         const roundActions = [];
-        let currentCharge = activeCombatState.enemy_charge_turns_current ?? 0;
-        const characterIsDefending = activeCombatState.character_is_defending;
+        let currentCharge = activeCombatCurrentState.enemy_charge_turns_current ?? 0;
+        const characterIsDefending = activeCombatCurrentState.character_is_defending;
         const chargeTurnsRequired = enemyBaseData.special_attack_charge_turns ?? 0;
-        this.logger.debug(`Enemy turn. Current charge: ${currentCharge}/${chargeTurnsRequired}. Player defending: ${characterIsDefending}`);
+        let enemyActionOccurred = false;
+        this.logger.debug(`[ResolveEnemyAction] Start. Enemy: ${enemyBaseData.name}, CurrentCharge: ${currentCharge}/${chargeTurnsRequired}, Player Defending: ${characterIsDefending}, Player HP: ${character.health}`);
         if (enemyBaseData.special_attack_name &&
             chargeTurnsRequired > 0 &&
             currentCharge >= chargeTurnsRequired) {
-            this.logger.debug(`Enemy ${enemyBaseData.id} is unleashing special attack: ${enemyBaseData.special_attack_name}`);
+            this.logger.debug(`Enemy ${enemyBaseData.id} UNLEASHING special: ${enemyBaseData.special_attack_name}`);
             const actionDetail = {
                 actor: 'enemy',
                 actionType: 'special_attack_execute',
@@ -234,56 +224,69 @@ let CombatService = CombatService_1 = class CombatService {
                     `${enemyBaseData.name} elsüti: ${enemyBaseData.special_attack_name}!`,
                 outcome: 'miss',
             };
-            const baseEnemyDmg = (enemyBaseData.skill ?? 0) * 0.5;
-            let specialDamage = Math.floor(baseEnemyDmg * (enemyBaseData.special_attack_damage_multiplier ?? 1.5));
+            const baseEnemySkillForSpecial = enemyBaseData.skill ?? 0;
+            const enemySkill = enemyBaseData.skill ?? 0;
+            let initialSpecialDamage = Math.floor(enemySkill *
+                0.75 *
+                (enemyBaseData.special_attack_damage_multiplier ?? 1.0));
+            initialSpecialDamage = Math.floor(enemySkill * (enemyBaseData.special_attack_damage_multiplier ?? 1.0));
+            let finalAppliedDamage = initialSpecialDamage;
             if (characterIsDefending) {
                 actionDetail.description += ` De te védekeztél, a sebzés jelentősen csökkent!`;
-                specialDamage = Math.floor(specialDamage * 0.25);
+                finalAppliedDamage = Math.floor(initialSpecialDamage * 0.25);
+                this.logger.debug(`[ResolveEnemyAction] Player IS defending. Reduced special damage to: ${finalAppliedDamage}`);
             }
             else {
-                specialDamage = Math.max(0, specialDamage - (character.defense ?? 0));
+                const playerPassiveDefense = character.defense ?? 0;
+                finalAppliedDamage = Math.max(0, initialSpecialDamage - playerPassiveDefense);
+                this.logger.debug(`[ResolveEnemyAction] Player IS NOT actively defending. Damage after passive defense (${playerPassiveDefense}): ${finalAppliedDamage}`);
             }
-            character.health = Math.max(0, character.health - specialDamage);
+            character.health = Math.max(0, character.health - finalAppliedDamage);
             actionDetail.outcome = 'hit';
-            actionDetail.damageDealt = specialDamage;
+            actionDetail.damageDealt = finalAppliedDamage;
             actionDetail.targetActor = 'player';
             actionDetail.targetCurrentHp = character.health;
             actionDetail.targetMaxHp = character.stamina ?? 100;
             roundActions.push(actionDetail);
             currentCharge = 0;
+            enemyActionOccurred = true;
         }
         else if (enemyBaseData.special_attack_name &&
             chargeTurnsRequired > 0 &&
-            currentCharge > 0) {
-            this.logger.debug(`Enemy ${enemyBaseData.id} continues charging special attack.`);
+            currentCharge > 0 &&
+            currentCharge < chargeTurnsRequired) {
+            this.logger.debug(`Enemy ${enemyBaseData.id} CONTINUES charging.`);
             currentCharge++;
             roundActions.push({
                 actor: 'enemy',
                 actionType: 'special_attack_charge',
                 description: enemyBaseData.special_attack_telegraph_text ||
-                    `${enemyBaseData.name} tovább tölti a támadását... (${currentCharge}/${chargeTurnsRequired})`,
+                    `${enemyBaseData.name} tovább gyűjti az erejét... (${currentCharge}/${chargeTurnsRequired})`,
                 outcome: 'charging_continues',
                 currentChargeTurns: currentCharge,
                 maxChargeTurns: chargeTurnsRequired,
             });
+            enemyActionOccurred = true;
         }
         else if (enemyBaseData.special_attack_name &&
             chargeTurnsRequired > 0 &&
+            currentCharge === 0 &&
             Math.random() < 0.4) {
-            this.logger.debug(`Enemy ${enemyBaseData.id} starts charging special attack.`);
+            this.logger.debug(`Enemy ${enemyBaseData.id} STARTS charging.`);
             currentCharge = 1;
             roundActions.push({
                 actor: 'enemy',
                 actionType: 'special_attack_charge',
                 description: enemyBaseData.special_attack_telegraph_text ||
-                    `${enemyBaseData.name} erőt gyűjt!`,
+                    `${enemyBaseData.name} erőt gyűjt! (${currentCharge}/${chargeTurnsRequired})`,
                 outcome: 'charging_began',
                 currentChargeTurns: currentCharge,
                 maxChargeTurns: chargeTurnsRequired,
             });
+            enemyActionOccurred = true;
         }
-        else {
-            this.logger.debug(`Enemy ${enemyBaseData.id} performs a normal attack.`);
+        if (!enemyActionOccurred) {
+            this.logger.debug(`Enemy ${enemyBaseData.id} performs a NORMAL attack.`);
             const playerDiceDef = Math.floor(Math.random() * 6) + 1;
             const enemyDiceAtk = Math.floor(Math.random() * 6) + 1;
             const enemySkill = enemyBaseData.skill ?? 0;
@@ -291,7 +294,7 @@ let CombatService = CombatService_1 = class CombatService {
             const normalAttackAction = {
                 actor: 'enemy',
                 actionType: 'attack',
-                description: `${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''})!`,
+                description: `${enemyBaseData.name} rád támad (${enemyBaseData.attack_description ?? ''}).`,
                 attackerRollDetails: {
                     actorSkill: enemySkill,
                     diceRoll: enemyDiceAtk,
@@ -299,8 +302,9 @@ let CombatService = CombatService_1 = class CombatService {
                 },
                 outcome: 'miss',
             };
+            let defenseDescriptionPart = '';
             if (characterIsDefending) {
-                normalAttackAction.description = `${enemyBaseData.name} rád támad, de te védekezel!`;
+                defenseDescriptionPart = ` Védekezel!`;
                 playerEffectiveSkill += character.skill ?? 0;
             }
             normalAttackAction.defenderRollDetails = {
@@ -308,14 +312,19 @@ let CombatService = CombatService_1 = class CombatService {
                 diceRoll: playerDiceDef,
                 totalValue: playerEffectiveSkill + playerDiceDef,
             };
+            normalAttackAction.description +=
+                defenseDescriptionPart +
+                    ` (Dobás: ${enemySkill + enemyDiceAtk} vs ${playerEffectiveSkill + playerDiceDef})`;
             if (enemySkill + enemyDiceAtk > playerEffectiveSkill + playerDiceDef) {
                 const baseEnemyDmg = 5;
                 let actualDamageTaken = Math.max(0, baseEnemyDmg - (character.defense ?? 0));
+                let damageReductionText = '';
                 if (characterIsDefending) {
+                    const originalDamage = actualDamageTaken;
                     actualDamageTaken = Math.floor(actualDamageTaken / 2);
-                    if (actualDamageTaken < baseEnemyDmg - (character.defense ?? 0) &&
-                        actualDamageTaken >= 0)
-                        normalAttackAction.description += ` A védekezésed csökkentette a sebzést!`;
+                    if (actualDamageTaken < originalDamage && actualDamageTaken >= 0) {
+                        damageReductionText = ` A védekezésed csökkentette a sebzést!`;
+                    }
                 }
                 character.health = Math.max(0, character.health - actualDamageTaken);
                 normalAttackAction.outcome = 'hit';
@@ -323,29 +332,58 @@ let CombatService = CombatService_1 = class CombatService {
                 normalAttackAction.targetActor = 'player';
                 normalAttackAction.targetCurrentHp = character.health;
                 normalAttackAction.targetMaxHp = character.stamina ?? 100;
-                normalAttackAction.description += ` Eltalált! Sebzés: ${actualDamageTaken}. Életerőd: ${character.health}. (Dobás: ${enemySkill + enemyDiceAtk} vs ${playerEffectiveSkill + playerDiceDef})`;
+                normalAttackAction.description += `${damageReductionText} Eltalált! Sebzés: ${actualDamageTaken}. Életerőd: ${character.health}.`;
             }
             else {
-                normalAttackAction.description += ` Sikeresen kivédted ${enemyBaseData.name} támadását! (Dobás: ${enemySkill + enemyDiceAtk} vs ${playerEffectiveSkill + playerDiceDef})`;
+                normalAttackAction.description += ` Sikeresen kivédted a támadást!`;
             }
             roundActions.push(normalAttackAction);
         }
         if (character.health !== characterInput.health) {
-            character = await this.characterService.updateCharacter(character.id, {
+            this.logger.debug(`Player HP changed. Updating story progress ${activeStoryProgressId}. New HP: ${character.health}`);
+            await this.characterService.updateStoryProgress(activeStoryProgressId, {
                 health: character.health,
             });
         }
         return {
             actionDetails: roundActions,
             updatedCharacter: character,
-            newChargeTurns: currentCharge,
+            updatedEnemyChargeTurns: currentCharge,
         };
     }
+    async _getHydratedCharacter(baseCharacterId, progressId) {
+        const baseChar = await this.characterService.findById(baseCharacterId);
+        const progress = await this.knex('character_story_progress')
+            .where({ id: progressId })
+            .first();
+        if (!baseChar || !progress) {
+            throw new common_1.InternalServerErrorException('Failed to hydrate character for combat.');
+        }
+        let hydratedCharacter = {
+            ...baseChar,
+            health: progress.health,
+            skill: progress.skill,
+            luck: progress.luck,
+            stamina: progress.stamina,
+            defense: progress.defense,
+            level: progress.level,
+            xp: progress.xp,
+            xp_to_next_level: progress.xp_to_next_level,
+            current_node_id: progress.current_node_id,
+            equipped_weapon_id: progress.equipped_weapon_id,
+            equipped_armor_id: progress.equipped_armor_id,
+        };
+        return this.characterService.applyPassiveEffects(hydratedCharacter);
+    }
     async handleCombatAction(userId, actionDto) {
-        this.logger.log(`Handling combat action '${actionDto.action}' for user ID: ${userId}`);
-        let character = await this.characterService.findOrCreateByUserId(userId);
-        let activeCombat = await this.knex('active_combats')
-            .where({ character_id: character.id })
+        this.logger.log(`[CombatService] Handling combat action '${actionDto.action}' for UserID: ${userId}`);
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const activeStoryProgress = await this.characterService.getActiveStoryProgress(baseCharacter.id);
+        if (!activeStoryProgress) {
+            throw new common_1.ForbiddenException('No active story progress for character.');
+        }
+        const activeCombat = await this.knex('active_combats')
+            .where({ character_id: baseCharacter.id })
             .first();
         if (!activeCombat) {
             throw new common_1.ForbiddenException('You are not currently in combat.');
@@ -357,25 +395,28 @@ let CombatService = CombatService_1 = class CombatService {
             await this.knex('active_combats').where({ id: activeCombat.id }).del();
             throw new common_1.InternalServerErrorException('Combat data corrupted, enemy not found.');
         }
+        let characterForCombat = await this._getHydratedCharacter(baseCharacter.id, activeStoryProgress.id);
         let enemyCurrentHealth = activeCombat.enemy_current_health;
         const roundActions = [];
         let playerActionTookTurn = false;
         if (actionDto.action === 'attack') {
-            const attackResult = await this._resolvePlayerAttack(character, enemyBaseData, enemyCurrentHealth, activeCombat.id);
-            roundActions.push(attackResult.actionDetail);
-            enemyCurrentHealth = attackResult.updatedEnemyHealth;
+            const result = await this._resolvePlayerAttack(characterForCombat, enemyBaseData, enemyCurrentHealth, activeCombat.id);
+            roundActions.push(result.actionDetail);
+            enemyCurrentHealth = result.updatedEnemyHealth;
             playerActionTookTurn = true;
         }
         else if (actionDto.action === 'use_item' && actionDto.itemId) {
-            const itemUseResult = await this._resolvePlayerItemUse(character, actionDto.itemId);
-            roundActions.push(itemUseResult.actionDetail);
-            character = itemUseResult.updatedCharacter;
-            playerActionTookTurn = itemUseResult.playerActionTookTurn;
+            const result = await this._resolvePlayerItemUse(characterForCombat, activeStoryProgress.id, actionDto.itemId);
+            roundActions.push(result.actionDetail);
+            if (result.characterStateChanged) {
+                characterForCombat = await this._getHydratedCharacter(baseCharacter.id, activeStoryProgress.id);
+            }
+            playerActionTookTurn = result.playerActionTookTurn;
         }
         else if (actionDto.action === 'defend') {
-            const defendResult = await this._resolvePlayerDefend(activeCombat.id);
-            roundActions.push(defendResult.actionDetail);
-            playerActionTookTurn = defendResult.playerActionTookTurn;
+            const result = await this._resolvePlayerDefend(activeCombat.id);
+            roundActions.push(result.actionDetail);
+            playerActionTookTurn = result.playerActionTookTurn;
         }
         else {
             this.logger.error(`Unknown combat action received: ${actionDto.action}`);
@@ -389,34 +430,30 @@ let CombatService = CombatService_1 = class CombatService {
                 outcome: 'victory',
                 description: `Legyőzted: ${enemyBaseData.name}! ${enemyBaseData.defeat_text ?? ''}`,
             });
-            this.logger.log(`Enemy ${enemyBaseData.id} defeated by character ${character.id}`);
             try {
-                this.logger.debug(`[VICTORY BLOCK] Attempting to delete active_combats record ID: ${activeCombat.id}`);
+                this.logger.debug(`[VICTORY BLOCK] Deleting active combat ID: ${activeCombat.id}`);
                 await this.knex('active_combats').where({ id: activeCombat.id }).del();
-                this.logger.log(`[VICTORY BLOCK] Active combat record ${activeCombat.id} deleted.`);
+                let finalCharacterState = characterForCombat;
                 if (enemyBaseData.xp_reward > 0) {
-                    this.logger.debug(`[VICTORY BLOCK] Attempting to add XP: ${enemyBaseData.xp_reward}`);
-                    const xpResult = await this.characterService.addXp(character.id, enemyBaseData.xp_reward);
+                    const xpResult = await this.characterService.addXp(baseCharacter.id, enemyBaseData.xp_reward);
                     roundActions.push({
                         actor: 'player',
                         actionType: 'info',
                         outcome: 'info',
                         description: `Kaptál ${enemyBaseData.xp_reward} tapasztalati pontot.`,
                     });
-                    if (xpResult.leveledUp)
-                        xpResult.messages.forEach((m) => roundActions.push({
+                    if (xpResult.leveledUp) {
+                        xpResult.messages.forEach((msg) => roundActions.push({
                             actor: 'player',
                             actionType: 'info',
                             outcome: 'info',
-                            description: m,
+                            description: msg,
                         }));
-                    character =
-                        (await this.characterService.findById(character.id)) ?? character;
-                    this.logger.debug(`[VICTORY BLOCK] XP awarded. Leveled up: ${xpResult.leveledUp}`);
+                    }
+                    finalCharacterState = await this._getHydratedCharacter(baseCharacter.id, activeStoryProgress.id);
                 }
                 if (enemyBaseData.item_drop_id) {
-                    this.logger.debug(`[VICTORY BLOCK] Attempting to add item drop ID: ${enemyBaseData.item_drop_id}`);
-                    await this.characterService.addItemToInventory(character.id, enemyBaseData.item_drop_id, 1);
+                    await this.characterService.addStoryItem(activeStoryProgress.id, enemyBaseData.item_drop_id, 1);
                     const droppedItem = await this.knex('items')
                         .where({ id: enemyBaseData.item_drop_id })
                         .first();
@@ -426,59 +463,54 @@ let CombatService = CombatService_1 = class CombatService {
                         outcome: 'info',
                         description: `Az ellenfél eldobta: ${droppedItem?.name ?? `Tárgy ID: ${enemyBaseData.item_drop_id}`}`,
                     });
-                    this.logger.log(`[VICTORY BLOCK] Item dropped: ${enemyBaseData.item_drop_id}`);
                 }
-                const victoryNodeId = VICTORY_NODE_ID;
-                this.logger.debug(`[VICTORY BLOCK] Attempting to move character ${character.id} to victory node ${victoryNodeId}`);
-                character = await this.characterService.updateCharacter(character.id, {
-                    current_node_id: victoryNodeId,
+                const updatedProgress = await this.characterService.updateStoryProgress(activeStoryProgress.id, {
+                    current_node_id: VICTORY_NODE_ID,
                 });
-                this.logger.log(`[VICTORY BLOCK] Character moved to node ${victoryNodeId}.`);
-                this.logger.log('[VICTORY BLOCK] Preparing to return final state (combat over).');
+                finalCharacterState.current_node_id = updatedProgress.current_node_id;
                 return {
-                    character,
+                    character: finalCharacterState,
                     roundActions,
                     isCombatOver: true,
-                    nextNodeId: victoryNodeId,
+                    nextNodeId: VICTORY_NODE_ID,
                     enemy: undefined,
                 };
             }
-            catch (errorInVictoryBlock) {
-                this.logger.error(`[VICTORY BLOCK] CRITICAL ERROR during victory processing: ${errorInVictoryBlock}`, errorInVictoryBlock.stack);
-                throw new common_1.InternalServerErrorException(`Error processing victory: ${errorInVictoryBlock.message}`);
+            catch (e) {
+                this.logger.error(`[VICTORY BLOCK] CRITICAL ERROR during victory processing: ${e}`, e.stack);
+                throw new common_1.InternalServerErrorException(`Error processing victory: ${e.message}`);
             }
         }
         if (playerActionTookTurn) {
-            const currentCombatTurnState = await this.knex('active_combats')
+            const currentCombat = await this.knex('active_combats')
                 .where({ id: activeCombat.id })
                 .first();
-            if (!currentCombatTurnState)
-                throw new common_1.InternalServerErrorException('Combat state lost before enemy turn!');
-            const enemyTurnResult = await this._resolveEnemyAction(character, enemyBaseData, currentCombatTurnState);
+            if (!currentCombat) {
+                throw new common_1.InternalServerErrorException('Combat state lost during enemy turn.');
+            }
+            const enemyTurnResult = await this._resolveEnemyAction(characterForCombat, activeStoryProgress.id, enemyBaseData, currentCombat);
             roundActions.push(...enemyTurnResult.actionDetails);
-            character = enemyTurnResult.updatedCharacter;
-            await this.knex('active_combats')
-                .where({ id: currentCombatTurnState.id })
-                .update({
-                enemy_charge_turns_current: enemyTurnResult.newChargeTurns,
+            characterForCombat = enemyTurnResult.updatedCharacter;
+            await this.knex('active_combats').where({ id: currentCombat.id }).update({
+                enemy_charge_turns_current: enemyTurnResult.updatedEnemyChargeTurns,
                 character_is_defending: false,
             });
-            if (character.health <= 0) {
+            if (characterForCombat.health <= 0) {
                 roundActions.push({
                     actor: 'player',
                     actionType: 'defeat',
                     outcome: 'defeat',
                     description: 'Leestél a lábadról... Vége a kalandnak.',
                 });
-                await this.knex('active_combats')
-                    .where({ id: currentCombatTurnState.id })
-                    .del();
-                character = await this.characterService.updateCharacter(character.id, {
+                await this.knex('active_combats').where({ id: currentCombat.id }).del();
+                const updatedProgress = await this.characterService.updateStoryProgress(activeStoryProgress.id, {
                     current_node_id: DEFEAT_NODE_ID,
                     health: 0,
                 });
+                characterForCombat.current_node_id = updatedProgress.current_node_id;
+                characterForCombat.health = 0;
                 return {
-                    character,
+                    character: characterForCombat,
                     roundActions,
                     isCombatOver: true,
                     nextNodeId: DEFEAT_NODE_ID,
@@ -486,10 +518,8 @@ let CombatService = CombatService_1 = class CombatService {
                 };
             }
         }
-        this.logger.log(`Combat continues for user ${userId}. Round actions: ${roundActions.length}`);
-        const finalCharacterState = await this.characterService.findById(character.id);
-        if (!finalCharacterState)
-            throw new common_1.InternalServerErrorException('Character state lost before final return!');
+        this.logger.log(`Combat continues for UserID: ${userId}. Round actions: ${roundActions.length}`);
+        const finalCharacterState = await this._getHydratedCharacter(baseCharacter.id, activeStoryProgress.id);
         const finalActiveCombatState = await this.knex('active_combats')
             .where({ id: activeCombat.id })
             .first();
@@ -504,9 +534,9 @@ let CombatService = CombatService_1 = class CombatService {
                 currentHealth: finalActiveCombatState.enemy_current_health,
                 skill: enemyBaseData.skill,
                 isChargingSpecial: currentCharge > 0,
-                currentChargeTurns: finalActiveCombatState.enemy_charge_turns_current,
+                currentChargeTurns: currentCharge,
                 maxChargeTurns: maxCharge,
-                specialAttackTelegraphText: (finalActiveCombatState.enemy_charge_turns_current ?? 0) > 0
+                specialAttackTelegraphText: currentCharge > 0
                     ? enemyBaseData.special_attack_telegraph_text
                     : null,
             };

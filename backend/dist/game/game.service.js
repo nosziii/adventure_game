@@ -46,7 +46,7 @@ let GameService = GameService_1 = class GameService {
     async processCombatAction(userId, actionDto) {
         this.logger.log(`GameService processing combat action for user ${userId}`);
         const combatResult = await this.combatService.handleCombatAction(userId, actionDto);
-        const inventory = await this.characterService.getInventory(combatResult.character.id);
+        const inventory = await this.characterService.getStoryInventory(combatResult.character.id);
         const characterForDto = this.mapCharacterToDto(combatResult.character);
         if (combatResult.isCombatOver) {
             this.logger.log(`Combat finished for user ${userId}. New node: ${combatResult.nextNodeId}`);
@@ -61,7 +61,7 @@ let GameService = GameService_1 = class GameService {
                     .then((potentialChoices) => Promise.all(potentialChoices.map(async (choice) => ({
                     id: choice.id,
                     text: choice.text,
-                    isAvailable: await this.checkChoiceAvailability(choice, combatResult.character),
+                    isAvailable: await this.checkChoiceAvailability(choice, combatResult.character, combatResult.character.id),
                 }))))
                 : [];
             return {
@@ -138,7 +138,7 @@ let GameService = GameService_1 = class GameService {
         };
         characterForState =
             await this.characterService.applyPassiveEffects(characterForState);
-        const inventory = await this.characterService.getInventory(baseCharacter.id);
+        const inventory = await this.characterService.getStoryInventory(activeStoryProgress.id);
         this.logger.debug('Inventory fetched (using base character_id for now):', JSON.stringify(inventory));
         const activeCombatDbRecord = await this.knex('active_combats')
             .where({ character_id: baseCharacter.id })
@@ -208,7 +208,7 @@ let GameService = GameService_1 = class GameService {
             const availableChoices = await Promise.all(potentialChoices.map(async (choice) => ({
                 id: choice.id,
                 text: choice.text,
-                isAvailable: await this.checkChoiceAvailability(choice, characterForState),
+                isAvailable: await this.checkChoiceAvailability(choice, characterForState, activeStoryProgress.id),
             })));
             return {
                 node: {
@@ -226,191 +226,186 @@ let GameService = GameService_1 = class GameService {
             };
         }
     }
-    async checkChoiceAvailability(choice, character) {
-        if (choice.required_item_id !== null &&
-            choice.required_item_id !== undefined) {
-            this.logger.debug(`Checking required item ID: ${choice.required_item_id}`);
-            const hasRequiredItem = await this.characterService.hasItem(character.id, choice.required_item_id);
-            if (!hasRequiredItem) {
-                this.logger.debug(`Choice ${choice.id} unavailable: Missing required item ${choice.required_item_id}`);
-                return false;
-            }
-            this.logger.debug(`Required item ${choice.required_item_id} found in inventory.`);
-        }
-        if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
-            this.logger.debug(`Checking item cost ID: ${choice.item_cost_id}`);
-            const hasCostItem = await this.characterService.hasItem(character.id, choice.item_cost_id);
+    async checkChoiceAvailability(choice, character, storyProgressId) {
+        this.logger.debug(`[GameService.checkChoiceAvailability] Checking choice ID ${choice.id} for character ID ${storyProgressId}`);
+        if (choice.item_cost_id) {
+            const hasCostItem = await this.characterService.hasStoryItem(storyProgressId, choice.item_cost_id);
             if (!hasCostItem) {
                 this.logger.debug(`Choice ${choice.id} unavailable: Missing cost item ${choice.item_cost_id}`);
                 return false;
             }
-            this.logger.debug(`Required cost item ${choice.item_cost_id} found in inventory.`);
         }
-        const reqStatCheck = choice.required_stat_check;
-        if (typeof reqStatCheck === 'string') {
-            this.logger.debug(`Evaluating stat requirement: "${reqStatCheck}"`);
-            const parts = reqStatCheck.match(/(\w+)\s*(>=|<=|>|<|==|!=)\s*(\d+)/);
-            if (parts) {
-                const [, stat, operator, valueStr] = parts;
+        if (choice.required_item_id) {
+            const hasRequiredItem = await this.characterService.hasStoryItem(storyProgressId, choice.required_item_id);
+            if (!hasRequiredItem) {
+                this.logger.debug(`Choice ${choice.id} unavailable: Missing required item ${choice.required_item_id}`);
+                return false;
+            }
+        }
+        if (choice.required_stat_check) {
+            const statRegex = /(\w+)\s*([<>=!]+)\s*(\d+)/;
+            const match = choice.required_stat_check.match(statRegex);
+            if (match) {
+                const [, statName, operator, valueStr] = match;
                 const requiredValue = parseInt(valueStr, 10);
-                let characterValue;
-                switch (stat.toLowerCase()) {
+                let characterStatValue = 0;
+                switch (statName.toLowerCase()) {
                     case 'skill':
-                        characterValue = character.skill;
-                        break;
-                    case 'health':
-                        characterValue = character.health;
+                        characterStatValue = character.skill ?? 0;
                         break;
                     case 'luck':
-                        characterValue = character.luck;
+                        characterStatValue = character.luck ?? 0;
                         break;
                     case 'stamina':
-                        characterValue = character.stamina;
+                        characterStatValue = character.stamina ?? 0;
+                        break;
+                    case 'defense':
+                        characterStatValue = character.defense ?? 0;
+                        break;
+                    case 'level':
+                        characterStatValue = character.level ?? 0;
+                        break;
+                    case 'xp':
+                        characterStatValue = character.xp ?? 0;
                         break;
                     default:
-                        this.logger.warn(`Unknown stat in requirement: ${stat}`);
+                        this.logger.warn(`Unknown stat '${statName}' in required_stat_check for choice ${choice.id}`);
                         return false;
                 }
-                if (characterValue === null || characterValue === undefined) {
-                    this.logger.debug(`Stat ${stat} is null/undefined for character ${character.id}`);
-                    return false;
-                }
-                this.logger.debug(`Checking: <span class="math-inline">\{stat\} \(</span>{characterValue}) ${operator} ${requiredValue}`);
                 let conditionMet = false;
                 switch (operator) {
                     case '>=':
-                        conditionMet = characterValue >= requiredValue;
+                        conditionMet = characterStatValue >= requiredValue;
                         break;
                     case '<=':
-                        conditionMet = characterValue <= requiredValue;
+                        conditionMet = characterStatValue <= requiredValue;
                         break;
                     case '>':
-                        conditionMet = characterValue > requiredValue;
+                        conditionMet = characterStatValue > requiredValue;
                         break;
                     case '<':
-                        conditionMet = characterValue < requiredValue;
+                        conditionMet = characterStatValue < requiredValue;
                         break;
                     case '==':
-                        conditionMet = characterValue == requiredValue;
+                    case '=':
+                        conditionMet = characterStatValue === requiredValue;
                         break;
                     case '!=':
-                        conditionMet = characterValue != requiredValue;
+                        conditionMet = characterStatValue !== requiredValue;
                         break;
                     default:
-                        this.logger.warn(`Unknown operator in requirement: ${operator}`);
+                        this.logger.warn(`Unknown operator '${operator}' in required_stat_check for choice ${choice.id}`);
                         return false;
                 }
-                this.logger.debug(`Requirement ${reqStatCheck} result: ${conditionMet}`);
                 if (!conditionMet) {
+                    this.logger.debug(`Choice ${choice.id} unavailable: Stat check failed: ${characterStatValue} ${operator} ${requiredValue} (Stat: ${statName})`);
                     return false;
                 }
             }
             else {
-                this.logger.warn(`Could not parse stat requirement string: ${reqStatCheck}`);
+                this.logger.warn(`Could not parse required_stat_check: "${choice.required_stat_check}" for choice ${choice.id}`);
                 return false;
             }
         }
+        this.logger.debug(`Choice ID ${choice.id} is available.`);
         return true;
     }
     async makeChoice(userId, choiceId) {
-        this.logger.log(`Processing choice ID: ${choiceId} for user ID: ${userId}`);
-        const character = await this.characterService.findOrCreateByUserId(userId);
-        const existingCombat = await this.knex('active_combats')
-            .where({ character_id: character.id })
-            .first();
-        if (existingCombat) {
-            throw new common_1.ForbiddenException('Cannot make choices while in combat.');
+        this.logger.log(`[GameService.makeChoice] UserID: ${userId}, Attempting ChoiceID: ${choiceId}`);
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const activeStoryProgress = await this.characterService.getActiveStoryProgress(baseCharacter.id);
+        if (!activeStoryProgress || activeStoryProgress.current_node_id === null) {
+            this.logger.error(`[GameService.makeChoice] No active story or current node for CharacterID: ${baseCharacter.id}.`);
+            throw new common_1.BadRequestException('No active game session or current node to make a choice from.');
         }
-        const currentNodeId = character.current_node_id;
-        if (!currentNodeId) {
-            throw new common_1.BadRequestException('Cannot make a choice without being at a node.');
-        }
+        const currentNodeId = activeStoryProgress.current_node_id;
+        const characterForValidation = await this.characterService.applyPassiveEffects({
+            ...baseCharacter,
+            health: activeStoryProgress.health,
+            skill: activeStoryProgress.skill,
+            luck: activeStoryProgress.luck,
+            stamina: activeStoryProgress.stamina,
+            defense: activeStoryProgress.defense,
+            level: activeStoryProgress.level,
+            xp: activeStoryProgress.xp,
+            xp_to_next_level: activeStoryProgress.xp_to_next_level,
+            current_node_id: currentNodeId,
+            equipped_weapon_id: activeStoryProgress.equipped_weapon_id,
+            equipped_armor_id: activeStoryProgress.equipped_armor_id,
+        });
         const currentNode = await this.knex('story_nodes')
             .where({ id: currentNodeId })
             .first();
-        if (!currentNode) {
+        if (!currentNode)
             throw new common_1.NotFoundException(`Current node ${currentNodeId} not found!`);
-        }
         const choice = await this.knex('choices')
             .where({ id: choiceId, source_node_id: currentNodeId })
             .first();
-        if (!choice) {
-            throw new common_1.BadRequestException(`Invalid choice ID: ${choiceId}`);
-        }
-        if (!(await this.checkChoiceAvailability(choice, character))) {
+        if (!choice)
+            throw new common_1.BadRequestException(`Invalid choice ID: ${choiceId} for node ${currentNodeId}`);
+        if (!(await this.checkChoiceAvailability(choice, characterForValidation, activeStoryProgress.id))) {
             throw new common_1.ForbiddenException('You do not meet the requirements for this choice.');
         }
         if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
-            this.logger.log(`Choice ${choiceId} has item cost: ${choice.item_cost_id}. Attempting to remove from inventory.`);
-            const removedSuccessfully = await this.characterService.removeItemFromInventory(character.id, choice.item_cost_id, 1);
-            if (!removedSuccessfully) {
-                this.logger.error(`Failed to remove cost item ${choice.item_cost_id} for choice ${choiceId} - item might have vanished?`);
+            this.logger.log(`Choice ${choiceId} (StoryProgressID: ${activeStoryProgress.id}) has item cost: ${choice.item_cost_id}. Attempting to remove from story inventory.`);
+            const removed = await this.characterService.removeStoryItem(activeStoryProgress.id, choice.item_cost_id, 1);
+            if (!removed) {
+                this.logger.error(`Failed to remove cost item ${choice.item_cost_id} for choice ${choiceId} (StoryProgressID: ${activeStoryProgress.id}).`);
                 throw new common_1.InternalServerErrorException('Failed to process item cost.');
             }
-            this.logger.log(`Item ${choice.item_cost_id} successfully removed as cost.`);
+            this.logger.log(`Item ${choice.item_cost_id} successfully removed as cost for StoryProgressID: ${activeStoryProgress.id}.`);
         }
         const targetNodeId = choice.target_node_id;
-        this.logger.debug(`Choice ${choiceId} valid. Target node ID: ${targetNodeId}`);
         const targetNode = await this.knex('story_nodes')
             .where({ id: targetNodeId })
             .first();
-        if (!targetNode) {
-            throw new common_1.InternalServerErrorException('Target node missing.');
-        }
-        let healthUpdate = character.health;
+        if (!targetNode)
+            throw new common_1.InternalServerErrorException(`Target node ${targetNodeId} missing for choice ${choiceId}.`);
+        let newHealthForProgress = characterForValidation.health;
         if (currentNode.health_effect !== null &&
             currentNode.health_effect !== undefined) {
-            this.logger.log(`Applying health effect ${currentNode.health_effect} from current node ${currentNodeId}`);
-            healthUpdate = Math.max(0, character.health + currentNode.health_effect);
+            newHealthForProgress = Math.max(0, characterForValidation.health + currentNode.health_effect);
         }
         if (currentNode.item_reward_id !== null &&
             currentNode.item_reward_id !== undefined) {
-            this.logger.log(`Current node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id}`);
-            try {
-                await this.characterService.addItemToInventory(character.id, currentNode.item_reward_id, 1);
-                this.logger.log(`Item ${currentNode.item_reward_id} added to inventory.`);
-            }
-            catch (itemError) {
-                this.logger.error(`Failed to add item reward ${currentNode.item_reward_id}: ${itemError}`);
-            }
+            this.logger.log(`Node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id} to StoryProgressID: ${activeStoryProgress.id}`);
+            await this.characterService.addStoryItem(activeStoryProgress.id, currentNode.item_reward_id, 1);
+            this.logger.log(`Item ${currentNode.item_reward_id} added to story inventory for StoryProgressID: ${activeStoryProgress.id}.`);
         }
+        const progressUpdates = {
+            health: newHealthForProgress,
+        };
         if (targetNode.enemy_id) {
-            this.logger.log(`Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`);
-            if (healthUpdate !== character.health) {
-                await this.characterService.updateCharacter(character.id, {
-                    health: healthUpdate,
-                });
-            }
+            this.logger.log(`Choice leads to combat at node ${targetNodeId} (StoryProgressID: ${activeStoryProgress.id})`);
             const enemy = await this.knex('enemies')
                 .where({ id: targetNode.enemy_id })
                 .first();
-            if (!enemy) {
-                throw new common_1.InternalServerErrorException('Enemy data missing for combat.');
-            }
+            if (!enemy)
+                throw new common_1.InternalServerErrorException(`Enemy ${targetNode.enemy_id} not found.`);
             await this.knex('active_combats').insert({
-                character_id: character.id,
+                character_id: baseCharacter.id,
                 enemy_id: enemy.id,
                 enemy_current_health: enemy.health,
             });
             await this.knex('player_progress').insert({
-                character_id: character.id,
+                character_story_progress_id: activeStoryProgress.id,
                 node_id: targetNodeId,
                 choice_id_taken: choice.id,
             });
         }
         else {
-            this.logger.log(`Choice leads to non-combat node ${targetNodeId}`);
-            await this.characterService.updateCharacter(character.id, {
-                current_node_id: targetNodeId,
-                health: healthUpdate,
-            });
+            this.logger.log(`Choice leads to non-combat node ${targetNodeId} (StoryProgressID: ${activeStoryProgress.id})`);
+            progressUpdates.current_node_id = targetNodeId;
             await this.knex('player_progress').insert({
-                character_id: character.id,
+                character_story_progress_id: activeStoryProgress.id,
                 node_id: targetNodeId,
                 choice_id_taken: choice.id,
             });
         }
-        this.logger.log(`Choice processed for user ${userId}. Fetching new game state.`);
+        if (Object.keys(progressUpdates).length > 0) {
+            this.logger.debug(`Updating story progress ${activeStoryProgress.id} with: ${JSON.stringify(progressUpdates)}`);
+            await this.characterService.updateStoryProgress(activeStoryProgress.id, progressUpdates);
+        }
         return this.getCurrentGameState(userId);
     }
     async useItemOutOfCombat(userId, itemId) {
@@ -423,7 +418,7 @@ let GameService = GameService_1 = class GameService {
             this.logger.warn(`User ${userId} tried to use item ${itemId} outside combat, but is in combat.`);
             throw new common_1.ForbiddenException('Cannot use items this way while in combat.');
         }
-        const hasItem = await this.characterService.hasItem(character.id, itemId);
+        const hasItem = await this.characterService.hasStoryItem(character.id, itemId);
         if (!hasItem) {
             this.logger.warn(`User ${userId} tried to use item ${itemId} but doesn't have it.`);
             throw new common_1.BadRequestException('You do not have this item.');
@@ -448,7 +443,7 @@ let GameService = GameService_1 = class GameService {
                     await this.characterService.updateCharacter(character.id, {
                         health: newHealth,
                     });
-                    const removed = await this.characterService.removeItemFromInventory(character.id, itemId, 1);
+                    const removed = await this.characterService.removeStoryItem(character.id, itemId, 1);
                     if (!removed) {
                         this.logger.error(`Failed to remove item ${itemId} after use for character ${character.id}!`);
                     }
@@ -542,23 +537,26 @@ let GameService = GameService_1 = class GameService {
             self.findIndex((e) => e.from === edge.from && e.to === edge.to));
         return { nodes: mapNodes, edges: uniqueEdges };
     }
-    async getPublishedStories() {
-        this.logger.log('Fetching published stories for players');
-        try {
-            const stories = await this.knex('stories')
-                .where({ is_published: true })
-                .select('id', 'title', 'description')
-                .orderBy('title', 'asc');
-            return stories.map((s) => ({
-                id: s.id,
-                title: s.title,
-                description: s.description,
-            }));
-        }
-        catch (error) {
-            this.logger.error('Failed to fetch published stories', error.stack);
-            throw new common_1.InternalServerErrorException('Could not retrieve stories.');
-        }
+    async getPublishedStories(userId) {
+        this.logger.log(`Workspaceing published stories with progress for user ID: ${userId}`);
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        const stories = await this.knex('stories')
+            .select('stories.id as storyId', 'stories.title', 'stories.description', 'csp.current_node_id as currentNodeIdInStory', 'csp.last_played_at as lastPlayedAt', 'csp.is_active as isActive')
+            .leftJoin('character_story_progress as csp', (join) => {
+            join
+                .on('stories.id', '=', 'csp.story_id')
+                .andOn('csp.character_id', '=', this.knex.raw('?', [character.id]));
+        })
+            .where('stories.is_published', true)
+            .orderBy('stories.id', 'asc');
+        return stories.map((s) => ({
+            id: s.storyId,
+            title: s.title,
+            description: s.description,
+            lastPlayedAt: s.lastPlayedAt ? new Date(s.lastPlayedAt) : null,
+            currentNodeIdInStory: s.currentNodeIdInStory,
+            isActive: s.isActive ?? false,
+        }));
     }
 };
 exports.GameService = GameService;

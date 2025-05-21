@@ -1,6 +1,6 @@
 import { Knex } from 'knex';
 import { CharacterService } from '../character.service';
-import { GameStateDto, CharacterStatsDto, CombatActionDto, PlayerMapDataDto, StoryInfoDto } from './dto';
+import { GameStateDto, CharacterStatsDto, CombatActionDto, PlayerMapDataDto, PlayerStoryListItemDto } from './dto';
 import { CombatService } from '../combat.service';
 export declare class GameService {
     private readonly knex;
@@ -15,5 +15,5 @@ export declare class GameService {
     makeChoice(userId: number, choiceId: number): Promise<GameStateDto>;
     useItemOutOfCombat(userId: number, itemId: number): Promise<CharacterStatsDto>;
     getPlayerProgress(userId: number): Promise<PlayerMapDataDto>;
-    getPublishedStories(): Promise<StoryInfoDto[]>;
+    getPublishedStories(userId: number): Promise<PlayerStoryListItemDto[]>;
 }

@@ -17,6 +17,7 @@ import {
   CombatActionDto,
   PlayerMapDataDto,
   StoryInfoDto,
+  PlayerStoryListItemDto,
 } from './dto';
 
 @Controller('game')
@@ -96,10 +97,15 @@ export class GameController {
     return this.gameService.getPlayerProgress(userId);
   }
 
-  @Get('stories') // GET /api/game/stories
-  @UseGuards(AuthGuard('jwt')) // Legyen védett, csak bejelentkezett userek lássák a sztorikat
-  async listPublishedStories(): Promise<StoryInfoDto[]> {
-    this.logger.log('Request received for published stories');
-    return this.gameService.getPublishedStories();
+  @Get('stories')
+  @UseGuards(AuthGuard('jwt'))
+  async listPublishedStories(
+    @Request() req,
+  ): Promise<PlayerStoryListItemDto[]> {
+    const userId = req.user.id;
+    this.logger.log(
+      `Request received for published stories for user ${userId}`,
+    );
+    return this.gameService.getPublishedStories(userId);
   }
 }

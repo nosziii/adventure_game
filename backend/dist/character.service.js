@@ -46,6 +46,90 @@ let CharacterService = CharacterService_1 = class CharacterService {
             .first();
         return character ? await this.applyPassiveEffects(character) : undefined;
     }
+    async getStoryInventory(progressId) {
+        this.logger.debug(`Workspaceing inventory for story progress ID: ${progressId}`);
+        return this.knex('character_story_inventory as csi')
+            .join('items', 'items.id', 'csi.item_id')
+            .where('csi.character_story_progress_id', progressId)
+            .andWhere('csi.quantity', '>', 0)
+            .select('items.id as itemId', 'items.name', 'items.description', 'items.type', 'items.effect', 'items.usable', 'csi.quantity');
+    }
+    async hasStoryItem(progressId, itemId, quantity = 1) {
+        this.logger.debug(`Checking if story progress ID ${progressId} has item ${itemId} (quantity: ${quantity})`);
+        const itemEntry = await this.knex('character_story_inventory')
+            .where({
+            character_story_progress_id: progressId,
+            item_id: itemId,
+        })
+            .andWhere('quantity', '>=', quantity)
+            .first();
+        return !!itemEntry;
+    }
+    async addStoryItem(progressId, itemId, quantity = 1) {
+        if (quantity <= 0)
+            return;
+        this.logger.log(`Adding item ${itemId} (quantity ${quantity}) to story progress ID: ${progressId}`);
+        const existingEntry = await this.knex('character_story_inventory')
+            .where({ character_story_progress_id: progressId, item_id: itemId })
+            .first();
+        if (existingEntry) {
+            await this.knex('character_story_inventory')
+                .where({ id: existingEntry.id })
+                .increment('quantity', quantity)
+                .update({ updated_at: new Date() });
+            this.logger.debug(`Incremented quantity for item ${itemId} for progress ${progressId}`);
+        }
+        else {
+            await this.knex('character_story_inventory').insert({
+                character_story_progress_id: progressId,
+                item_id: itemId,
+                quantity: quantity,
+            });
+            this.logger.debug(`Inserted new item ${itemId} for progress ${progressId}`);
+        }
+    }
+    async removeStoryItem(progressId, itemId, quantity = 1) {
+        if (quantity <= 0)
+            return true;
+        this.logger.log(`Removing item ${itemId} (quantity ${quantity}) from story progress ID: ${progressId}`);
+        const existingEntry = await this.knex('character_story_inventory')
+            .where({ character_story_progress_id: progressId, item_id: itemId })
+            .first();
+        if (existingEntry && existingEntry.quantity >= quantity) {
+            const newQuantity = existingEntry.quantity - quantity;
+            if (newQuantity > 0) {
+                await this.knex('character_story_inventory')
+                    .where({ id: existingEntry.id })
+                    .update({ quantity: newQuantity, updated_at: new Date() });
+                this.logger.debug(`Decremented quantity for item ${itemId} to ${newQuantity} for progress ${progressId}`);
+            }
+            else {
+                await this.knex('character_story_inventory')
+                    .where({ id: existingEntry.id })
+                    .del();
+                this.logger.debug(`Removed item ${itemId} (quantity reached 0) for progress ${progressId}`);
+            }
+            return true;
+        }
+        else {
+            this.logger.warn(`Failed to remove item ${itemId}: not enough quantity or item not found for progress ${progressId}.`);
+            return false;
+        }
+    }
+    async updateStoryProgress(progressId, updates) {
+        this.logger.debug(`Updating story progress ID: ${progressId} with data: ${JSON.stringify(updates)}`);
+        const finalUpdates = { ...updates, updated_at: new Date() };
+        const [updatedRecord] = await this.knex('character_story_progress')
+            .where({ id: progressId })
+            .update(finalUpdates)
+            .returning('*');
+        if (!updatedRecord) {
+            this.logger.error(`Failed to update story progress ${progressId}, record not found.`);
+            throw new common_1.NotFoundException(`Story progress with ID ${progressId} not found for update.`);
+        }
+        this.logger.debug(`Story progress ${progressId} updated successfully.`);
+        return updatedRecord;
+    }
     async createCharacter(userId) {
         this.logger.log(`Creating new character for user ID: ${userId}.`);
         const defaultHealth = 100;
@@ -105,87 +189,63 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         return character;
     }
-    async getInventory(characterId) {
-        this.logger.debug(`Workspaceing inventory for character ID: ${characterId}`);
-        try {
-            const inventory = await this.knex('character_inventory as ci')
-                .join('items as i', 'ci.item_id', '=', 'i.id')
-                .select('ci.item_id as itemId', 'ci.quantity', 'i.name', 'i.description', 'i.type', 'i.effect', 'i.usable')
-                .where('ci.character_id', characterId);
-            return inventory;
-        }
-        catch (error) {
-            this.logger.error(`Failed to fetch inventory for character ${characterId}: ${error}`, error.stack);
-            throw new common_1.InternalServerErrorException('Could not retrieve inventory.');
-        }
-    }
     async equipItem(characterId, itemId) {
-        this.logger.log(`Attempting to equip item ${itemId} for character ${characterId}`);
-        const hasItemInInventory = await this.hasItem(characterId, itemId);
-        if (!hasItemInInventory) {
-            throw new common_1.BadRequestException(`Character ${characterId} does not possess item ${itemId}.`);
+        this.logger.log(`Character ${characterId} attempting to equip item ${itemId} for their active story.`);
+        const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+        if (!activeStoryProgress) {
+            throw new common_1.NotFoundException('No active story progress found for character to equip item.');
         }
-        const item = await this.knex('items').where({ id: itemId }).first();
+        const progressId = activeStoryProgress.id;
+        const hasItemInStoryInventory = await this.hasStoryItem(progressId, itemId);
+        if (!hasItemInStoryInventory) {
+            this.logger.warn(`Item ${itemId} not found in story inventory for progress ${progressId}.`);
+            throw new common_1.BadRequestException(`You do not possess this item in the current story's inventory.`);
+        }
+        const item = await this.knex('items')
+            .where({ id: itemId })
+            .first();
         if (!item) {
-            throw new common_1.InternalServerErrorException('Item data not found.');
+            throw new common_1.InternalServerErrorException(`Item data for ID ${itemId} not found.`);
         }
         let equipSlotColumn = null;
-        let updateData = {};
+        let updates = {};
         if (item.type === 'weapon') {
             equipSlotColumn = 'equipped_weapon_id';
-            updateData.equipped_weapon_id = itemId;
+            updates.equipped_weapon_id = itemId;
         }
         else if (item.type === 'armor') {
             equipSlotColumn = 'equipped_armor_id';
-            updateData.equipped_armor_id = itemId;
+            updates.equipped_armor_id = itemId;
         }
-        if (!equipSlotColumn) {
-            throw new common_1.BadRequestException(`Item ${itemId} (${item.name}) is not equippable.`);
+        else {
+            this.logger.warn(`Item ${itemId} (${item.name}) of type ${item.type} is not equippable.`);
+            throw new common_1.BadRequestException(`Item ${item.name} is not equippable.`);
         }
-        try {
-            this.logger.debug(`Equipping item ${itemId} into slot ${equipSlotColumn} for character ${characterId}`);
-            const updatedCharacter = await this.updateCharacter(characterId, updateData);
-            this.logger.log(`Item ${itemId} equipped successfully for character ${characterId}`);
-            return await this.applyPassiveEffects(updatedCharacter);
-        }
-        catch (error) {
-            this.logger.error(`Failed to equip item ${itemId} for character ${characterId}: ${error}`, error.stack);
-            if (error instanceof common_1.NotFoundException ||
-                error instanceof common_1.InternalServerErrorException) {
-                throw error;
-            }
-            throw new common_1.InternalServerErrorException('Failed to equip item due to an unexpected error.');
-        }
+        this.logger.debug(`Equipping item ${itemId} into slot ${equipSlotColumn} for story progress ${progressId}`);
+        return this.updateStoryProgress(progressId, updates);
     }
     async unequipItem(characterId, itemType) {
-        this.logger.log(`Attempting to unequip item type ${itemType} for character ${characterId}`);
+        this.logger.log(`Character ${characterId} attempting to unequip item type ${itemType} for their active story.`);
+        const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+        if (!activeStoryProgress) {
+            throw new common_1.NotFoundException('No active story progress found for character to unequip item.');
+        }
+        const progressId = activeStoryProgress.id;
         let equipSlotColumn = null;
-        let updateData = {};
+        let updates = {};
         if (itemType === 'weapon') {
             equipSlotColumn = 'equipped_weapon_id';
-            updateData.equipped_weapon_id = null;
+            updates.equipped_weapon_id = null;
         }
         else if (itemType === 'armor') {
             equipSlotColumn = 'equipped_armor_id';
-            updateData.equipped_armor_id = null;
+            updates.equipped_armor_id = null;
         }
-        if (!equipSlotColumn) {
+        else {
             throw new common_1.BadRequestException(`Invalid item type "${itemType}" for unequipping.`);
         }
-        try {
-            this.logger.debug(`Unequipping slot ${equipSlotColumn} for character ${characterId}`);
-            const updatedCharacter = await this.updateCharacter(characterId, updateData);
-            this.logger.log(`Item type ${itemType} unequipped successfully for character ${characterId}`);
-            return await this.applyPassiveEffects(updatedCharacter);
-        }
-        catch (error) {
-            this.logger.error(`Failed to unequip item type ${itemType} for character ${characterId}: ${error}`, error.stack);
-            if (error instanceof common_1.NotFoundException ||
-                error instanceof common_1.InternalServerErrorException) {
-                throw error;
-            }
-            throw new common_1.InternalServerErrorException('Failed to unequip item due to an unexpected error.');
-        }
+        this.logger.debug(`Unequipping slot ${equipSlotColumn} for story progress ${progressId}`);
+        return this.updateStoryProgress(progressId, updates);
     }
     async applyPassiveEffects(character) {
         const characterWithEffects = { ...character };
@@ -250,80 +310,6 @@ let CharacterService = CharacterService_1 = class CharacterService {
             this.logger.debug('No items equipped, no passive effects to apply.');
         }
         return characterWithEffects;
-    }
-    async hasItem(characterId, itemId) {
-        this.logger.debug(`Checking if character ${characterId} has item ${itemId}`);
-        const itemEntry = await this.knex('character_inventory')
-            .where({
-            character_id: characterId,
-            item_id: itemId,
-        })
-            .andWhere('quantity', '>', 0)
-            .first();
-        return !!itemEntry;
-    }
-    async addItemToInventory(characterId, itemId, quantityToAdd = 1) {
-        if (quantityToAdd <= 0) {
-            this.logger.warn(`Attempted to add non-positive quantity (${quantityToAdd}) of item ${itemId} for character ${characterId}`);
-            return;
-        }
-        this.logger.log(`Adding item ${itemId} (quantity: ${quantityToAdd}) to inventory for character ${characterId}`);
-        await this.knex.transaction(async (trx) => {
-            const existingEntry = await trx('character_inventory')
-                .where({ character_id: characterId, item_id: itemId })
-                .first();
-            if (existingEntry) {
-                this.logger.debug(`Item ${itemId} exists, incrementing quantity by ${quantityToAdd}.`);
-                const affectedRows = await trx('character_inventory')
-                    .where({ character_id: characterId, item_id: itemId })
-                    .increment('quantity', quantityToAdd);
-                if (affectedRows === 0) {
-                    throw new Error('Failed to increment item quantity.');
-                }
-            }
-            else {
-                this.logger.debug(`Item ${itemId} not found, inserting new entry.`);
-                await trx('character_inventory').insert({
-                    character_id: characterId,
-                    item_id: itemId,
-                    quantity: quantityToAdd,
-                });
-            }
-        });
-        this.logger.log(`Item ${itemId} successfully added/updated for character ${characterId}`);
-    }
-    async removeItemFromInventory(characterId, itemId, quantityToRemove = 1) {
-        if (quantityToRemove <= 0)
-            return true;
-        this.logger.log(`Removing item ${itemId} (quantity: ${quantityToRemove}) from inventory for character ${characterId}`);
-        let success = false;
-        await this.knex.transaction(async (trx) => {
-            const existingEntry = await trx('character_inventory')
-                .where({ character_id: characterId, item_id: itemId })
-                .forUpdate()
-                .first();
-            if (existingEntry && existingEntry.quantity >= quantityToRemove) {
-                const newQuantity = existingEntry.quantity - quantityToRemove;
-                if (newQuantity > 0) {
-                    this.logger.debug(`Decreasing quantity of item ${itemId} to ${newQuantity}`);
-                    await trx('character_inventory')
-                        .where({ character_id: characterId, item_id: itemId })
-                        .update({ quantity: newQuantity });
-                }
-                else {
-                    this.logger.debug(`Removing item ${itemId} completely (quantity reached zero).`);
-                    await trx('character_inventory')
-                        .where({ character_id: characterId, item_id: itemId })
-                        .del();
-                }
-                success = true;
-            }
-            else {
-                this.logger.warn(`Failed to remove item ${itemId}: Not found or insufficient quantity for character ${characterId}.`);
-                success = false;
-            }
-        });
-        return success;
     }
     async addXp(characterId, xpToAdd) {
         if (xpToAdd <= 0) {

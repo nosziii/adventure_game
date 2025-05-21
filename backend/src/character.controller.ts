@@ -11,7 +11,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common'; // Szükséges importok
 import { AuthGuard } from '@nestjs/passport';
-import { CharacterService } from './character.service';
+import { CharacterService, Character } from './character.service';
 import { CharacterStatsDto } from './game/dto/character-stats.dto'; // Használjuk a meglévő DTO-t a válaszhoz
 import { IsInt, IsNotEmpty, IsIn } from 'class-validator'; // Validációhoz
 import { GameService } from './game/game.service';
@@ -32,6 +32,7 @@ class UnequipItemDto {
 }
 
 @Controller('character') // Alap útvonal: /api/character
+@UseGuards(AuthGuard('jwt'))
 export class CharacterController {
   private readonly logger = new Logger(CharacterController.name);
 
@@ -41,65 +42,105 @@ export class CharacterController {
   ) {}
 
   // --- Felszerelés Végpont ---
-  @UseGuards(AuthGuard('jwt')) // Védett végpont
-  @Post('equip') // POST /api/character/equip
-  // A ValidationPipe automatikusan validálja a DTO-t (globálisan kell beállítani main.ts-ben!)
+  @Post('equip')
   async equipItem(
+    // Átneveztem, hogy ne legyen equip az osztályban és a metódus neve is
     @Request() req,
-    @Body(ValidationPipe) body: EquipItemDto, // Használjuk a DTO-t és validáljuk
+    @Body(ValidationPipe) body: EquipItemDto,
   ): Promise<CharacterStatsDto> {
-    // Adjunk vissza friss statokat
     const userId = req.user.id;
     const itemId = body.itemId;
     this.logger.log(`User ${userId} requested to equip item ${itemId}`);
-    // Meghívjuk a service equipItem metódusát (ami már visszaadja a friss karaktert)
-    const updatedCharacterWithEffects = await this.characterService.equipItem(
-      userId,
+
+    // 1. Karakter alap adatainak lekérése (névhez kell)
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId);
+
+    // 2. Felszerelés végrehajtása, ez CharacterStoryProgressRecord-ot ad vissza
+    const updatedProgress = await this.characterService.equipItem(
+      baseCharacter.id,
       itemId,
     );
-    // Átalakítjuk DTO-vá a választ (lehetne egy külön mapper)
+
+    // 3. Passzív effektek újraalkalmazása a frissített progress alapján
+    // Ehhez össze kell állítani egy 'Character' típusú objektumot a baseCharacter és updatedProgress alapján
+    let characterWithEffects: Character = {
+      ...baseCharacter,
+      health: updatedProgress.health,
+      skill: updatedProgress.skill,
+      luck: updatedProgress.luck,
+      stamina: updatedProgress.stamina,
+      defense: updatedProgress.defense,
+      level: updatedProgress.level,
+      xp: updatedProgress.xp,
+      xp_to_next_level: updatedProgress.xp_to_next_level,
+      current_node_id: updatedProgress.current_node_id,
+      equipped_weapon_id: updatedProgress.equipped_weapon_id,
+      equipped_armor_id: updatedProgress.equipped_armor_id,
+    };
+    characterWithEffects =
+      await this.characterService.applyPassiveEffects(characterWithEffects);
+
+    // 4. CharacterStatsDto összeállítása
     return {
-      health: updatedCharacterWithEffects.health,
-      skill: updatedCharacterWithEffects.skill,
-      luck: updatedCharacterWithEffects.luck,
-      stamina: updatedCharacterWithEffects.stamina,
-      name: updatedCharacterWithEffects.name,
-      level: updatedCharacterWithEffects.level,
-      xp: updatedCharacterWithEffects.xp,
-      xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
-      defense: updatedCharacterWithEffects.defense, // Ha van védelem is
+      health: characterWithEffects.health,
+      skill: characterWithEffects.skill,
+      luck: characterWithEffects.luck,
+      stamina: characterWithEffects.stamina,
+      name: baseCharacter.name, // A nevet a baseCharacter-ből vesszük!
+      level: characterWithEffects.level,
+      xp: characterWithEffects.xp,
+      xpToNextLevel: characterWithEffects.xp_to_next_level, // Figyelj a snake_case vs camelCase-re itt is
+      defense: characterWithEffects.defense,
     };
   }
 
-  // --- Levetkőzés Végpont ---
-  @UseGuards(AuthGuard('jwt'))
-  @Post('unequip') // POST /api/character/unequip
-  async unequipItem(
+  @Post('unequip')
+  async unequip(
+    // Átneveztem
     @Request() req,
-    @Body(ValidationPipe) body: UnequipItemDto, // Használjuk a DTO-t és validáljuk
+    @Body(ValidationPipe) body: UnequipItemDto,
   ): Promise<CharacterStatsDto> {
-    // Adjunk vissza friss statokat
     const userId = req.user.id;
     const itemType = body.itemType;
     this.logger.log(
       `User ${userId} requested to unequip item type ${itemType}`,
     );
-    // Meghívjuk a service unequipItem metódusát
-    const updatedCharacterWithEffects = await this.characterService.unequipItem(
-      userId,
+
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId);
+    const updatedProgress = await this.characterService.unequipItem(
+      baseCharacter.id,
       itemType,
     );
-    // Átalakítjuk DTO-vá a választ
+
+    let characterWithEffects: Character = {
+      ...baseCharacter,
+      health: updatedProgress.health,
+      skill: updatedProgress.skill,
+      luck: updatedProgress.luck,
+      stamina: updatedProgress.stamina,
+      defense: updatedProgress.defense,
+      level: updatedProgress.level,
+      xp: updatedProgress.xp,
+      xp_to_next_level: updatedProgress.xp_to_next_level,
+      current_node_id: updatedProgress.current_node_id,
+      equipped_weapon_id: updatedProgress.equipped_weapon_id,
+      equipped_armor_id: updatedProgress.equipped_armor_id,
+    };
+    characterWithEffects =
+      await this.characterService.applyPassiveEffects(characterWithEffects);
+
     return {
-      health: updatedCharacterWithEffects.health,
-      skill: updatedCharacterWithEffects.skill,
-      luck: updatedCharacterWithEffects.luck,
-      stamina: updatedCharacterWithEffects.stamina,
-      name: updatedCharacterWithEffects.name,
-      level: updatedCharacterWithEffects.level,
-      xp: updatedCharacterWithEffects.xp,
-      xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
-      defense: updatedCharacterWithEffects.defense,
+      health: characterWithEffects.health,
+      skill: characterWithEffects.skill,
+      luck: characterWithEffects.luck,
+      stamina: characterWithEffects.stamina,
+      name: baseCharacter.name, // A nevet a baseCharacter-ből vesszük!
+      level: characterWithEffects.level,
+      xp: characterWithEffects.xp,
+      xpToNextLevel: characterWithEffects.xp_to_next_level,
+      defense: characterWithEffects.defense,
     };
   }
 

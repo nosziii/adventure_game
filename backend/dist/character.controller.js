@@ -47,34 +47,68 @@ let CharacterController = CharacterController_1 = class CharacterController {
         const userId = req.user.id;
         const itemId = body.itemId;
         this.logger.log(`User ${userId} requested to equip item ${itemId}`);
-        const updatedCharacterWithEffects = await this.characterService.equipItem(userId, itemId);
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const updatedProgress = await this.characterService.equipItem(baseCharacter.id, itemId);
+        let characterWithEffects = {
+            ...baseCharacter,
+            health: updatedProgress.health,
+            skill: updatedProgress.skill,
+            luck: updatedProgress.luck,
+            stamina: updatedProgress.stamina,
+            defense: updatedProgress.defense,
+            level: updatedProgress.level,
+            xp: updatedProgress.xp,
+            xp_to_next_level: updatedProgress.xp_to_next_level,
+            current_node_id: updatedProgress.current_node_id,
+            equipped_weapon_id: updatedProgress.equipped_weapon_id,
+            equipped_armor_id: updatedProgress.equipped_armor_id,
+        };
+        characterWithEffects =
+            await this.characterService.applyPassiveEffects(characterWithEffects);
         return {
-            health: updatedCharacterWithEffects.health,
-            skill: updatedCharacterWithEffects.skill,
-            luck: updatedCharacterWithEffects.luck,
-            stamina: updatedCharacterWithEffects.stamina,
-            name: updatedCharacterWithEffects.name,
-            level: updatedCharacterWithEffects.level,
-            xp: updatedCharacterWithEffects.xp,
-            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
-            defense: updatedCharacterWithEffects.defense,
+            health: characterWithEffects.health,
+            skill: characterWithEffects.skill,
+            luck: characterWithEffects.luck,
+            stamina: characterWithEffects.stamina,
+            name: baseCharacter.name,
+            level: characterWithEffects.level,
+            xp: characterWithEffects.xp,
+            xpToNextLevel: characterWithEffects.xp_to_next_level,
+            defense: characterWithEffects.defense,
         };
     }
-    async unequipItem(req, body) {
+    async unequip(req, body) {
         const userId = req.user.id;
         const itemType = body.itemType;
         this.logger.log(`User ${userId} requested to unequip item type ${itemType}`);
-        const updatedCharacterWithEffects = await this.characterService.unequipItem(userId, itemType);
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const updatedProgress = await this.characterService.unequipItem(baseCharacter.id, itemType);
+        let characterWithEffects = {
+            ...baseCharacter,
+            health: updatedProgress.health,
+            skill: updatedProgress.skill,
+            luck: updatedProgress.luck,
+            stamina: updatedProgress.stamina,
+            defense: updatedProgress.defense,
+            level: updatedProgress.level,
+            xp: updatedProgress.xp,
+            xp_to_next_level: updatedProgress.xp_to_next_level,
+            current_node_id: updatedProgress.current_node_id,
+            equipped_weapon_id: updatedProgress.equipped_weapon_id,
+            equipped_armor_id: updatedProgress.equipped_armor_id,
+        };
+        characterWithEffects =
+            await this.characterService.applyPassiveEffects(characterWithEffects);
         return {
-            health: updatedCharacterWithEffects.health,
-            skill: updatedCharacterWithEffects.skill,
-            luck: updatedCharacterWithEffects.luck,
-            stamina: updatedCharacterWithEffects.stamina,
-            name: updatedCharacterWithEffects.name,
-            level: updatedCharacterWithEffects.level,
-            xp: updatedCharacterWithEffects.xp,
-            xpToNextLevel: updatedCharacterWithEffects.xp_to_next_level,
-            defense: updatedCharacterWithEffects.defense,
+            health: characterWithEffects.health,
+            skill: characterWithEffects.skill,
+            luck: characterWithEffects.luck,
+            stamina: characterWithEffects.stamina,
+            name: baseCharacter.name,
+            level: characterWithEffects.level,
+            xp: characterWithEffects.xp,
+            xpToNextLevel: characterWithEffects.xp_to_next_level,
+            defense: characterWithEffects.defense,
         };
     }
     async startStory(req, storyId) {
@@ -89,7 +123,6 @@ let CharacterController = CharacterController_1 = class CharacterController {
 };
 exports.CharacterController = CharacterController;
 __decorate([
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
     (0, common_1.Post)('equip'),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
@@ -98,14 +131,13 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "equipItem", null);
 __decorate([
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
     (0, common_1.Post)('unequip'),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, UnequipItemDto]),
     __metadata("design:returntype", Promise)
-], CharacterController.prototype, "unequipItem", null);
+], CharacterController.prototype, "unequip", null);
 __decorate([
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
     (0, common_1.Post)('story/:storyId/start'),
@@ -117,6 +149,7 @@ __decorate([
 ], CharacterController.prototype, "startStory", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([
     (0, common_1.Controller)('character'),
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
     __metadata("design:paramtypes", [character_service_1.CharacterService,
         game_service_1.GameService])
 ], CharacterController);

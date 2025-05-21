@@ -19,5 +19,6 @@ export declare class CombatService {
     private _resolvePlayerItemUse;
     private _resolvePlayerDefend;
     private _resolveEnemyAction;
+    private _getHydratedCharacter;
     handleCombatAction(userId: number, actionDto: CombatActionDto): Promise<CombatResult>;
 }

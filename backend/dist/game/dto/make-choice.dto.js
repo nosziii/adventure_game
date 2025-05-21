@@ -16,8 +16,8 @@ class MakeChoiceDto {
 }
 exports.MakeChoiceDto = MakeChoiceDto;
 __decorate([
-    (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsNotEmpty)({ message: 'A choiceId megadása kötelező.' }),
+    (0, class_validator_1.IsInt)({ message: 'A choiceId számnak kell lennie.' }),
     __metadata("design:type", Number)
 ], MakeChoiceDto.prototype, "choiceId", void 0);
 //# sourceMappingURL=make-choice.dto.js.map

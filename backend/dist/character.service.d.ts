@@ -25,16 +25,17 @@ export declare class CharacterService {
     constructor(knex: Knex);
     findByUserId(userId: number): Promise<Character | undefined>;
     findById(id: number): Promise<Character | undefined>;
+    getStoryInventory(progressId: number): Promise<InventoryItemDto[]>;
+    hasStoryItem(progressId: number, itemId: number, quantity?: number): Promise<boolean>;
+    addStoryItem(progressId: number, itemId: number, quantity?: number): Promise<void>;
+    removeStoryItem(progressId: number, itemId: number, quantity?: number): Promise<boolean>;
+    updateStoryProgress(progressId: number, updates: Partial<Omit<CharacterStoryProgressRecord, 'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'>>): Promise<CharacterStoryProgressRecord>;
     createCharacter(userId: number): Promise<Character>;
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
     findOrCreateByUserId(userId: number): Promise<Character>;
-    getInventory(characterId: number): Promise<InventoryItemDto[]>;
-    equipItem(characterId: number, itemId: number): Promise<Character>;
-    unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<Character>;
+    equipItem(characterId: number, itemId: number): Promise<CharacterStoryProgressRecord>;
+    unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<CharacterStoryProgressRecord>;
     applyPassiveEffects(character: Character): Promise<Character>;
-    hasItem(characterId: number, itemId: number): Promise<boolean>;
-    addItemToInventory(characterId: number, itemId: number, quantityToAdd?: number): Promise<void>;
-    removeItemFromInventory(characterId: number, itemId: number, quantityToRemove?: number): Promise<boolean>;
     addXp(characterId: number, xpToAdd: number): Promise<{
         leveledUp: boolean;
         messages: string[];

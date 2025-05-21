@@ -1,6 +1,6 @@
 <template>
   <div class="gallery-teaser-wrapper">
-    <h2 class="section-title">Pillantás a Világokba</h2>
+    <!-- <h2 class="section-title">Pillantás a Világokba</h2> -->
     <div class="image-gallery-grid">
       <div
         v-for="n in 6"

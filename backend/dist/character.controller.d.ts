@@ -14,7 +14,7 @@ export declare class CharacterController {
     private readonly logger;
     constructor(characterService: CharacterService, gameService: GameService);
     equipItem(req: any, body: EquipItemDto): Promise<CharacterStatsDto>;
-    unequipItem(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
+    unequip(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
     startStory(req: any, storyId: number): Promise<GameStateDto>;
 }
 export {};

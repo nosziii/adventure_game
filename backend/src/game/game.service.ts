@@ -23,10 +23,12 @@ import {
   PlayerMapNodeDto,
   PlayerMapEdgeDto,
   StoryInfoDto,
+  PlayerStoryListItemDto,
 } from './dto';
 import { StoryNode } from './interfaces/story-node.interface';
 import { ChoiceRecord } from './interfaces/choice-record.interface';
 import { EnemyRecord } from './interfaces/enemy-record.interface';
+import { CharacterStoryProgressRecord } from './interfaces/character-story-progres-record.interface';
 import { PlayerProgressRecord } from './interfaces/player-progress.interface';
 import { CombatService, CombatResult } from '../combat.service';
 
@@ -68,7 +70,7 @@ export class GameService {
 
     // Lekérdezzük a legfrissebb inventoryt a frissített karakterhez
     // A combatResult.character már a harc utáni/közbeni állapotot tükrözi
-    const inventory = await this.characterService.getInventory(
+    const inventory = await this.characterService.getStoryInventory(
       combatResult.character.id,
     );
     const characterForDto = this.mapCharacterToDto(combatResult.character);
@@ -99,6 +101,7 @@ export class GameService {
                     isAvailable: await this.checkChoiceAvailability(
                       choice,
                       combatResult.character,
+                      combatResult.character.id, // <-- Az activeStoryProgress.id
                     ),
                   })),
                 ),
@@ -197,8 +200,8 @@ export class GameService {
 
     // TODO: Inventory lekérdezése a character_story_inventory táblából, character_story_progress_id alapján.
     // Egyelőre a régi, character_id alapú lekérdezést használjuk.
-    const inventory = await this.characterService.getInventory(
-      baseCharacter.id,
+    const inventory = await this.characterService.getStoryInventory(
+      activeStoryProgress.id,
     );
     this.logger.debug(
       'Inventory fetched (using base character_id for now):',
@@ -297,6 +300,7 @@ export class GameService {
           isAvailable: await this.checkChoiceAvailability(
             choice,
             characterForState,
+            activeStoryProgress.id, // <-- ÚJ PARAMÉTER: az activeStoryProgress.id
           ), // A sztori-specifikus karaktert adjuk át
         })),
       );
@@ -321,303 +325,304 @@ export class GameService {
   // --- checkChoiceAvailability ---
   private async checkChoiceAvailability(
     choice: ChoiceRecord,
-    character: Character,
+    character: Character, // Ez a sztori-specifikus, effektekkel ellátott statokat tartalmazza
+    storyProgressId: number, // <-- ÚJ PARAMÉTER: az activeStoryProgress.id
   ): Promise<boolean> {
-    /**
-     * Ellenőrizzük a választás elérhetőségét:
-     * - Ha a választásnak van 'required_item_id' mezője, ellenőrizzük, hogy a karakter birtokolja-e azt az itemet.
-     * - Ha a választásnak van 'item_cost_id' mezője, ellenőrizzük, hogy a karakter birtokolja-e azt az itemet.
-     */
-    if (
-      choice.required_item_id !== null &&
-      choice.required_item_id !== undefined
-    ) {
-      this.logger.debug(
-        `Checking required item ID: ${choice.required_item_id}`,
-      );
-      const hasRequiredItem = await this.characterService.hasItem(
-        character.id,
+    this.logger.debug(
+      `[GameService.checkChoiceAvailability] Checking choice ID ${choice.id} for character ID ${storyProgressId}`,
+    );
+
+    // 1. Tárgyköltség Ellenőrzése (a karakter sztori-specifikus leltárából)
+    if (choice.item_cost_id) {
+      // TODO: Ezt át kell írni this.characterService.hasStoryItem(activeStoryProgress.id, choice.item_cost_id)-re
+      //       miután a CharacterService fel lett készítve a sztorinkénti leltárra.
+      //       Egyelőre a régi, globális hasItem-et használjuk baseCharacter.id-val,
+      //       de a 'character' paraméter már a sztori-specifikus statokat tartalmazza.
+      const hasCostItem = await this.characterService.hasStoryItem(
+        storyProgressId,
+        choice.item_cost_id,
+      ); // character.id itt a baseCharacter.id
+      if (!hasCostItem) {
+        this.logger.debug(
+          `Choice ${choice.id} unavailable: Missing cost item ${choice.item_cost_id}`,
+        );
+        return false;
+      }
+    }
+
+    // 2. Szükséges Tárgy Ellenőrzése (a karakter sztori-specifikus leltárából)
+    if (choice.required_item_id) {
+      // TODO: Ezt is át kell írni this.characterService.hasStoryItem(activeStoryProgress.id, choice.required_item_id)-re.
+      const hasRequiredItem = await this.characterService.hasStoryItem(
+        storyProgressId,
         choice.required_item_id,
       );
       if (!hasRequiredItem) {
         this.logger.debug(
           `Choice ${choice.id} unavailable: Missing required item ${choice.required_item_id}`,
         );
-        return false; // Ha hiányzik a tárgy, a választás nem elérhető
+        return false;
       }
-      this.logger.debug(
-        `Required item ${choice.required_item_id} found in inventory.`,
-      );
     }
 
-    if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
-      this.logger.debug(`Checking item cost ID: ${choice.item_cost_id}`);
-      // Itt is azt kell ellenőrizni, hogy van-e neki legalább 1 db
-      const hasCostItem = await this.characterService.hasItem(
-        character.id,
-        choice.item_cost_id,
-      );
-      if (!hasCostItem) {
-        this.logger.debug(
-          `Choice ${choice.id} unavailable: Missing cost item ${choice.item_cost_id}`,
-        );
-        return false; // Ha nincs meg a tárgy, amibe kerülne, nem választható
-      }
-      this.logger.debug(
-        `Required cost item ${choice.item_cost_id} found in inventory.`,
-      );
-    }
-
-    const reqStatCheck = choice.required_stat_check;
-    if (typeof reqStatCheck === 'string') {
-      this.logger.debug(`Evaluating stat requirement: "${reqStatCheck}"`);
-      const parts = reqStatCheck.match(/(\w+)\s*(>=|<=|>|<|==|!=)\s*(\d+)/);
-      if (parts) {
-        const [, stat, operator, valueStr] = parts;
+    // 3. Statisztika Feltétel Ellenőrzése (a karakter sztori-specifikus, effektekkel ellátott statjai alapján)
+    if (choice.required_stat_check) {
+      const statRegex = /(\w+)\s*([<>=!]+)\s*(\d+)/;
+      const match = choice.required_stat_check.match(statRegex);
+      if (match) {
+        const [, statName, operator, valueStr] = match;
         const requiredValue = parseInt(valueStr, 10);
-        let characterValue: number | null | undefined;
+        let characterStatValue = 0;
 
-        switch (stat.toLowerCase()) {
+        switch (statName.toLowerCase()) {
           case 'skill':
-            characterValue = character.skill;
-            break;
-          case 'health':
-            characterValue = character.health;
+            characterStatValue = character.skill ?? 0;
             break;
           case 'luck':
-            characterValue = character.luck;
+            characterStatValue = character.luck ?? 0;
             break;
           case 'stamina':
-            characterValue = character.stamina;
+            characterStatValue = character.stamina ?? 0;
+            break;
+          case 'defense':
+            characterStatValue = character.defense ?? 0;
+            break;
+          case 'level':
+            characterStatValue = character.level ?? 0;
+            break;
+          case 'xp':
+            characterStatValue = character.xp ?? 0;
             break;
           default:
-            this.logger.warn(`Unknown stat in requirement: ${stat}`);
-            return false;
+            this.logger.warn(
+              `Unknown stat '${statName}' in required_stat_check for choice ${choice.id}`,
+            );
+            return false; // Ismeretlen stat esetén ne legyen elérhető
         }
-
-        if (characterValue === null || characterValue === undefined) {
-          this.logger.debug(
-            `Stat ${stat} is null/undefined for character ${character.id}`,
-          );
-          return false;
-        }
-
-        this.logger.debug(
-          `Checking: <span class="math-inline">\{stat\} \(</span>{characterValue}) ${operator} ${requiredValue}`,
-        );
 
         let conditionMet = false;
         switch (operator) {
           case '>=':
-            conditionMet = characterValue >= requiredValue;
+            conditionMet = characterStatValue >= requiredValue;
             break;
           case '<=':
-            conditionMet = characterValue <= requiredValue;
+            conditionMet = characterStatValue <= requiredValue;
             break;
           case '>':
-            conditionMet = characterValue > requiredValue;
+            conditionMet = characterStatValue > requiredValue;
             break;
           case '<':
-            conditionMet = characterValue < requiredValue;
+            conditionMet = characterStatValue < requiredValue;
             break;
           case '==':
-            conditionMet = characterValue == requiredValue;
+          case '=':
+            conditionMet = characterStatValue === requiredValue;
             break;
           case '!=':
-            conditionMet = characterValue != requiredValue;
+            conditionMet = characterStatValue !== requiredValue;
             break;
           default:
-            this.logger.warn(`Unknown operator in requirement: ${operator}`);
+            this.logger.warn(
+              `Unknown operator '${operator}' in required_stat_check for choice ${choice.id}`,
+            );
             return false;
         }
-        this.logger.debug(
-          `Requirement ${reqStatCheck} result: ${conditionMet}`,
-        );
+
         if (!conditionMet) {
-          return false; // Ha a stat feltétel nem teljesül
+          this.logger.debug(
+            `Choice ${choice.id} unavailable: Stat check failed: ${characterStatValue} ${operator} ${requiredValue} (Stat: ${statName})`,
+          );
+          return false;
         }
       } else {
         this.logger.warn(
-          `Could not parse stat requirement string: ${reqStatCheck}`,
+          `Could not parse required_stat_check: "${choice.required_stat_check}" for choice ${choice.id}`,
         );
-        return false;
+        return false; // Hibás formátum esetén ne legyen elérhető
       }
-    } // Stat check vége
-    // Ha nem volt stat feltétel, vagy az teljesült (és más feltétel sem bukott meg):
-    return true;
+    }
+    this.logger.debug(`Choice ID ${choice.id} is available.`);
+    return true; // Ha minden feltétel teljesült (vagy nem volt feltétel)
   } // checkChoiceAvailability vége
 
-  // --- makeChoice ---
   async makeChoice(userId: number, choiceId: number): Promise<GameStateDto> {
-    this.logger.log(`Processing choice ID: ${choiceId} for user ID: ${userId}`);
-    const character = await this.characterService.findOrCreateByUserId(userId);
+    this.logger.log(
+      `[GameService.makeChoice] UserID: ${userId}, Attempting ChoiceID: ${choiceId}`,
+    );
 
-    // Ellenőrizzük a harcot (változatlan)
-    const existingCombat = await this.knex('active_combats')
-      .where({ character_id: character.id })
-      .first();
-    if (existingCombat) {
-      throw new ForbiddenException('Cannot make choices while in combat.');
-    }
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId);
+    const activeStoryProgress =
+      await this.characterService.getActiveStoryProgress(baseCharacter.id);
 
-    const currentNodeId = character.current_node_id;
-    if (!currentNodeId) {
+    if (!activeStoryProgress || activeStoryProgress.current_node_id === null) {
+      this.logger.error(
+        `[GameService.makeChoice] No active story or current node for CharacterID: ${baseCharacter.id}.`,
+      );
       throw new BadRequestException(
-        'Cannot make a choice without being at a node.',
+        'No active game session or current node to make a choice from.',
       );
     }
 
-    // Lekérdezzük az AKTUÁLIS node-ot is, hogy az effektjeit/jutalmait kezeljük
+    const currentNodeId = activeStoryProgress.current_node_id;
+    const characterForValidation: Character =
+      await this.characterService.applyPassiveEffects({
+        ...baseCharacter,
+        health: activeStoryProgress.health,
+        skill: activeStoryProgress.skill,
+        luck: activeStoryProgress.luck,
+        stamina: activeStoryProgress.stamina,
+        defense: activeStoryProgress.defense,
+        level: activeStoryProgress.level,
+        xp: activeStoryProgress.xp,
+        xp_to_next_level: activeStoryProgress.xp_to_next_level,
+        current_node_id: currentNodeId,
+        equipped_weapon_id: activeStoryProgress.equipped_weapon_id,
+        equipped_armor_id: activeStoryProgress.equipped_armor_id,
+      });
+
     const currentNode = await this.knex<StoryNode>('story_nodes')
       .where({ id: currentNodeId })
       .first();
-    if (!currentNode) {
+    if (!currentNode)
       throw new NotFoundException(`Current node ${currentNodeId} not found!`);
-    } // Extra ellenőrzés
 
-    // Választás validálása (változatlan)
     const choice = await this.knex<ChoiceRecord>('choices')
       .where({ id: choiceId, source_node_id: currentNodeId })
       .first();
-    if (!choice) {
-      throw new BadRequestException(`Invalid choice ID: ${choiceId}`);
-    }
-    if (!(await this.checkChoiceAvailability(choice, character))) {
-      // checkAvailability most már async!
+    if (!choice)
+      throw new BadRequestException(
+        `Invalid choice ID: ${choiceId} for node ${currentNodeId}`,
+      );
+
+    // --- Feltétel ellenőrzés ---
+    if (
+      !(await this.checkChoiceAvailability(
+        choice,
+        characterForValidation,
+        activeStoryProgress.id,
+      ))
+    ) {
       throw new ForbiddenException(
         'You do not meet the requirements for this choice.',
       );
     }
 
+    // --- Tárgyköltség levonása a story inventoryból ---
     if (choice.item_cost_id !== null && choice.item_cost_id !== undefined) {
       this.logger.log(
-        `Choice ${choiceId} has item cost: ${choice.item_cost_id}. Attempting to remove from inventory.`,
+        `Choice ${choiceId} (StoryProgressID: ${activeStoryProgress.id}) has item cost: ${choice.item_cost_id}. Attempting to remove from story inventory.`,
       );
-      const removedSuccessfully =
-        await this.characterService.removeItemFromInventory(
-          character.id,
-          choice.item_cost_id,
-          1,
-        );
-      if (!removedSuccessfully) {
+      const removed = await this.characterService.removeStoryItem(
+        activeStoryProgress.id,
+        choice.item_cost_id,
+        1,
+      );
+      if (!removed) {
         this.logger.error(
-          `Failed to remove cost item ${choice.item_cost_id} for choice ${choiceId} - item might have vanished?`,
+          `Failed to remove cost item ${choice.item_cost_id} for choice ${choiceId} (StoryProgressID: ${activeStoryProgress.id}).`,
         );
         throw new InternalServerErrorException('Failed to process item cost.');
       }
       this.logger.log(
-        `Item ${choice.item_cost_id} successfully removed as cost.`,
+        `Item ${choice.item_cost_id} successfully removed as cost for StoryProgressID: ${activeStoryProgress.id}.`,
       );
-      // combatLogMessages.push(`Felhasználtál egy tárgyat: ${choice.item_cost_id}`); // TODO: Tárgy nevét kiírni
     }
 
     const targetNodeId = choice.target_node_id;
-    this.logger.debug(
-      `Choice ${choiceId} valid. Target node ID: ${targetNodeId}`,
-    );
-
     const targetNode = await this.knex<StoryNode>('story_nodes')
       .where({ id: targetNodeId })
       .first();
-    if (!targetNode) {
-      throw new InternalServerErrorException('Target node missing.');
-    }
+    if (!targetNode)
+      throw new InternalServerErrorException(
+        `Target node ${targetNodeId} missing for choice ${choiceId}.`,
+      );
 
-    // --- Effekt/Jutalom Alkalmazása a FORRÁS (currentNode) alapján MIELŐTT lépünk ---
-    let healthUpdate = character.health;
-    // Health effect (az aktuális node-on, ha van)
+    // --- Effekt/Jutalom alkalmazása a jelenlegi node alapján ---
+    let newHealthForProgress = characterForValidation.health;
     if (
       currentNode.health_effect !== null &&
       currentNode.health_effect !== undefined
     ) {
-      this.logger.log(
-        `Applying health effect ${currentNode.health_effect} from current node ${currentNodeId}`,
+      newHealthForProgress = Math.max(
+        0,
+        characterForValidation.health + currentNode.health_effect,
       );
-      healthUpdate = Math.max(0, character.health + currentNode.health_effect);
     }
 
-    // Item reward (az aktuális node-on, ha van)
     if (
       currentNode.item_reward_id !== null &&
       currentNode.item_reward_id !== undefined
     ) {
       this.logger.log(
-        `Current node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id}`,
+        `Node ${currentNodeId} grants item reward ID: ${currentNode.item_reward_id} to StoryProgressID: ${activeStoryProgress.id}`,
       );
-      try {
-        await this.characterService.addItemToInventory(
-          character.id,
-          currentNode.item_reward_id,
-          1,
-        );
-        this.logger.log(
-          `Item ${currentNode.item_reward_id} added to inventory.`,
-        );
-      } catch (itemError) {
-        this.logger.error(
-          `Failed to add item reward ${currentNode.item_reward_id}: ${itemError}`,
-        );
-      }
-    }
-    // TODO: Item cost levonása (a choice alapján) itt történjen
-
-    // --- Most jön a továbblépés vagy harc indítása ---
-    if (targetNode.enemy_id) {
-      // HARC KEZDŐDIK (a cél node alapján)
+      await this.characterService.addStoryItem(
+        activeStoryProgress.id,
+        currentNode.item_reward_id,
+        1,
+      );
       this.logger.log(
-        `Choice leads to combat! Node ${targetNodeId} has enemy ID: ${targetNode.enemy_id}`,
+        `Item ${currentNode.item_reward_id} added to story inventory for StoryProgressID: ${activeStoryProgress.id}.`,
       );
-      // Karakter HP frissítése az esetleges forrás node effekt miatt
-      if (healthUpdate !== character.health) {
-        await this.characterService.updateCharacter(character.id, {
-          health: healthUpdate,
-        });
-      }
-      // Harc rekord létrehozása (változatlan)
+    }
+
+    const progressUpdates: Partial<CharacterStoryProgressRecord> = {
+      health: newHealthForProgress,
+    };
+
+    // --- Döntés végrehajtása: Harc vagy új node ---
+    if (targetNode.enemy_id) {
+      this.logger.log(
+        `Choice leads to combat at node ${targetNodeId} (StoryProgressID: ${activeStoryProgress.id})`,
+      );
+
       const enemy = await this.knex<EnemyRecord>('enemies')
         .where({ id: targetNode.enemy_id })
         .first();
-      if (!enemy) {
+      if (!enemy)
         throw new InternalServerErrorException(
-          'Enemy data missing for combat.',
+          `Enemy ${targetNode.enemy_id} not found.`,
         );
-      }
-      await this.knex('active_combats').insert({
-        character_id: character.id, // A karakter ID-ja
-        enemy_id: enemy.id, // Az ellenfél ID-ja
-        enemy_current_health: enemy.health, // Kezdő HP = Max HP az enemies táblából
-      });
-      // Node ID NEM változik még
 
-      // --- Haladás rögzítése a HARCI node-ra lépéskor ---
+      await this.knex('active_combats').insert({
+        character_id: baseCharacter.id, // FIGYELEM: később lecserélendő character_story_progress_id-ra
+        enemy_id: enemy.id,
+        enemy_current_health: enemy.health,
+      });
+
       await this.knex('player_progress').insert({
-        character_id: character.id,
-        node_id: targetNodeId, // A harcot tartalmazó node ID-ja
-        choice_id_taken: choice.id, // A választás, ami a harchoz vezetett
+        character_story_progress_id: activeStoryProgress.id,
+        node_id: targetNodeId,
+        choice_id_taken: choice.id,
       });
     } else {
-      // NINCS HARC, TOVÁBBLÉPÉS
-      this.logger.log(`Choice leads to non-combat node ${targetNodeId}`);
-      // Karakter frissítése: ÚJ node ID ÉS az esetlegesen módosult HP
-      await this.characterService.updateCharacter(character.id, {
-        current_node_id: targetNodeId,
-        health: healthUpdate, // A forrás node effektje már benne van
-      });
+      this.logger.log(
+        `Choice leads to non-combat node ${targetNodeId} (StoryProgressID: ${activeStoryProgress.id})`,
+      );
+      progressUpdates.current_node_id = targetNodeId;
 
-      // --- Haladás rögzítése a normál node-ra lépéskor ---
       await this.knex('player_progress').insert({
-        character_id: character.id,
-        node_id: targetNodeId, // Az új, elért node ID-ja
-        choice_id_taken: choice.id, // A választás, ami ide vezetett
+        character_story_progress_id: activeStoryProgress.id,
+        node_id: targetNodeId,
+        choice_id_taken: choice.id,
       });
     }
 
-    // Visszaadjuk az új állapotot
-    this.logger.log(
-      `Choice processed for user ${userId}. Fetching new game state.`,
-    );
-    return this.getCurrentGameState(userId); // Ez lekéri az aktuális állapotot (ami lehet harc vagy az új node)
-  } // makeChoice vége
+    // --- Story progress frissítése ---
+    if (Object.keys(progressUpdates).length > 0) {
+      this.logger.debug(
+        `Updating story progress ${activeStoryProgress.id} with: ${JSON.stringify(progressUpdates)}`,
+      );
+      await this.characterService.updateStoryProgress(
+        activeStoryProgress.id,
+        progressUpdates,
+      );
+    }
+
+    return this.getCurrentGameState(userId);
+  }
+  // makeChoice vége
 
   async useItemOutOfCombat(
     userId: number,
@@ -642,7 +647,10 @@ export class GameService {
     }
 
     // 2. Van-e ilyen tárgya és használható-e?
-    const hasItem = await this.characterService.hasItem(character.id, itemId);
+    const hasItem = await this.characterService.hasStoryItem(
+      character.id,
+      itemId,
+    );
     if (!hasItem) {
       this.logger.warn(
         `User ${userId} tried to use item ${itemId} but doesn't have it.`,
@@ -680,7 +688,7 @@ export class GameService {
             health: newHealth,
           });
           // Tárgy eltávolítása
-          const removed = await this.characterService.removeItemFromInventory(
+          const removed = await this.characterService.removeStoryItem(
             character.id,
             itemId,
             1,
@@ -826,24 +834,38 @@ export class GameService {
     return { nodes: mapNodes, edges: uniqueEdges };
   }
 
-  async getPublishedStories(): Promise<StoryInfoDto[]> {
-    this.logger.log('Fetching published stories for players');
-    try {
-      const stories = await this.knex('stories') // A tábla neve 'stories'
-        .where({ is_published: true })
-        .select('id', 'title', 'description')
-        .orderBy('title', 'asc'); // Cím szerint rendezve
+  async getPublishedStories(userId: number): Promise<PlayerStoryListItemDto[]> {
+    this.logger.log(
+      `Workspaceing published stories with progress for user ID: ${userId}`,
+    );
+    const character = await this.characterService.findOrCreateByUserId(userId);
 
-      // Manuális mappolás DTO-ra, ha a DB oszlopnevek eltérnek vagy extra logika kell
-      // Jelen esetben a select miatt a nevek egyeznek a DTO-val (feltéve, hogy a DTO-ban is id, title, description van)
-      return stories.map((s) => ({
-        id: s.id,
-        title: s.title,
-        description: s.description,
-      }));
-    } catch (error) {
-      this.logger.error('Failed to fetch published stories', error.stack);
-      throw new InternalServerErrorException('Could not retrieve stories.');
-    }
+    const stories = await this.knex('stories')
+      .select(
+        'stories.id as storyId',
+        'stories.title',
+        'stories.description',
+        'csp.current_node_id as currentNodeIdInStory',
+        'csp.last_played_at as lastPlayedAt',
+        'csp.is_active as isActive',
+      )
+      // Arrow function használata a join callbackben, hogy a 'this.knex' elérhető legyen
+      .leftJoin('character_story_progress as csp', (join) => {
+        join
+          .on('stories.id', '=', 'csp.story_id')
+          .andOn('csp.character_id', '=', this.knex.raw('?', [character.id]));
+      })
+      .where('stories.is_published', true)
+      .orderBy('stories.id', 'asc');
+
+    return stories.map((s) => ({
+      id: s.storyId,
+      title: s.title,
+      description: s.description,
+      // Ha nincs progresszió (csp mezők null-ok), akkor azok null-ok maradnak a DTO-ban
+      lastPlayedAt: s.lastPlayedAt ? new Date(s.lastPlayedAt) : null,
+      currentNodeIdInStory: s.currentNodeIdInStory,
+      isActive: s.isActive ?? false,
+    }));
   }
 } // GameService vége
