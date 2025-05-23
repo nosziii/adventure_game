@@ -116,9 +116,41 @@ export interface AdminCreateStoryPayload {
   isPublished?: boolean;
 }
 
+export enum AbilityType {
+  PASSIVE_STAT = "PASSIVE_STAT",
+  ACTIVE_COMBAT_ACTION = "ACTIVE_COMBAT_ACTION",
+  PASSIVE_COMBAT_MODIFIER = "PASSIVE_COMBAT_MODIFIER",
+}
+
+// Ability adatok az admin listához és szerkesztéshez
+export interface AdminAbilityData {
+  id: number;
+  name: string;
+  description: string;
+  type: AbilityType; // Használjuk az enumot
+  effectString: string | null;
+  talentPointCost: number;
+  levelRequirement: number;
+  prerequisites: any | null; // JSONB, lehet string[] vagy number[]
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Ability létrehozásához payload
+export interface AdminCreateAbilityPayload {
+  name: string;
+  description: string;
+  type: AbilityType;
+  effectString?: string | null;
+  talentPointCost?: number; // Backend defaultol, de frontendről is küldhetjük
+  levelRequirement?: number; // Backend defaultol
+  prerequisites?: any | null;
+}
+
 // Node frissítéséhez küldendő adatok (minden mező opcionális)
 export type AdminUpdateNodePayload = Partial<AdminCreateNodePayload>;
 export type AdminUpdateChoicePayload = Partial<AdminCreateChoicePayload>;
 export type AdminUpdateItemPayload = Partial<AdminCreateItemPayload>;
 export type AdminUpdateEnemyPayload = Partial<AdminCreateEnemyPayload>;
 export type AdminUpdateStoryPayload = Partial<AdminCreateStoryPayload>;
+export type AdminUpdateAbilityPayload = Partial<AdminCreateAbilityPayload>;
