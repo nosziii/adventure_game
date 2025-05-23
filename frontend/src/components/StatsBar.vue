@@ -85,18 +85,16 @@ const handleLogout = () => {
 
 /* .themed-button stílus a GameView-ból (vagy globálisból) öröklődhet,
    vagy itt definiáljuk újra/felülírjuk. */
-.themed-button { /* Alap stílus a gomboknak itt is */
-  padding: 6px 12px;
-  font-size: 0.85em;
-  color: var(--button-text); /* Sötét szöveg, ha az accent világos */
-  border: none;
-  border-radius: 4px;
+.themed-button {
+  background: var(--accent-secondary); /* Sötétebb narancs/bronz */
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 8px 15px;
+  border-radius: 5px;
   cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
   font-family: 'Cinzel', serif;
   font-weight: bold;
-  transition: background-color 0.2s, transform 0.1s ease;
+  transition: background-color 0.3s ease, transform 0.1s ease;
 }
 .admin-button-stats {
   background-color: var(--accent-secondary); /* Bronzosabb */

@@ -176,5 +176,27 @@ exports.seed = async function (knex) {
     //   is_published: false
     // }
 ]);
+
+const ABILITIES_TABLE = 'abilities'
+
+await knex(ABILITIES_TABLE).del(); // Régi képességek törlése
+await knex(ABILITIES_TABLE).insert([
+  { 
+    id: 1, name: 'Kitartás I', description: 'Növeli a maximális életerőt (Stamina) +10 ponttal.', 
+    type: 'PASSIVE_STAT', effect_string: 'stamina+10', 
+    talent_point_cost: 1, level_requirement: 2 
+  },
+  { 
+    id: 2, name: 'Élesebb Penge I', description: 'Növeli a fegyverek sebzését +1 ponttal.', 
+    type: 'PASSIVE_COMBAT_MODIFIER', effect_string: 'weapon_damage_bonus+1', 
+    talent_point_cost: 2, level_requirement: 3 
+  },
+  { 
+    id: 3, name: 'Erős Vágás', description: 'Egy erőteljes támadás, ami több állóképességbe kerül, de nagyobbat sebez.', 
+    type: 'ACTIVE_COMBAT_ACTION', effect_string: 'damage_multiplier:1.5;stamina_cost:15', // Ez még csak példa string
+    talent_point_cost: 3, level_requirement: 5 
+  },
+]);
+console.log('Abilities seeded.');
   console.log('Seeding complete!');
 };

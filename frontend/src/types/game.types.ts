@@ -23,6 +23,7 @@ export interface CharacterStats {
   xp: number;
   xpToNextLevel: number;
   defense: number | null;
+  talentPointsAvailable?: number | null;
 }
 
 export interface EnemyData {

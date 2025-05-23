@@ -19,6 +19,7 @@ const passport_1 = require("@nestjs/passport");
 const character_service_1 = require("./character.service");
 const class_validator_1 = require("class-validator");
 const game_service_1 = require("./game/game.service");
+const spend_talent_point_dto_1 = require("./character/dto/spend-talent-point.dto");
 class EquipItemDto {
     itemId;
 }
@@ -129,6 +130,18 @@ let CharacterController = CharacterController_1 = class CharacterController {
         this.logger.log(`User ${userId} (Character ${character.id}) requested to reset story ${storyId}`);
         await this.characterService.resetStoryProgress(character.id, storyId);
     }
+    async spendTalentPoint(req, spendTalentPointDto) {
+        const userId = req.user.id;
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        if (!baseCharacter) {
+            throw new common_1.NotFoundException('Character not found for user.');
+        }
+        this.logger.log(`User ${userId} (Character ${baseCharacter.id}) spending talent point on: ${spendTalentPointDto.statName}`);
+        await this.characterService.spendTalentPointOnStat(baseCharacter.id, spendTalentPointDto.statName);
+        this.logger.log(`Talent point spent for char ${baseCharacter.id}. Fetching updated game state.`);
+        const newGameState = await this.gameService.getCurrentGameState(userId);
+        return newGameState;
+    }
 };
 exports.CharacterController = CharacterController;
 __decorate([
@@ -165,6 +178,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "resetStory", null);
+__decorate([
+    (0, common_1.Post)('spend-talent-point'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, spend_talent_point_dto_1.SpendTalentPointDto]),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "spendTalentPoint", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([
     (0, common_1.Controller)('character'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),

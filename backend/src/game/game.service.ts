@@ -56,6 +56,7 @@ export class GameService {
       xp: character.xp,
       xpToNextLevel: character.xp_to_next_level,
       defense: character.defense,
+      talentPointsAvailable: character.talent_points_available,
     };
   }
   // A GameController ezt fogja hívni
@@ -194,6 +195,7 @@ export class GameService {
       current_node_id: activeStoryProgress.current_node_id,
       equipped_weapon_id: activeStoryProgress.equipped_weapon_id,
       equipped_armor_id: activeStoryProgress.equipped_armor_id,
+      talent_points_available: activeStoryProgress.talent_points_available,
     };
     characterForState =
       await this.characterService.applyPassiveEffects(characterForState); // Effektek alkalmazása

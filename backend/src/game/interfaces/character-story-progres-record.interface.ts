@@ -15,6 +15,7 @@ export interface CharacterStoryProgressRecord {
   equipped_armor_id: number | null;
   last_played_at: Date;
   is_active: boolean;
+  talent_points_available: number;
   created_at: Date;
   updated_at: Date;
 }

@@ -10,6 +10,7 @@ class CharacterStatsDto {
     level;
     xp;
     xpToNextLevel;
+    talentPointsAvailable;
     defense;
 }
 exports.CharacterStatsDto = CharacterStatsDto;

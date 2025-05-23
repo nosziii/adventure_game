@@ -14,6 +14,7 @@ import type {
   CombatActionDetails,
 } from "../types/game.types";
 import { useStoryStore } from "./story";
+import type { SpendableStatName } from "../types/character.dto.types";
 
 interface GameState {
   currentNode: StoryNodeData | null;
@@ -101,6 +102,7 @@ export const useGameStore = defineStore("game", {
             xp: data.character.xp,
             xpToNextLevel: data.character.xpToNextLevel,
             defense: data.character.defense,
+            talentPointsAvailable: data.character.talentPointsAvailable,
           }
         : null;
       this.combatState = data.combat;
@@ -468,6 +470,51 @@ export const useGameStore = defineStore("game", {
           err.response?.data?.message ||
           `Nem sikerült újrakezdeni a(z) ${storyId} ID-jú sztorit.`;
         return false; // Jelezzük a hibát
+      } finally {
+        this.loading = false;
+      }
+    },
+    async spendTalentPoint(statName: SpendableStatName): Promise<boolean> {
+      if (
+        !this.characterStats ||
+        (this.characterStats.talentPointsAvailable ?? 0) < 1
+      ) {
+        this.error = "Nincs elkölthető tehetségpontod.";
+        console.warn(
+          "[GameStore] Attempted to spend talent point with none available."
+        );
+        return false;
+      }
+
+      this.loading = true; // Általános loading state
+      this.error = null;
+      console.log(
+        `[GameStore] Attempting to spend talent point on: ${statName}`
+      );
+
+      try {
+        // A backend CharacterStatsDto-t ad vissza, de a teljes GameStateDto jobb lenne
+        // a konzisztens frissítéshez. Tegyük fel, hogy a controller a teljes GameStateDto-t adja vissza.
+        // Ha csak CharacterStatsDto-t ad, akkor a _updateStateFromResponse-t módosítani kell,
+        // vagy csak a karakter statokat frissítjük itt.
+        // Most feltételezzük, hogy a backend a teljes GameStateDto-t adja vissza a /spend-talent-point végponton is.
+        const response = await apiClient.post<GameStateResponse>(
+          "/character/spend-talent-point", // A backend végpontod
+          { statName } // A SpendTalentPointDto-nak megfelelően
+        );
+
+        this._updateStateFromResponse(response.data); // Frissítjük a teljes állapotot
+        console.log(
+          `Talent point spent on ${statName} successfully. New state:`,
+          response.data
+        );
+        return true;
+      } catch (err: any) {
+        console.error(`Failed to spend talent point on ${statName}:`, err);
+        this.error =
+          err.response?.data?.message ||
+          `Nem sikerült pontot költeni erre: ${statName}.`;
+        return false;
       } finally {
         this.loading = false;
       }

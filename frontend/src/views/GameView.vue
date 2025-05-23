@@ -3,11 +3,15 @@
     <div class="game-view">
       <StatsBar :stats="gameStore.getCharacterStats" />
       <div class="game-actions-bar">
-          <button @click="toggleMinimapHandler" class="minimap-toggle-button">
+          <button @click="toggleMinimapHandler" class="themed-button minimap-toggle-button">
               {{ gameStore.isMinimapVisible ? 'Minimap Bezárása' : 'Minimap Mutatása' }}
           </button>
+          <button @click="toggleCharacterSheet" class="themed-button char-sheet-button">
+          Karakterlap
+        </button>
       </div>
       <PlayerMinimap v-if="gameStore.isMinimapVisible" />
+       <CharacterSheetModal v-if="isCharacterSheetVisible" @close="toggleCharacterSheet" />
 
       <div v-if="gameStore.isLoading && !gameStore.isInCombat && !gameStore.isLoadingMinimap" class="loading">
         Töltés...
@@ -100,12 +104,23 @@ import InventoryDisplay from '../components/InventoryDisplay.vue'
 // import CombatDisplay from '@/components/CombatDisplay.vue'; // Később kell majd
 import PlayerMinimap from '../components/PlayerMinimap.vue'
 import type { CombatActionDetails } from '../types/game.types'
+import CharacterSheetModal from '../components/CharacterSheetModal.vue'
 
 const gameStore = useGameStore()
+const isCharacterSheetVisible = ref(false); // Új állapot a modalhoz
 
 onMounted(() => {
   gameStore.fetchGameState();
 });
+
+const toggleCharacterSheet = () => {
+  isCharacterSheetVisible.value = !isCharacterSheetVisible.value;
+  if (isCharacterSheetVisible.value) {
+      // Ha megnyitjuk, frissíthetjük a game state-et, hogy biztosan a legfrissebb statok legyenek
+      // Bár a store már reaktív, egy explicit fetch sosem árt, ha pl. háttérben változhatna
+      // gameStore.fetchGameState(); // Opcionális
+  }
+};
 
 // Ez a metódus fogadja az eseményt a ChoiceList-től
 const handleChoiceSelection = async (choiceId: number) => {
@@ -336,4 +351,22 @@ hr {
 .game-content {
     padding-top: 20px;
 }
+
+.char-sheet-button {
+    background-color: #6f42c1; /* Lila gomb */
+    margin-left: 10px; /* Térköz a minimap gomb mellett */
+}
+.char-sheet-button:hover:not(:disabled) {
+    background-color: #5a2d9e;
+}
+
+.minimap-toggle-button {
+    background-color: #6f42c1; /* Lila gomb */
+    margin-left: 10px; /* Térköz a minimap gomb mellett */
+}
+
+.minimap-toggle-button:hover:not(:disabled) {
+    background-color: #5a2d9e;
+}
+
 </style>

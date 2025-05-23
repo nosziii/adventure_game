@@ -1,6 +1,7 @@
 import { Knex } from 'knex';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
-import { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
+import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
+import { SpendableStatName } from './character/dto/spend-talent-point.dto';
 export interface Character {
     id: number;
     user_id: number;
@@ -16,6 +17,7 @@ export interface Character {
     created_at: Date;
     updated_at: Date;
     defense: number | null;
+    talent_points_available: number | null;
     equipped_weapon_id: number | null;
     equipped_armor_id: number | null;
 }
@@ -39,8 +41,10 @@ export declare class CharacterService {
     addXp(characterId: number, xpToAdd: number): Promise<{
         leveledUp: boolean;
         messages: string[];
+        updatedProgress?: CharacterStoryProgressRecord;
     }>;
     getActiveStoryProgress(characterId: number): Promise<CharacterStoryProgressRecord | null>;
     startOrContinueStory(characterId: number, storyId: number): Promise<CharacterStoryProgressRecord>;
     resetStoryProgress(characterId: number, storyId: number): Promise<void>;
+    spendTalentPointOnStat(characterId: number, statName: SpendableStatName): Promise<CharacterStoryProgressRecord>;
 }

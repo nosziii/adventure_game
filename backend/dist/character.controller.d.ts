@@ -2,6 +2,7 @@ import { CharacterService } from './character.service';
 import { CharacterStatsDto } from './game/dto/character-stats.dto';
 import { GameService } from './game/game.service';
 import { GameStateDto } from './game/dto/game-state.dto';
+import { SpendTalentPointDto } from './character/dto/spend-talent-point.dto';
 declare class EquipItemDto {
     itemId: number;
 }
@@ -17,5 +18,6 @@ export declare class CharacterController {
     unequip(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
     startStory(req: any, storyId: number): Promise<GameStateDto>;
     resetStory(req: any, storyId: number): Promise<void>;
+    spendTalentPoint(req: any, spendTalentPointDto: SpendTalentPointDto): Promise<GameStateDto>;
 }
 export {};

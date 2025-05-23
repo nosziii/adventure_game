@@ -19,6 +19,7 @@ import { CharacterStatsDto } from './game/dto/character-stats.dto'; // Használj
 import { IsInt, IsNotEmpty, IsIn } from 'class-validator'; // Validációhoz
 import { GameService } from './game/game.service';
 import { GameStateDto } from './game/dto/game-state.dto';
+import { SpendTalentPointDto } from './character/dto/spend-talent-point.dto'; // DTO a talent point költéshez
 
 // DTO az equip kéréshez
 class EquipItemDto {
@@ -199,5 +200,38 @@ export class CharacterController {
     );
     await this.characterService.resetStoryProgress(character.id, storyId);
     // Nincs visszatérési érték, a 204-et a @HttpCode állítja be
+  }
+
+  @Post('spend-talent-point')
+  async spendTalentPoint(
+    @Request() req,
+    @Body(ValidationPipe) spendTalentPointDto: SpendTalentPointDto,
+  ): Promise<GameStateDto> {
+    // <-- VISSZATÉRÉSI TÍPUS GameStateDto!
+    const userId = req.user.id;
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId);
+    if (!baseCharacter) {
+      // Ez az ág valószínűleg sosem fut le a findOrCreate miatt
+      throw new NotFoundException('Character not found for user.');
+    }
+
+    this.logger.log(
+      `User ${userId} (Character ${baseCharacter.id}) spending talent point on: ${spendTalentPointDto.statName}`,
+    );
+
+    // Pont elköltése a CharacterService-en keresztül (ez a character_story_progress-t frissíti)
+    await this.characterService.spendTalentPointOnStat(
+      baseCharacter.id, // A service ezen belül keresi az aktív progress-t
+      spendTalentPointDto.statName,
+    );
+
+    // Sikeres pontköltés után kérjük le a teljes, frissített játékállapotot
+    this.logger.log(
+      `Talent point spent for char ${baseCharacter.id}. Fetching updated game state.`,
+    );
+    const newGameState = await this.gameService.getCurrentGameState(userId);
+
+    return newGameState; // <-- TELJES GameStateDto VISSZAADÁSA
   }
 }

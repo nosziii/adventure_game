@@ -7,5 +7,6 @@ export class CharacterStatsDto {
   level: number;
   xp: number;
   xpToNextLevel: number;
+  talentPointsAvailable?: number | null;
   defense: number | null;
 }

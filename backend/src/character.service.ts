@@ -12,9 +12,10 @@ import { Knex } from 'knex';
 import { KNEX_CONNECTION } from './database/database.module'; // Ellenőrizd az útvonalat!
 import { InventoryItem } from './types/character.interfaces';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
-import { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
+import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
 import { StoryRecord } from './game/interfaces/story-record.interface';
 import { ItemRecord } from './game/interfaces/item-record.interface';
+import { SpendableStatName } from './character/dto/spend-talent-point.dto';
 
 export interface Character {
   id: number;
@@ -31,6 +32,7 @@ export interface Character {
   created_at: Date;
   updated_at: Date;
   defense: number | null;
+  talent_points_available: number | null;
   equipped_weapon_id: number | null;
   equipped_armor_id: number | null;
 }
@@ -45,6 +47,13 @@ const DEFAULT_DEFENSE = 0;
 const DEFAULT_LEVEL = 1;
 const DEFAULT_XP = 0;
 const DEFAULT_XP_TO_NEXT_LEVEL = 100;
+
+const STAT_INCREASE_PER_TALENT_POINT: Record<SpendableStatName, number> = {
+  skill: 1,
+  luck: 1,
+  defense: 1,
+  stamina: 5, // Pl. 1 pontért +5 stamina/maxHP
+};
 
 @Injectable()
 export class CharacterService {
@@ -503,85 +512,96 @@ export class CharacterService {
 
   // XP Hozzáadása és Szintlépés Kezelése ---
   async addXp(
-    characterId: number,
+    characterId: number, // A base character ID-ja
     xpToAdd: number,
-  ): Promise<{ leveledUp: boolean; messages: string[] }> {
+  ): Promise<{
+    leveledUp: boolean;
+    messages: string[];
+    updatedProgress?: CharacterStoryProgressRecord; // Visszaadjuk a frissített progress recordot
+  }> {
     if (xpToAdd <= 0) {
-      return { leveledUp: false, messages: [] }; // Ne csinálj semmit, ha nincs XP
+      return { leveledUp: false, messages: [] };
     }
     this.logger.log(
-      `Attempting to add ${xpToAdd} XP to character ${characterId}`,
+      `[CharacterService.addXp] Attempting to add ${xpToAdd} XP for baseCharacterId ${characterId}`,
     );
 
-    const character = await this.findById(characterId); // Lekérdezzük a karaktert (effektek nélkül?) Elég lehet a DB adat. Legyen findById.
-    if (!character) {
-      this.logger.error(`Cannot add XP, character ${characterId} not found.`);
-      throw new NotFoundException('Character not found to add XP.');
+    const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+    if (!activeStoryProgress) {
+      this.logger.warn(
+        `[CharacterService.addXp] No active story progress found for character ${characterId} to add XP to.`,
+      );
+      return {
+        leveledUp: false,
+        messages: ['Nincs aktív sztori, amihez XP-t lehetne adni.'],
+      };
     }
+    this.logger.debug(
+      `[CharacterService.addXp] Found active story progress ID: ${activeStoryProgress.id}. Current Lvl: ${activeStoryProgress.level}, XP: ${activeStoryProgress.xp}/${activeStoryProgress.xp_to_next_level}`,
+    );
 
-    let currentXp = character.xp + xpToAdd;
-    let currentLevel = character.level;
-    let currentXpToNext = character.xp_to_next_level;
-    let currentSkill = character.skill ?? 0; // Null kezelés
-    let currentLuck = character.luck ?? 0;
-    let currentStamina = character.stamina ?? 100; // Alap max HP?
-    let currentHealth = character.health; // Jelenlegi HP
+    let currentXp = activeStoryProgress.xp + xpToAdd;
+    let currentLevel = activeStoryProgress.level;
+    let currentXpToNext = activeStoryProgress.xp_to_next_level;
+    let currentTalentPoints = activeStoryProgress.talent_points_available ?? 0;
+
+    // A stamina és health az activeStoryProgress-ből jön és azt frissítjük
+    let currentStamina = activeStoryProgress.stamina;
+    let currentHealth = activeStoryProgress.health; // Az aktuális HP-t is frissítjük, ha a stamina nő
 
     let leveledUp = false;
     const levelUpMessages: string[] = [];
+    const pointsPerLevel = 3; // Tehetségpontok szintlépésenként
+    const staminaIncreasePerLevel = 10; // Fix stamina növekedés szintlépésenként
 
-    // Szintlépés ciklus (ha több szintet is lépne egyszerre)
     while (currentXp >= currentXpToNext) {
       leveledUp = true;
-      currentLevel++; // Szint növelése
-      const xpOver = currentXp - currentXpToNext; // XP a szintlépés felett
-      currentXp = xpOver; // Az új XP a maradék lesz
+      currentLevel++;
+      const xpOver = currentXp - currentXpToNext;
+      currentXp = xpOver;
+      // Új xp_to_next_level számítása (a példád alapján, vagy saját képlet)
+      currentXpToNext = Math.floor(100 * Math.pow(1.5, currentLevel - 1));
 
-      // Új xp_to_next_level számítása (példa: 100 * 1.5^(szint-1))
-      const newXpToNext = Math.floor(100 * Math.pow(1.5, currentLevel - 1));
-      currentXpToNext = newXpToNext;
+      // 1. Fix Stamina (és HP) növelés
+      currentStamina += staminaIncreasePerLevel;
+      currentHealth = currentStamina; // HP feltöltése az új maximumra
+      levelUpMessages.push(
+        `Állóképességed (Stamina/MaxHP) nőtt +${staminaIncreasePerLevel}-el! Jelenlegi: ${currentStamina}. Életerőd teljesen visszatöltődött!`,
+      );
 
-      // Stat növelések (példa)
-      const skillIncrease = 1;
-      const luckIncrease = 2;
-      const staminaIncrease = 10; // Max HP növelés
+      // 2. Tehetségpontok adása
+      currentTalentPoints += pointsPerLevel;
 
-      currentSkill += skillIncrease;
-      currentLuck += luckIncrease;
-      currentStamina += staminaIncrease;
-      // Szintlépéskor gyógyuljon max HP-ra?
-      currentHealth = currentStamina;
-
-      const levelUpMsg = `SZINTLÉPÉS! Elérted a ${currentLevel}. szintet! Skill+${skillIncrease}, Luck+${luckIncrease}, Stamina+${staminaIncrease}. Életerő visszatöltve!`;
+      levelUpMessages.push(
+        `SZINTLÉPÉS! Elérted a ${currentLevel}. szintet! Kaptál ${pointsPerLevel} tehetségpontot.`,
+      );
       this.logger.log(
-        `Character ${characterId} leveled up to ${currentLevel}.`,
-      );
-      levelUpMessages.push(levelUpMsg);
-    } // while vége
-
-    // Adatbázis frissítése az új értékekkel
-    try {
-      const updates: Partial<Character> = {
-        level: currentLevel,
-        xp: currentXp,
-        xp_to_next_level: currentXpToNext,
-        skill: currentSkill,
-        luck: currentLuck,
-        stamina: currentStamina, // Frissítjük a max HP-t (stamina)
-        health: currentHealth, // Frissítjük az aktuális HP-t is (gyógyulás)
-      };
-      await this.updateCharacter(characterId, updates); // Használjuk a meglévő update-et
-      this.logger.log(`Character ${characterId} XP/Level/Stats updated.`);
-      return { leveledUp, messages: levelUpMessages };
-    } catch (error) {
-      this.logger.error(
-        `Failed to update character ${characterId} after XP gain/level up: ${error}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Failed to save character progression.',
+        `StoryProgress ${activeStoryProgress.id} leveled up to ${currentLevel}. Gained ${pointsPerLevel} talent points. Stamina increased by ${staminaIncreasePerLevel}.`,
       );
     }
+
+    const updates: Partial<CharacterStoryProgressRecord> = {
+      level: currentLevel,
+      xp: currentXp,
+      xp_to_next_level: currentXpToNext,
+      talent_points_available: currentTalentPoints,
+      stamina: currentStamina,
+      health: currentHealth, // Fontos, hogy a HP-t is frissítsük az új staminára
+    };
+
+    this.logger.debug(
+      `[CharacterService.addXp] Updating story progress ID ${activeStoryProgress.id} with: ${JSON.stringify(updates)}`,
+    );
+    const updatedProgressRecord = await this.updateStoryProgress(
+      activeStoryProgress.id,
+      updates,
+    );
+
+    return {
+      leveledUp,
+      messages: levelUpMessages,
+      updatedProgress: updatedProgressRecord,
+    };
   } // addXp vége
 
   async getActiveStoryProgress(
@@ -794,7 +814,60 @@ export class CharacterService {
     });
   }
 
-  // TODO: async resetStoryProgress(characterId: number, storyId: number): Promise<void>
-  // Ez törölné a character_story_progress, character_story_inventory, player_progress bejegyzéseket
-  // az adott characterId + storyId pároshoz, és újra létrehozná az alap character_story_progress-t.
+  async spendTalentPointOnStat(
+    characterId: number, // Base character ID
+    statName: SpendableStatName,
+  ): Promise<CharacterStoryProgressRecord> {
+    // Visszaadjuk a frissített progress-t
+    this.logger.log(
+      `Character ${characterId} attempting to spend 1 talent point on stat: ${statName}`,
+    );
+
+    const activeStoryProgress = await this.getActiveStoryProgress(characterId);
+    if (!activeStoryProgress) {
+      throw new NotFoundException(
+        'No active story progress found for character to spend talent points.',
+      );
+    }
+
+    if ((activeStoryProgress.talent_points_available ?? 0) < 1) {
+      this.logger.warn(
+        `Character progress ${activeStoryProgress.id} has no talent points available.`,
+      );
+      throw new BadRequestException('Nincs elkölthető tehetségpontod.');
+    }
+
+    const pointsToDecrease = 1; // Mindig 1 pontot költünk
+    const currentStatValue = activeStoryProgress[statName] ?? 0; // Null kezelés, ha a stat lehet null
+    const increaseAmount = STAT_INCREASE_PER_TALENT_POINT[statName];
+
+    if (increaseAmount === undefined) {
+      this.logger.error(
+        `Invalid statName "${statName}" provided for spending talent point.`,
+      );
+      throw new BadRequestException(`Érvénytelen statisztika: ${statName}`);
+    }
+
+    const newStatValue = currentStatValue + increaseAmount;
+    const newTalentPointsAvailable =
+      (activeStoryProgress.talent_points_available ?? 0) - pointsToDecrease;
+
+    const updates: Partial<CharacterStoryProgressRecord> = {
+      [statName]: newStatValue,
+      talent_points_available: newTalentPointsAvailable,
+    };
+
+    // Ha a stamina nőtt, a health-et is fel kell tölteni az új maximumra
+    if (statName === 'stamina') {
+      updates.health = newStatValue; // Az új stamina érték lesz az új maxHP és egyben az új HP
+      this.logger.log(
+        `Stamina increased to ${newStatValue}, health refilled to ${newStatValue}.`,
+      );
+    }
+
+    this.logger.debug(
+      `Updating story progress ${activeStoryProgress.id} after spending talent point. Updates: ${JSON.stringify(updates)}`,
+    );
+    return this.updateStoryProgress(activeStoryProgress.id, updates);
+  }
 }
