@@ -147,6 +147,34 @@ export interface AdminCreateAbilityPayload {
   prerequisites?: any | null;
 }
 
+export interface AdminArchetypeData {
+  id: number;
+  name: string;
+  description: string;
+  iconPath: string | null;
+  baseHealthBonus: number;
+  baseSkillBonus: number;
+  baseLuckBonus: number;
+  baseStaminaBonus: number;
+  baseDefenseBonus: number;
+  startingAbilityIds: number[] | null; // JSONB-ből number[] lesz
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Character Archetype létrehozásához payload
+export interface AdminCreateArchetypePayload {
+  name: string;
+  description: string;
+  iconPath?: string | null;
+  baseHealthBonus?: number;
+  baseSkillBonus?: number;
+  baseLuckBonus?: number;
+  baseStaminaBonus?: number;
+  baseDefenseBonus?: number;
+  startingAbilityIds?: number[] | null;
+}
+
 // Node frissítéséhez küldendő adatok (minden mező opcionális)
 export type AdminUpdateNodePayload = Partial<AdminCreateNodePayload>;
 export type AdminUpdateChoicePayload = Partial<AdminCreateChoicePayload>;
@@ -154,3 +182,4 @@ export type AdminUpdateItemPayload = Partial<AdminCreateItemPayload>;
 export type AdminUpdateEnemyPayload = Partial<AdminCreateEnemyPayload>;
 export type AdminUpdateStoryPayload = Partial<AdminCreateStoryPayload>;
 export type AdminUpdateAbilityPayload = Partial<AdminCreateAbilityPayload>;
+export type AdminUpdateArchetypePayload = Partial<AdminCreateArchetypePayload>;

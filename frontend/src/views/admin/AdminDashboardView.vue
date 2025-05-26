@@ -42,6 +42,9 @@
             <span class="icon">✨</span> Képességek
           </router-link>
         </li>
+        <li><router-link to="/admin/archetypes">
+          <span class="icon">🔮</span>Karakter Archetípusok Kezelése
+        </router-link></li>
       </ul>
     </nav>
   </div>

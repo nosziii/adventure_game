@@ -15,6 +15,8 @@ import { AdminStoriesController } from './stories/stories.controller';
 import { AdminStoriesService } from './stories/stories.service';
 import { AdminAbilitiesController } from './abilities/abilities.controller';
 import { AdminAbilitiesService } from './abilities/abilities.service';
+import { AdminArchetypesController } from './archetypes/archetypes.controller';
+import { AdminArchetypesService } from './archetypes/archetypes.service';
 
 @Module({
   // imports: [AuthModule, CharacterModule], csak majd ha szükség lesz a providers-re
@@ -25,6 +27,7 @@ import { AdminAbilitiesService } from './abilities/abilities.service';
     AdminEnemiesController,
     AdminStoriesController,
     AdminAbilitiesController,
+    AdminArchetypesController,
   ],
   providers: [
     AdminNodesService,
@@ -33,6 +36,7 @@ import { AdminAbilitiesService } from './abilities/abilities.service';
     AdminEnemiesService,
     AdminStoriesService,
     AdminAbilitiesService,
+    AdminArchetypesService,
   ],
 })
 export class AdminModule {}

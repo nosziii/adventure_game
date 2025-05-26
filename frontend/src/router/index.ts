@@ -30,6 +30,9 @@ import AdminStoryEditView from "../views/admin/stories/AdminStoryEditView.vue";
 import AdminAbilityListView from "../views/admin/abilities/AdminAbilityListView.vue";
 import AdminAbilityEditView from "../views/admin/abilities/AdminAbilityEditView.vue";
 
+import AdminArchetypeListView from "../views/admin/archetypes/AdminArchetypeListView.vue";
+import AdminArchetypeEditView from "../views/admin/archetypes/AdminArchetypeEditView.vue";
+
 import AdminMapView from "../views/admin/map/AdminMapView.vue";
 
 import DashboardView from "../views/DashboardView.vue";
@@ -162,6 +165,21 @@ const router = createRouter({
           path: "abilities/:id/edit",
           name: "admin-abilities-edit",
           component: AdminAbilityEditView,
+        },
+        {
+          path: "archetypes",
+          name: "admin-archetypes-list",
+          component: AdminArchetypeListView,
+        },
+        {
+          path: "archetypes/new",
+          name: "admin-archetypes-new",
+          component: AdminArchetypeEditView,
+        },
+        {
+          path: "archetypes/:id/edit",
+          name: "admin-archetypes-edit",
+          component: AdminArchetypeEditView,
         },
       ],
     },

@@ -20,6 +20,8 @@ const stories_controller_1 = require("./stories/stories.controller");
 const stories_service_1 = require("./stories/stories.service");
 const abilities_controller_1 = require("./abilities/abilities.controller");
 const abilities_service_1 = require("./abilities/abilities.service");
+const archetypes_controller_1 = require("./archetypes/archetypes.controller");
+const archetypes_service_1 = require("./archetypes/archetypes.service");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
@@ -32,6 +34,7 @@ exports.AdminModule = AdminModule = __decorate([
             enemies_controller_1.AdminEnemiesController,
             stories_controller_1.AdminStoriesController,
             abilities_controller_1.AdminAbilitiesController,
+            archetypes_controller_1.AdminArchetypesController,
         ],
         providers: [
             nodes_service_1.AdminNodesService,
@@ -40,6 +43,7 @@ exports.AdminModule = AdminModule = __decorate([
             enemies_service_1.AdminEnemiesService,
             stories_service_1.AdminStoriesService,
             abilities_service_1.AdminAbilitiesService,
+            archetypes_service_1.AdminArchetypesService,
         ],
     })
 ], AdminModule);
