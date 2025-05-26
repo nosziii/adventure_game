@@ -2,44 +2,49 @@
   <div class="admin-enemy-edit">
     <h1>{{ isEditing ? `Ellenség Szerkesztése (ID: ${enemyId})` : 'Új Ellenség Létrehozása' }}</h1>
 
-    <div v-if="pageLoading">Adatok töltése...</div> <div v-else-if="store.getError || adminItemsStore.getError" class="error-message">
-        Hiba történt:
-        <span v-if="store.getError">{{ store.getError }}</span>
-        <span v-if="adminItemsStore.getError">{{ adminItemsStore.getError }}</span>
+    <div v-if="pageLoading" class="status-text">Adatok töltése...</div>
+    <div v-else-if="store.getError || adminItemsStore.getError" class="error-box">
+      <p><strong>Hiba történt:</strong></p>
+      <p v-if="store.getError">{{ store.getError }}</p>
+      <p v-if="adminItemsStore.getError">{{ adminItemsStore.getError }}</p>
     </div>
 
-    <form @submit.prevent="handleSubmit" v-else>
+    <form @submit.prevent="handleSubmit" v-else class="enemy-form">
       <div class="form-group">
-          <label for="name">Név:</label>
-          <input type="text" id="name" v-model="enemyData.name" required />
-      </div>
-      <div class="form-group">
-          <label for="xpReward">XP Jutalom:</label>
-          <input type="number" id="xpReward" v-model.number="enemyData.xpReward" required min="0" />
+        <label for="name">Név</label>
+        <input type="text" id="name" v-model="enemyData.name" required />
       </div>
 
       <div class="form-group">
-        <label for="itemDropId">Item Drop (opcionális):</label>
+        <label for="xpReward">XP Jutalom</label>
+        <input type="number" id="xpReward" v-model.number="enemyData.xpReward" required min="0" />
+      </div>
+
+      <div class="form-group">
+        <label for="itemDropId">Item Drop (opcionális)</label>
         <select id="itemDropId" v-model.number="enemyData.itemDropId">
           <option :value="null">Nincs drop</option>
           <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
-            ID: {{ item.id }} - {{ item.name }}
+            ID: {{ item.id }} – {{ item.name }}
           </option>
         </select>
       </div>
 
       <hr />
-      <h2>Speciális Támadás (Opcionális)</h2>
+
+      <h2>Speciális Támadás (opcionális)</h2>
       <div class="form-group">
-        <label for="specialAttackName">Speciális Támadás Neve:</label>
+        <label for="specialAttackName">Támadás Neve</label>
         <input type="text" id="specialAttackName" v-model="enemyData.specialAttackName" />
       </div>
+
       <div class="form-actions">
-        <button type="submit" :disabled="store.isLoading || pageLoading">
-          {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
+        <button type="submit" class="btn btn-primary" :disabled="store.isLoading || pageLoading">
+          {{ store.isLoading ? 'Mentés...' : isEditing ? 'Módosítások Mentése' : 'Létrehozás' }}
         </button>
-        <router-link :to="{ name: 'admin-enemies-list' }" class="cancel-button">Mégse</router-link>
+        <router-link :to="{ name: 'admin-enemies-list' }" class="btn btn-secondary">Mégse</router-link>
       </div>
+
       <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
     </form>
   </div>
@@ -148,29 +153,126 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* Hasonló stílusok, mint az AdminNodeEditView */
-.admin-enemy-edit { padding: 20px; max-width: 600px; margin: auto; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group textarea {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+.admin-enemy-edit {
+  padding: 2rem;
+  max-width: 700px;
+  margin: auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
-.form-group textarea { min-height: 60px; }
-.form-actions { margin-top: 20px; }
-.form-actions button { padding: 10px 15px; margin-right: 10px; }
-.cancel-button { padding: 10px 15px; text-decoration: none; background-color: #6c757d; color:white; border-radius: 4px;}
-.error-message { color: red; margin-top: 10px; }
-.success-message { color: green; margin-top: 10px; }
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
 }
-hr { margin: 20px 0; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--panel-border);
+  margin: 2rem 0;
+}
+
+h2 {
+  font-size: 1.2rem;
+  color: var(--accent-secondary);
+  margin-bottom: 1rem;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.error-box {
+  background-color: rgba(160, 32, 32, 0.2);
+  color: #ffcfcf;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #cc5555;
+}
+
+.success-message {
+  color: #37ff8b;
+  margin-top: 1rem;
+}
+
+.enemy-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+input,
+textarea,
 select {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: white;
+  padding: 0.6rem;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 0.5rem;
+  transition: border 0.2s ease;
+  color:rgb(68, 45, 90);
 }
-.admin-enemy-edit { padding: 20px; max-width: 600px; margin: auto; }
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--input-focus-border);
+  outline: none;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--accent-secondary);
+  color: white;
+}
 </style>

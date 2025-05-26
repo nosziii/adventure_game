@@ -2,60 +2,66 @@
   <div class="admin-node-edit">
     <h1>{{ isEditing ? `Node Szerkesztése (ID: ${nodeId})` : 'Új Story Node Létrehozása' }}</h1>
 
-    <div v-if="pageLoading">Adatok töltése...</div> <div v-else-if="store.getError || adminItemsStore.getError || adminEnemiesStore.getError" class="error-message">
-      Hiba történt:
-      <span v-if="store.getError">{{ store.getError }} </span>
-      <span v-if="adminItemsStore.getError">{{ adminItemsStore.getError }} </span>
-      <span v-if="adminEnemiesStore.getError">{{ adminEnemiesStore.getError }} </span>
+    <div v-if="pageLoading" class="status-text">Adatok töltése...</div>
+
+    <div
+      v-else-if="store.getError || adminItemsStore.getError || adminEnemiesStore.getError"
+      class="error-box"
+    >
+      <p><strong>Hiba történt:</strong></p>
+      <p v-if="store.getError">{{ store.getError }}</p>
+      <p v-if="adminItemsStore.getError">{{ adminItemsStore.getError }}</p>
+      <p v-if="adminEnemiesStore.getError">{{ adminEnemiesStore.getError }}</p>
     </div>
 
-    <form @submit.prevent="handleSubmit" v-else>
+    <form @submit.prevent="handleSubmit" v-else class="node-form">
       <div class="form-group">
         <label for="text">Szöveg:</label>
-        <textarea id="text" v-model="nodeData.text" rows="5" required></textarea>
+        <textarea id="text" v-model="nodeData.text" rows="5" required />
       </div>
 
       <div class="form-group">
         <label for="image">Kép URL (opcionális):</label>
-        <input type="url" id="image" v-model="nodeData.image" placeholder="http://... vagy /images/..."/>
+        <input type="url" id="image" v-model="nodeData.image" placeholder="http://... vagy /images/..." />
       </div>
 
-      <div class="form-group checkbox-group">
+      <div class="form-group checkbox">
         <input type="checkbox" id="is_end" v-model="nodeData.is_end" />
         <label for="is_end">Ez egy befejező csomópont?</label>
       </div>
 
       <div class="form-group">
-        <label for="health_effect">Életerő Hatás (opcionális, pl. -10 vagy 20):</label>
+        <label for="health_effect">Életerő Hatás (opcionális):</label>
         <input type="number" id="health_effect" v-model.number="nodeData.health_effect" />
       </div>
 
       <div class="form-group">
-        <label for="item_reward_id">Tárgy Jutalom (opcionális):</label>
+        <label for="item_reward_id">Tárgy Jutalom:</label>
         <select id="item_reward_id" v-model.number="nodeData.item_reward_id">
           <option :value="null">Nincs jutalom</option>
           <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
-            ID: {{ item.id }} - {{ item.name }}
+            ID: {{ item.id }} – {{ item.name }}
           </option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="enemy_id">Ellenfél (opcionális):</label>
+        <label for="enemy_id">Ellenfél:</label>
         <select id="enemy_id" v-model.number="nodeData.enemy_id">
           <option :value="null">Nincs ellenfél</option>
           <option v-for="enemy in adminEnemiesStore.allEnemies" :key="enemy.id" :value="enemy.id">
-            ID: {{ enemy.id }} - {{ enemy.name }}
+            ID: {{ enemy.id }} – {{ enemy.name }}
           </option>
         </select>
       </div>
 
       <div class="form-actions">
-        <button type="submit" :disabled="store.isLoading || pageLoading">
-          {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
+        <button type="submit" class="btn btn-primary" :disabled="store.isLoading || pageLoading">
+          {{ store.isLoading ? 'Mentés...' : isEditing ? 'Módosítások Mentése' : 'Létrehozás' }}
         </button>
-        <router-link :to="{ name: 'admin-nodes-list' }" class="cancel-button">Mégse</router-link>
+        <router-link :to="{ name: 'admin-nodes-list' }" class="btn btn-secondary">Mégse</router-link>
       </div>
+
       <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
     </form>
   </div>
@@ -166,29 +172,123 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.admin-node-edit { padding: 20px; max-width: 600px; margin: auto; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-.form-group input[type="text"],
-.form-group input[type="url"],
-.form-group input[type="number"],
-.form-group textarea {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
+.admin-node-edit {
+  padding: 2rem;
+  margin: 80px auto;
+  max-width: 700px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
-.form-group textarea { min-height: 100px; }
-.checkbox-group { display: flex; align-items: center; }
-.checkbox-group input { margin-right: 8px; width: auto; }
-.form-actions { margin-top: 20px; }
-.form-actions button { padding: 10px 15px; margin-right: 10px; }
-.cancel-button { padding: 10px 15px; text-decoration: none; background-color: #6c757d; color:white; border-radius: 4px;}
-.error { color: red; margin-top: 10px; }
-.success { color: green; margin-top: 10px; }
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.error-box {
+  background-color: rgba(160, 32, 32, 0.2);
+  color: #ffcfcf;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #cc5555;
+}
+
+.success-message {
+  color: #37ff8b;
+  margin-top: 1rem;
+}
+
+.node-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+input,
+textarea,
 select {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: white;
+  padding: 0.6rem;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 0.5rem;
+  transition: border 0.2s ease;
+  color:rgb(68, 45, 90);
 }
-.admin-node-edit { padding: 20px; max-width: 600px; margin: auto; }
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--input-focus-border);
+  outline: none;
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.checkbox input {
+  margin-right: 0.5rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--accent-secondary);
+  color: white;
+}
 </style>

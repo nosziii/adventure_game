@@ -2,69 +2,73 @@
   <div class="admin-choice-edit">
     <h1>{{ isEditing ? `Választás Szerkesztése (ID: ${choiceId})` : 'Új Választás Létrehozása' }}</h1>
 
-    <div v-if="pageLoading">Adatok töltése...</div> <div v-else-if="store.getError" class="error-message">{{ store.getError }}</div>
+    <div v-if="pageLoading" class="status-text">Adatok töltése...</div>
+    <div v-else-if="store.getError" class="error-box">{{ store.getError }}</div>
 
-    <form @submit.prevent="handleSubmit" v-else>
+    <form @submit.prevent="handleSubmit" v-else class="choice-form">
       <div class="form-group">
-        <label for="sourceNodeId">Forrás Node:</label>
+        <label for="sourceNodeId">Forrás Node</label>
         <select id="sourceNodeId" v-model.number="choiceData.sourceNodeId" required>
-          <option :value="0" disabled>Válassz egy forrás node-ot...</option>
+          <option :value="0" disabled>Válassz egy node-ot...</option>
           <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
-            ID: {{ node.id }} - {{ truncateText(node.text, 40) }}
+            ID: {{ node.id }} – {{ truncateText(node.text, 40) }}
           </option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="targetNodeId">Cél Node:</label>
+        <label for="targetNodeId">Cél Node</label>
         <select id="targetNodeId" v-model.number="choiceData.targetNodeId" required>
-          <option :value="0" disabled>Válassz egy cél node-ot...</option>
+          <option :value="0" disabled>Válassz egy node-ot...</option>
           <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
-            ID: {{ node.id }} - {{ truncateText(node.text, 40) }}
+            ID: {{ node.id }} – {{ truncateText(node.text, 40) }}
           </option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="text">Szöveg:</label>
+        <label for="text">Szöveg</label>
         <textarea id="text" v-model="choiceData.text" rows="3" required></textarea>
       </div>
 
       <div class="form-group">
-        <label for="requiredItemId">Szükséges Tárgy (opcionális):</label>
+        <label for="requiredItemId">Szükséges Tárgy</label>
         <select id="requiredItemId" v-model.number="choiceData.requiredItemId">
           <option :value="null">Nincs</option>
           <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
-            ID: {{ item.id }} - {{ item.name }}
+            ID: {{ item.id }} – {{ item.name }}
           </option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="itemCostId">Tárgy Költség (opcionális):</label>
+        <label for="itemCostId">Tárgy Költség</label>
         <select id="itemCostId" v-model.number="choiceData.itemCostId">
           <option :value="null">Nincs</option>
           <option v-for="item in adminItemsStore.allItems" :key="item.id" :value="item.id">
-            ID: {{ item.id }} - {{ item.name }}
+            ID: {{ item.id }} – {{ item.name }}
           </option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="requiredStatCheck">Statisztika Feltétel (opcionális, pl. "skill >= 10"):</label>
+        <label for="requiredStatCheck">Statisztikai Feltétel (pl. "skill >= 10")</label>
         <input type="text" id="requiredStatCheck" v-model="choiceData.requiredStatCheck" />
       </div>
 
       <div class="form-actions">
-        <button type="submit" :disabled="store.isLoading || adminNodesStore.isLoading || adminItemsStore.isLoading">
-          {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
+        <button type="submit" class="btn btn-primary"
+          :disabled="store.isLoading || adminNodesStore.isLoading || adminItemsStore.isLoading">
+          {{ store.isLoading ? 'Mentés...' : isEditing ? 'Módosítások Mentése' : 'Létrehozás' }}
         </button>
-        <router-link :to="{ name: 'admin-choices-list' }" class="cancel-button">Mégse</router-link>
+        <router-link :to="{ name: 'admin-choices-list' }" class="btn btn-secondary">Mégse</router-link>
       </div>
+
       <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
     </form>
   </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue';
@@ -141,7 +145,29 @@ watch(() => store.getCurrentChoice, (currentChoice) => {
     }
 }, { immediate: true, deep: true }); // deep: true a currentChoice objektum változásaira
 
-const handleSubmit = async () => { /* ... (változatlan) ... */ };
+const handleSubmit = async () => {
+  successMessage.value = null;
+  store.error = null; // Hiba törlése
+  let result: AdminChoiceData | null = null;
+
+  // Validáció (egyszerű példa, class-validator jobb lenne a DTO-ban)
+  if (!choiceData.value.sourceNodeId || !choiceData.value.targetNodeId || !choiceData.value.text) {
+      store.error = "A Forrás Node ID, Cél Node ID és Szöveg kitöltése kötelező!";
+      return;
+  }
+
+  if (isEditing.value && choiceId.value !== null) {
+    result = await store.updateChoice(choiceId.value, choiceData.value as AdminUpdateChoicePayload);
+    if (result) successMessage.value = `Választás (ID: ${result.id}) sikeresen frissítve!`;
+  } else {
+    result = await store.createChoice(choiceData.value as AdminCreateChoicePayload);
+    if (result) successMessage.value = `Választás sikeresen létrehozva (ID: ${result.id})!`;
+  }
+
+  if (result) {
+    setTimeout(() => router.push({ name: 'admin-choices-list' }), 1500);
+  }
+}
 
 // Segédfüggvény a szöveg rövidítésére (ha kellene itt is)
 const truncateText = (text: string, length: number): string => {
@@ -150,19 +176,115 @@ const truncateText = (text: string, length: number): string => {
 </script>
 
 <style scoped>
-/* Hasonló stílusok, mint az AdminNodeEditView */
-.admin-choice-edit { padding: 20px; max-width: 600px; margin: auto; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group textarea {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+.admin-choice-edit {
+  padding: 2rem;
+  max-width: 700px;
+  margin: 80px auto;
+  margin: 80px auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
-.form-group textarea { min-height: 80px; }
-.form-actions { margin-top: 20px; }
-.form-actions button { padding: 10px 15px; margin-right: 10px; }
-.cancel-button { padding: 10px 15px; text-decoration: none; background-color: #6c757d; color:white; border-radius: 4px;}
-.error-message { color: red; margin-top: 10px; }
-.success-message { color: green; margin-top: 10px; }
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.error-box {
+  background-color: rgba(160, 32, 32, 0.2);
+  color: #ffcfcf;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #cc5555;
+}
+
+.success-message {
+  color: #37ff8b;
+  margin-top: 1rem;
+}
+
+.choice-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+input,
+textarea,
+select {
+  padding: 0.6rem;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 0.5rem;
+  transition: border 0.2s ease;
+  color:rgb(68, 45, 90);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--input-focus-border);
+  outline: none;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--accent-secondary);
+  color: white;
+}
 </style>

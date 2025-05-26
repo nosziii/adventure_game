@@ -177,18 +177,130 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* Hasonló stílusok, mint a többi Admin EditView */
-.admin-ability-edit { padding: 20px; max-width: 700px; margin: auto; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-select, input[type="text"], input[type="number"], textarea {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-top: 4px;
+.admin-ability-edit {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 80px auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
-textarea { min-height: 80px; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-.form-actions { margin-top: 20px; }
-/* ... (gombok, üzenetek stílusa) ... */
-.error-message { color: red; }
-.success-message { color: green; }
-small { font-size: 0.8em; color: #777; display: block; margin-top: 4px;}
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
+}
+
+.loading-message {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.error-message {
+  background-color: rgba(160, 32, 32, 0.2);
+  color: #ffcfcf;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cc5555;
+  margin-bottom: 1rem;
+}
+
+.success-message {
+  color: #37ff8b;
+  margin-top: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1.2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  color: var(--text-primary);
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+input,
+textarea,
+select {
+  padding: 0.6rem;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 0.5rem;
+  transition: border 0.2s ease;
+  color:rgb(68, 45, 90);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--input-focus-border);
+  outline: none;
+}
+
+textarea {
+  min-height: 100px;
+}
+
+small {
+  color: var(--placeholder-text);
+  margin-top: 0.3rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  text-decoration: none;
+  text-align: center;
+}
+
+button.btn,
+router-link.btn {
+  display: inline-block;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--accent-secondary);
+  color: white;
+}
 </style>

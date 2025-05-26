@@ -114,31 +114,58 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.graph-container {
-  flex-grow: 1;
-  height: 800px;
-  width: 1024px;     
-  border: 1px solid #ccc;
-  background-color: #f9f9f9;
-  position: relative; /* Néha segít a Vis.js-nek a pozicionálásban */
-}
 .admin-map-view {
-  padding: 20px;
+  padding: 2rem;
+  margin-top: 80px;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 100px); /* Példa magasság, igazítsd a layoutodhoz */
+  height: calc(100vh - 100px);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+}
+
 .graph-container {
-  flex-grow: 1; /* Kitölti a rendelkezésre álló helyet */
-  border: 1px solid #ccc;
-  background-color: #f9f9f9;
+  flex-grow: 1;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  background: radial-gradient(circle at top left, var(--bg-glow-center), var(--bg-deep-dark));
+  margin-top: 1.5rem;
+  height: 800px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
 }
-.error-message, .info-message {
-    padding: 20px;
-    text-align: center;
-    color: red;
-}
+
+.error-message,
 .info-message {
-    color: #555;
+  padding: 1.5rem;
+  text-align: center;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  border: 1px solid;
+}
+
+.error-message {
+  color: #ffcfcf;
+  background-color: rgba(160, 32, 32, 0.15);
+  border-color: #cc5555;
+}
+
+.info-message {
+  color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--panel-border);
 }
 </style>

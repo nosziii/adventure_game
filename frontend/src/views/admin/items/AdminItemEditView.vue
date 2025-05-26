@@ -2,45 +2,47 @@
   <div class="admin-item-edit">
     <h1>{{ isEditing ? `Tárgy Szerkesztése (ID: ${itemId})` : 'Új Tárgy Létrehozása' }}</h1>
 
-    <div v-if="isEditing && store.isLoadingCurrent">Adatok töltése...</div>
-    <div v-else-if="store.getError" class="error-message">{{ store.getError }}</div>
+    <div v-if="isEditing && store.isLoadingCurrent" class="status-text">Adatok töltése...</div>
+    <div v-else-if="store.getError" class="error-box">{{ store.getError }}</div>
 
-    <form @submit.prevent="handleSubmit" v-else>
+    <form @submit.prevent="handleSubmit" v-else class="item-form">
       <div class="form-group">
-        <label for="name">Név:</label>
+        <label for="name">Név</label>
         <input type="text" id="name" v-model="itemData.name" required />
       </div>
 
       <div class="form-group">
-        <label for="description">Leírás (opcionális):</label>
-        <textarea id="description" v-model="itemData.description" rows="3"></textarea>
+        <label for="description">Leírás (opcionális)</label>
+        <textarea id="description" v-model="itemData.description" rows="3" />
       </div>
 
       <div class="form-group">
-        <label for="type">Típus:</label>
+        <label for="type">Típus</label>
         <input type="text" id="type" v-model="itemData.type" required placeholder="pl. weapon, potion, key, armor" />
       </div>
 
       <div class="form-group">
-        <label for="effect">Effekt (opcionális, pl. "skill+2;damage+5" vagy "heal+30"):</label>
+        <label for="effect">Effekt (opcionális)</label>
         <input type="text" id="effect" v-model="itemData.effect" />
       </div>
 
-      <div class="form-group checkbox-group">
+      <div class="form-group checkbox">
         <input type="checkbox" id="usable" v-model="itemData.usable" />
         <label for="usable">Használható (inventoryból aktívan)?</label>
       </div>
 
       <div class="form-actions">
-        <button type="submit" :disabled="store.isLoading">
-          {{ store.isLoading ? 'Mentés...' : (isEditing ? 'Módosítások Mentése' : 'Létrehozás') }}
+        <button type="submit" class="btn btn-primary" :disabled="store.isLoading">
+          {{ store.isLoading ? 'Mentés...' : isEditing ? 'Módosítások Mentése' : 'Létrehozás' }}
         </button>
-        <router-link :to="{ name: 'admin-items-list' }" class="cancel-button">Mégse</router-link>
+        <router-link :to="{ name: 'admin-items-list' }" class="btn btn-secondary">Mégse</router-link>
       </div>
+
       <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
     </form>
   </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue';
@@ -125,21 +127,120 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* Hasonló stílusok, mint az AdminNodeEditView */
-.admin-item-edit { padding: 20px; max-width: 600px; margin: auto; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group textarea {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+.admin-item-edit {
+  padding: 2rem;
+  max-width: 700px;
+  margin:80px auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
-.form-group textarea { min-height: 80px; }
-.checkbox-group { display: flex; align-items: center; }
-.checkbox-group input { margin-right: 8px; width: auto; }
-.form-actions { margin-top: 20px; }
-.form-actions button { padding: 10px 15px; margin-right: 10px; }
-.cancel-button { padding: 10px 15px; text-decoration: none; background-color: #6c757d; color:white; border-radius: 4px;}
-.error-message { color: red; margin-top: 10px; }
-.success-message { color: green; margin-top: 10px; }
+
+h1 {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 1.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.error-box {
+  background-color: rgba(160, 32, 32, 0.2);
+  color: #ffcfcf;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #cc5555;
+}
+
+.success-message {
+  color: #37ff8b;
+  margin-top: 1rem;
+}
+
+.item-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+input,
+textarea {
+  padding: 0.6rem;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 0.5rem;
+  transition: border 0.2s ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--input-focus-border);
+  outline: none;
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.checkbox input {
+  margin-right: 0.5rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover-bg);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--accent-secondary);
+  color: white;
+}
 </style>
