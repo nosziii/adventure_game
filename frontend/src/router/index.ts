@@ -10,6 +10,7 @@ import HomeView from "../views/HomeView.vue";
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import GameView from "../views/GameView.vue";
+import ArchetypeSelectionView from "../views/ArchetypeSelectionView.vue";
 
 import AdminDashboardView from "../views/admin/AdminDashboardView.vue"; // Placeholder kezdőoldal
 import AdminNodeListView from "../views/admin/nodes/AdminNodeListView.vue"; // Node lista nézet
@@ -66,6 +67,12 @@ const router = createRouter({
       path: "/game", // A játék fő útvonala
       name: "game",
       component: GameView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/select-archetype",
+      name: "archetype-selection",
+      component: ArchetypeSelectionView,
       meta: { requiresAuth: true },
     },
     // --- ADMIN ÚTVONALAK ---
@@ -188,100 +195,150 @@ const router = createRouter({
 
 router.beforeEach(async (to: RouteLocationNormalized, from, next) => {
   const authStore = useAuthStore();
-  const gameStore = useGameStore(); // Szükségünk lesz rá a currentNode ellenőrzéséhez
+  const gameStore = useGameStore(); // GameStore példányosítása
 
-  // Biztosítjuk, hogy az auth állapot (user adatok, role) betöltődjön, ha van token
+  // 1. Auth állapot betöltése, ha szükséges (ez a részed jó volt)
   if (authStore.token && !authStore.user && !authStore.isLoadingUser) {
-    console.log(
-      "[Guard] User data not loaded from token, running checkAuth..."
-    );
+    console.log("[Guard] User data not loaded, attempting checkAuth...");
     try {
-      await authStore.checkAuth();
+      await authStore.checkAuth(); // Ez frissíti az authStore.user-t, beleértve a selected_archetype_id-t
       console.log(
-        "[Guard] checkAuth completed in guard. User role:",
-        authStore.user
+        "[Guard] checkAuth completed. User role:",
+        authStore.user!.role,
+        "Archetype ID:",
+        authStore.user!.selected_archetype_id
       );
-      // Ha a checkAuth után még mindig nincs user, az probléma lehet (pl. token lejárt)
-      // Ezt az authStore.isAuthenticated már figyelembe veszi
+      // Ha checkAuth után még mindig nincs user, akkor a token érvénytelen volt,
+      // az isAuthenticated false lesz, és a későbbi feltételek ezt kezelik.
     } catch (e) {
-      console.error("[Guard] Error during checkAuth, logging out:", e);
-      // Hiba esetén kijelentkeztetjük, a további logika kezeli a loginra irányítást
-      // Nincs szükség itt explicit next({name: 'login'})-re, mert az isAuthenticated false lesz
+      console.error(
+        "[Guard] Error during checkAuth, authStore.logout() might have been called:",
+        e
+      );
+      // Ha a checkAuth hibát dob, az authStore.logout() valószínűleg lefutott benne,
+      // így az isAuthenticated false lesz.
     }
   }
 
-  // Friss állapotok kiolvasása az esetleges checkAuth után
   const isAuthenticated = authStore.isAuthenticated;
   const isAdmin = authStore.isAdmin;
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
+  const user = authStore.user; // Tartalmazza a selected_archetype_id-t
 
   console.log(
-    `[Guard Decision] Path: ${to.path} (Name: ${String(
-      to.name
-    )}) | reqAuth: ${requiresAuth} | reqAdmin: ${requiresAdmin} | isAuth: ${isAuthenticated} | isAdmin: ${isAdmin} | gameNode: ${
-      gameStore.currentNode?.id
-    }`
+    `[Guard Decision] To: ${String(to.name)} | From: ${String(
+      from.name
+    )} | Auth: ${isAuthenticated}, Admin: ${isAdmin}, Archetype: ${
+      user?.selected_archetype_id
+    }, GameNode: ${gameStore.currentNode?.id}`
   );
 
-  // 1. Ha admin oldalt akar elérni
-  if (requiresAdmin) {
-    if (isAuthenticated && isAdmin) {
-      console.log("[Guard] Admin access GRANTED.");
-      next(); // Admin és be van lépve -> mehet
-    } else if (isAuthenticated && !isAdmin) {
-      console.log(
-        "[Guard] Admin access DENIED (not admin). Redirecting to dashboard."
-      );
-      next({ name: "dashboard" }); // Be van lépve, de nem admin -> dashboard
-    } else {
-      console.log(
-        "[Guard] Admin access DENIED (not authenticated). Redirecting to login."
-      );
-      next({ name: "login", query: { redirect: to.fullPath } }); // Nincs bejelentkezve -> login
-    }
-  }
-  // 2. Ha bejelentkezett felhasználó a login vagy register oldalra téved
-  else if ((to.name === "login" || to.name === "register") && isAuthenticated) {
-    console.log(
-      "[Guard] User already authenticated. Redirecting from login/register to dashboard."
-    );
-    next({ name: "dashboard" }); // Mindig a dashboardra, onnan mehet adminba vagy játékba
-  }
-  // 3. Ha "sima" védett oldalt akar elérni (ami nem admin, pl. /dashboard, /game)
-  else if (requiresAuth) {
+  // --- ÚJ SORREND ÉS LOGIKA ---
+
+  // A. Login és Register oldalak kezelése
+  if (to.name === "login" || to.name === "register") {
     if (isAuthenticated) {
-      // Speciális ellenőrzés a /game útvonalra: csak akkor engedjük, ha van aktív játék
-      if (to.name === "game") {
-        // Ha a gameStore még tölti az adatokat, várjunk (ezt az App.vue onMounted kezeli jobban)
-        // Itt feltételezzük, hogy az App.vue onMounted már lefutott és a gameStore állapota releváns
-        if (!gameStore.currentNode && !gameStore.isLoading) {
-          // és nem épp tölt
-          console.log(
-            "[Guard] Accessing /game but no active story (no currentNode). Redirecting to dashboard."
-          );
-          next({ name: "dashboard" });
-        } else {
-          console.log("[Guard] Authenticated access to /game GRANTED.");
-          next(); // Van aktív játék, vagy épp tölt -> engedjük
-        }
+      // Ha be van lépve, de nincs archetípusa -> archetípus választó
+      if (user && user.selected_archetype_id === null) {
+        console.log(
+          "[Guard] Authenticated user on login/register, no archetype -> redirect to archetype-selection"
+        );
+        next({ name: "archetype-selection" });
       } else {
-        // Más védett oldal (pl. /dashboard)
-        console.log("[Guard] Authenticated access GRANTED.");
-        next();
+        // Ha be van lépve ÉS van archetípusa (vagy admin és nem kell neki) -> dashboard
+        console.log(
+          "[Guard] Authenticated user on login/register, has archetype/is admin -> redirect to dashboard"
+        );
+        next({ name: "dashboard" });
       }
     } else {
       console.log(
-        "[Guard] Authenticated access DENIED (not authenticated). Redirecting to login."
+        "[Guard] Not authenticated, allowing access to login/register."
       );
-      next({ name: "login", query: { redirect: to.fullPath } }); // Nincs bejelentkezve -> login
+      next(); // Nincs bejelentkezve, mehet a login/register oldalra
     }
+    return; // A guard itt véget ér erre az útvonalra
   }
-  // 4. Publikus oldalak (ha lennének, a login/register már le van kezelve)
-  else {
-    console.log("[Guard] Public route or unhandled case. Allowing navigation.");
-    next();
+
+  // B. Ha nincs bejelentkezve, és védett oldalra akar menni
+  if (
+    to.matched.some((record) => record.meta.requiresAuth) &&
+    !isAuthenticated
+  ) {
+    console.log(
+      "[Guard] Protected route, user not authenticated -> redirect to login."
+    );
+    next({ name: "login", query: { redirect: to.fullPath } });
+    return;
   }
+
+  // --- Csak bejelentkezett felhasználókra vonatkozó szabályok innentől ---
+  if (isAuthenticated && user) {
+    // Biztosítjuk, hogy a user objektum létezik
+    // C. Admin útvonalak ellenőrzése
+    if (to.matched.some((record) => record.meta.requiresAdmin)) {
+      if (isAdmin) {
+        console.log("[Guard] Admin route, access GRANTED.");
+        next();
+      } else {
+        console.log(
+          "[Guard] Admin route, user NOT ADMIN -> redirect to dashboard."
+        );
+        next({ name: "dashboard" }); // Nem admin, de be van lépve -> dashboard
+      }
+      return;
+    }
+
+    // D. Archetípus választó oldal speciális kezelése
+    if (to.name === "archetype-selection") {
+      if (user.selected_archetype_id !== null) {
+        console.log(
+          "[Guard] User has archetype, trying to access archetype-selection -> redirect to dashboard."
+        );
+        next({ name: "dashboard" }); // Már van archetípusa, ne menjen a választóba
+      } else {
+        console.log(
+          "[Guard] User has no archetype, allowing access to archetype-selection."
+        );
+        next(); // Nincs archetípusa, ez a helyes oldal
+      }
+      return;
+    }
+
+    // E. Más (nem admin) védett oldalak, de még nincs archetípusa
+    // (és nem az archetype-selection oldalra megy, mert azt a D. pont már lekezelte)
+    if (user.selected_archetype_id === null && to.meta.requiresAuth) {
+      console.log(
+        `[Guard] Authenticated user (Auth route: ${String(
+          to.name
+        )}), but no archetype selected -> redirect to archetype-selection.`
+      );
+      next({ name: "archetype-selection" });
+      return;
+    }
+
+    // F. /game útvonal ellenőrzése (már van archetípusa a usernek)
+    if (to.name === "game") {
+      // Ha a gameStore még tölti az adatokat az App.vue onMounted-ból, akkor engedjük
+      if (gameStore.isLoading) {
+        console.log("[Guard] Accessing /game, gameStore is loading, allowing.");
+        next();
+      } else if (!gameStore.currentNode) {
+        // Ha betöltődött, de nincs aktív node
+        console.log(
+          "[Guard] Accessing /game, no active story (currentNode is null after load). Redirecting to dashboard."
+        );
+        next({ name: "dashboard" });
+      } else {
+        console.log("[Guard] Accessing /game, GRANTED (story active).");
+        next();
+      }
+      return;
+    }
+  } // Bejelentkezett felhasználókra vonatkozó szabályok vége
+
+  // Ha egyik fenti feltétel sem teljesült (pl. publikus oldal, vagy már engedélyeztük a next()-et)
+  console.log("[Guard] Fallback: Allowing navigation.");
+  next();
 });
 
 export default router;

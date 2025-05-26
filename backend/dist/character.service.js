@@ -186,15 +186,6 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.debug(`Character ${characterId} updated successfully.`);
         return updatedCharacter;
     }
-    async findOrCreateByUserId(userId) {
-        let character = await this.findByUserId(userId);
-        if (!character) {
-            this.logger.log(`Character not found for user ${userId} in findOrCreate, creating new one.`);
-            const baseCharacter = await this.createCharacter(userId);
-            character = await this.applyPassiveEffects(baseCharacter);
-        }
-        return character;
-    }
     async equipItem(characterId, itemId) {
         this.logger.log(`Character ${characterId} attempting to equip item ${itemId} for their active story.`);
         const activeStoryProgress = await this.getActiveStoryProgress(characterId);
@@ -317,6 +308,41 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         return characterWithEffects;
     }
+    async resetStoryProgress(characterId, storyId) {
+        this.logger.log(`Attempting to reset story progress for Character ID: ${characterId}, Story ID: ${storyId}`);
+        await this.knex.transaction(async (trx) => {
+            const progressToReset = await trx('character_story_progress')
+                .where({
+                character_id: characterId,
+                story_id: storyId,
+            })
+                .first('id');
+            if (progressToReset && progressToReset.id) {
+                const progressId = progressToReset.id;
+                this.logger.debug(`Found story progress record ID: ${progressId} for character ${characterId}, story ${storyId}. Proceeding with reset.`);
+                const deletedPlayerProgress = await trx('player_progress')
+                    .where({ character_story_progress_id: progressId })
+                    .del();
+                this.logger.debug(`Deleted ${deletedPlayerProgress} entries from player_progress for progress ID: ${progressId}`);
+                const deletedInventoryItems = await trx('character_story_inventory')
+                    .where({ character_story_progress_id: progressId })
+                    .del();
+                this.logger.debug(`Deleted ${deletedInventoryItems} items from character_story_inventory for progress ID: ${progressId}`);
+                const deletedStoryProgress = await trx('character_story_progress')
+                    .where({ id: progressId })
+                    .del();
+                if (deletedStoryProgress > 0) {
+                    this.logger.log(`Successfully reset story progress ID: ${progressId} for character ${characterId}, story ${storyId}.`);
+                }
+                else {
+                    this.logger.warn(`Story progress ID: ${progressId} was targeted for deletion but not found or not deleted.`);
+                }
+            }
+            else {
+                this.logger.warn(`No story progress found for Character ID: ${characterId} and Story ID: ${storyId}. Nothing to reset.`);
+            }
+        });
+    }
     async addXp(characterId, xpToAdd) {
         if (xpToAdd <= 0) {
             return { leveledUp: false, messages: [] };
@@ -392,97 +418,91 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         const startingNodeId = story.starting_node_id;
         const progressRecord = await this.knex.transaction(async (trx) => {
-            this.logger.debug(`Clearing any existing active combat for character ${characterId} before starting/continuing story ${storyId}`);
-            await trx('active_combats').where({ character_id: characterId }).del();
+            this.logger.debug(`Clearing any existing active combat for character ${characterId} within transaction.`);
+            await trx('active_combats')
+                .where({ character_id: characterId })
+                .del();
             await trx('character_story_progress')
                 .where({ character_id: characterId, is_active: true })
                 .andWhereNot({ story_id: storyId })
                 .update({ is_active: false, updated_at: new Date() });
-            let currentProgress = await trx('character_story_progress')
+            let existingProgress = await trx('character_story_progress')
                 .where({ character_id: characterId, story_id: storyId })
                 .first();
-            if (currentProgress) {
+            let finalProgressRecord;
+            if (existingProgress) {
                 this.logger.log(`Continuing existing progress for story ${storyId} for character ${characterId}`);
                 const updatedRows = await trx('character_story_progress')
-                    .where({ id: currentProgress.id })
+                    .where({ id: existingProgress.id })
                     .update({
                     is_active: true,
                     last_played_at: new Date(),
                     updated_at: new Date(),
                 })
                     .returning('*');
-                if (!updatedRows || updatedRows.length === 0 || !updatedRows[0]) {
-                    this.logger.error(`Failed to update or retrieve character_story_progress for id ${currentProgress.id}.`);
+                if (!updatedRows?.[0]) {
+                    this.logger.error(`Failed to update or retrieve character_story_progress for id ${existingProgress.id}.`);
                     throw new common_1.InternalServerErrorException('Failed to update story progress.');
                 }
-                currentProgress = updatedRows[0];
+                finalProgressRecord = updatedRows[0];
             }
             else {
                 this.logger.log(`Creating new progress for story ${storyId} for character ${characterId}`);
+                const baseCharData = await trx('characters')
+                    .where({ id: characterId })
+                    .select('selected_archetype_id')
+                    .first();
+                let archetypeBonuses = {};
+                let startingAbilities = [];
+                if (baseCharData?.selected_archetype_id) {
+                }
                 const insertedRows = await trx('character_story_progress')
                     .insert({
                     character_id: characterId,
                     story_id: storyId,
                     current_node_id: startingNodeId,
-                    health: DEFAULT_HEALTH,
-                    skill: DEFAULT_SKILL,
-                    luck: DEFAULT_LUCK,
-                    stamina: DEFAULT_STAMINA,
-                    defense: DEFAULT_DEFENSE,
+                    health: DEFAULT_HEALTH + (archetypeBonuses.base_health_bonus || 0),
+                    skill: DEFAULT_SKILL + (archetypeBonuses.base_skill_bonus || 0),
+                    luck: DEFAULT_LUCK + (archetypeBonuses.base_luck_bonus || 0),
+                    stamina: DEFAULT_STAMINA + (archetypeBonuses.base_stamina_bonus || 0),
+                    defense: DEFAULT_DEFENSE + (archetypeBonuses.base_defense_bonus || 0),
                     level: DEFAULT_LEVEL,
                     xp: DEFAULT_XP,
                     xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
                     is_active: true,
                 })
                     .returning('*');
-                if (!insertedRows || insertedRows.length === 0 || !insertedRows[0]) {
-                    this.logger.error(`Failed to insert or retrieve new character_story_progress for char ${characterId}, story ${storyId}.`);
+                if (!insertedRows?.[0]) {
+                    this.logger.error(`Failed to insert/retrieve new character_story_progress for char ${characterId}, story ${storyId}.`);
                     throw new common_1.InternalServerErrorException('Failed to create new story progress.');
                 }
-                currentProgress = insertedRows[0];
+                finalProgressRecord = insertedRows[0];
                 await trx('player_progress').insert({
-                    character_story_progress_id: currentProgress?.id ??
-                        (() => {
-                            throw new common_1.InternalServerErrorException('currentProgress is undefined.');
-                        })(),
+                    character_story_progress_id: finalProgressRecord.id,
                     node_id: startingNodeId,
                     choice_id_taken: null,
                 });
-                this.logger.debug(`Initial player_progress logged for new story progress ${currentProgress.id}`);
+                this.logger.debug(`Initial player_progress logged for new story progress ${finalProgressRecord.id}`);
+                if (startingAbilities.length > 0) {
+                    const abilitiesToInsert = startingAbilities.map((abilityId) => ({
+                        character_story_progress_id: finalProgressRecord.id,
+                        ability_id: abilityId,
+                    }));
+                    await trx('character_story_abilities')
+                        .insert(abilitiesToInsert)
+                        .onConflict()
+                        .ignore();
+                    this.logger.debug(`Added/ignored starting abilities for progress ${finalProgressRecord.id}`);
+                }
             }
-            this.logger.debug('[startOrContinueStory] Progress before returning from transaction:', JSON.stringify(currentProgress, null, 2));
-            return currentProgress;
+            this.logger.debug('[startOrContinueStory] Progress before returning from transaction:', JSON.stringify(finalProgressRecord, null, 2));
+            return finalProgressRecord;
         });
         if (!progressRecord) {
-            throw new common_1.InternalServerErrorException('Failed to retrieve story progress.');
+            throw new common_1.InternalServerErrorException('Transaction failed to return a progress record.');
         }
         this.logger.debug('[startOrContinueStory] Progress record after transaction:', JSON.stringify(progressRecord, null, 2));
         return progressRecord;
-    }
-    async resetStoryProgress(characterId, storyId) {
-        this.logger.log(`Character ${characterId} attempting to reset progress for story ID: ${storyId}`);
-        await this.knex.transaction(async (trx) => {
-            const progress = await trx('character_story_progress')
-                .where({ character_id: characterId, story_id: storyId })
-                .first('id');
-            if (progress && progress.id) {
-                const progressId = progress.id;
-                this.logger.debug(`Found story progress ID: ${progressId} to reset.`);
-                await trx('player_progress')
-                    .where({ character_story_progress_id: progressId })
-                    .del();
-                this.logger.debug(`Deleted player_progress entries for progress ID: ${progressId}`);
-                await trx('character_story_inventory')
-                    .where({ character_story_progress_id: progressId })
-                    .del();
-                this.logger.debug(`Deleted character_story_inventory entries for progress ID: ${progressId}`);
-                await trx('character_story_progress').where({ id: progressId }).del();
-                this.logger.log(`Story progress ID: ${progressId} has been reset for character ${characterId}.`);
-            }
-            else {
-                this.logger.warn(`No story progress found for character ${characterId} and story ${storyId} to reset.`);
-            }
-        });
     }
     async spendTalentPointOnStat(characterId, statName) {
         this.logger.log(`Character ${characterId} attempting to spend 1 talent point on stat: ${statName}`);
@@ -513,6 +533,109 @@ let CharacterService = CharacterService_1 = class CharacterService {
         }
         this.logger.debug(`Updating story progress ${activeStoryProgress.id} after spending talent point. Updates: ${JSON.stringify(updates)}`);
         return this.updateStoryProgress(activeStoryProgress.id, updates);
+    }
+    async findOrCreateByUserId(userId, preferredArchetypeId) {
+        let character = await this.knex('characters')
+            .where({ user_id: userId })
+            .first();
+        if (character) {
+            this.logger.debug(`Found existing character ID ${character.id} for user ID ${userId}`);
+            if (preferredArchetypeId &&
+                character.selected_archetype_id !== preferredArchetypeId) {
+                this.logger.log(`Updating selected_archetype_id for character ${character.id} to ${preferredArchetypeId}`);
+                const [updatedCharacter] = await this.knex('characters')
+                    .where({ id: character.id })
+                    .update({
+                    selected_archetype_id: preferredArchetypeId,
+                    updated_at: new Date(),
+                })
+                    .returning('*');
+                character = updatedCharacter || character;
+            }
+        }
+        else {
+            this.logger.log(`No character found for user ID ${userId}. Creating new character.`);
+            const defaultName = 'Kalandor';
+            const [newCharacter] = await this.knex('characters')
+                .insert({
+                user_id: userId,
+                name: defaultName,
+                role: 'player',
+                selected_archetype_id: preferredArchetypeId,
+            })
+                .returning('*');
+            if (!newCharacter) {
+                this.logger.error(`Failed to create or retrieve new character for user ID ${userId}.`);
+                throw new common_1.InternalServerErrorException('Character creation failed unexpectedly.');
+            }
+            character = newCharacter;
+            this.logger.log(`New character created with ID: ${character.id}, ArchetypeID: ${preferredArchetypeId}`);
+        }
+        if (!character)
+            throw new common_1.InternalServerErrorException('Failed to find or create character.');
+        return character;
+    }
+    async getSelectableArchetypes() {
+        this.logger.log('Fetching selectable character archetypes for players with ability details');
+        try {
+            const archetypes = await this.knex('character_archetypes')
+                .select('*')
+                .orderBy('name', 'asc');
+            const result = [];
+            for (const arch of archetypes) {
+                let abilitiesDetails = [];
+                if (arch.starting_ability_ids && arch.starting_ability_ids.length > 0) {
+                    const abilities = await this.knex('abilities')
+                        .whereIn('id', arch.starting_ability_ids)
+                        .select('id', 'name', 'description');
+                    abilitiesDetails = abilities.map((a) => ({
+                        id: a.id,
+                        name: a.name,
+                        description: a.description,
+                    }));
+                }
+                result.push({
+                    id: arch.id,
+                    name: arch.name,
+                    description: arch.description,
+                    iconPath: arch.icon_path,
+                    baseHealthBonus: arch.base_health_bonus,
+                    baseSkillBonus: arch.base_skill_bonus,
+                    baseLuckBonus: arch.base_luck_bonus,
+                    baseStaminaBonus: arch.base_stamina_bonus,
+                    baseDefenseBonus: arch.base_defense_bonus,
+                    startingAbilities: abilitiesDetails,
+                });
+            }
+            return result;
+        }
+        catch (error) {
+            this.logger.error('Failed to fetch selectable archetypes with abilities', error.stack);
+            throw new common_1.InternalServerErrorException('Could not retrieve character archetypes.');
+        }
+    }
+    async selectArchetypeForCharacter(characterId, archetypeId) {
+        this.logger.log(`Character ${characterId} attempting to select archetype ID: ${archetypeId}`);
+        const archetypeExists = await this.knex('character_archetypes')
+            .where({ id: archetypeId })
+            .first();
+        if (!archetypeExists) {
+            this.logger.warn(`Attempted to select non-existent archetype ID: ${archetypeId} for character ${characterId}`);
+            throw new common_1.NotFoundException(`Archetype with ID ${archetypeId} not found.`);
+        }
+        const [updatedCharacter] = await this.knex('characters')
+            .where({ id: characterId })
+            .update({
+            selected_archetype_id: archetypeId,
+            updated_at: new Date(),
+        })
+            .returning('*');
+        if (!updatedCharacter) {
+            this.logger.error(`Failed to update archetype for character ID ${characterId}. Character not found.`);
+            throw new common_1.NotFoundException(`Character with ID ${characterId} not found for archetype update.`);
+        }
+        this.logger.log(`Character ${characterId} successfully selected archetype ID: ${archetypeId}`);
+        return updatedCharacter;
     }
 };
 exports.CharacterService = CharacterService;

@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Get,
 } from '@nestjs/common'; // Szükséges importok
 import { AuthGuard } from '@nestjs/passport';
 import { CharacterService, Character } from './character.service';
@@ -20,6 +21,9 @@ import { IsInt, IsNotEmpty, IsIn } from 'class-validator'; // Validációhoz
 import { GameService } from './game/game.service';
 import { GameStateDto } from './game/dto/game-state.dto';
 import { SpendTalentPointDto } from './character/dto/spend-talent-point.dto'; // DTO a talent point költéshez
+import { PlayerArchetypeDto } from './character/dto/player-archetype.dto'; // DTO az archetype-okhoz
+import { SelectArchetypeDto } from './character/dto/select-archetype.dto'; // DTO az archetípus kiválasztásához
+import { UserDto } from './auth/dto/user.dto'; // DTO a felhasználó adatokhoz
 
 // DTO az equip kéréshez
 class EquipItemDto {
@@ -233,5 +237,41 @@ export class CharacterController {
     const newGameState = await this.gameService.getCurrentGameState(userId);
 
     return newGameState; // <-- TELJES GameStateDto VISSZAADÁSA
+  }
+
+  @Get('archetypes') // GET /api/character/archetypes (Publikusabb, nem kell @UseGuards(AuthGuard('jwt')))
+  async listSelectableArchetypes(): Promise<PlayerArchetypeDto[]> {
+    this.logger.log('Request received for selectable archetypes');
+    return this.characterService.getSelectableArchetypes();
+  }
+
+  @Post('select-archetype') // POST /api/character/select-archetype
+  async selectArchetype(
+    @Request() req,
+    @Body(ValidationPipe) selectArchetypeDto: SelectArchetypeDto,
+  ): Promise<UserDto> {
+    // Visszaadjuk a frissített UserDto-t az authStore számára
+    const userId = req.user.id; // A JWT payloadból (feltéve, hogy a User objektum id-je a user_id)
+    const character = await this.characterService.findOrCreateByUserId(userId); // Biztosítja, hogy a karakter létezik
+
+    this.logger.log(
+      `User ${userId} (Character ${character.id}) selected archetype ID: ${selectArchetypeDto.archetypeId}`,
+    );
+
+    const updatedBaseCharacter =
+      await this.characterService.selectArchetypeForCharacter(
+        character.id,
+        selectArchetypeDto.archetypeId,
+      );
+
+    // A UserDto-t kellene frissíteni, hogy az authStore user objektuma is naprakész legyen
+    // a selected_archetype_id-vel.
+    return {
+      id: userId, // Vagy req.user.sub, ha a user_id a sub-ban van
+      email: req.user.email,
+      role: req.user.role,
+      selected_archetype_id: updatedBaseCharacter.selected_archetype_id, // A frissített érték
+      // characterName: updatedBaseCharacter.name, // Ha ez is része a UserDto-nak
+    };
   }
 }

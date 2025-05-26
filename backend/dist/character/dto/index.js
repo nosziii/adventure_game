@@ -15,4 +15,6 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./spend-talent-point.dto"), exports);
+__exportStar(require("./player-archetype.dto"), exports);
+__exportStar(require("./select-archetype.dto"), exports);
 //# sourceMappingURL=index.js.map

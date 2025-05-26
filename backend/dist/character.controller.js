@@ -20,6 +20,7 @@ const character_service_1 = require("./character.service");
 const class_validator_1 = require("class-validator");
 const game_service_1 = require("./game/game.service");
 const spend_talent_point_dto_1 = require("./character/dto/spend-talent-point.dto");
+const select_archetype_dto_1 = require("./character/dto/select-archetype.dto");
 class EquipItemDto {
     itemId;
 }
@@ -142,6 +143,22 @@ let CharacterController = CharacterController_1 = class CharacterController {
         const newGameState = await this.gameService.getCurrentGameState(userId);
         return newGameState;
     }
+    async listSelectableArchetypes() {
+        this.logger.log('Request received for selectable archetypes');
+        return this.characterService.getSelectableArchetypes();
+    }
+    async selectArchetype(req, selectArchetypeDto) {
+        const userId = req.user.id;
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        this.logger.log(`User ${userId} (Character ${character.id}) selected archetype ID: ${selectArchetypeDto.archetypeId}`);
+        const updatedBaseCharacter = await this.characterService.selectArchetypeForCharacter(character.id, selectArchetypeDto.archetypeId);
+        return {
+            id: userId,
+            email: req.user.email,
+            role: req.user.role,
+            selected_archetype_id: updatedBaseCharacter.selected_archetype_id,
+        };
+    }
 };
 exports.CharacterController = CharacterController;
 __decorate([
@@ -186,6 +203,20 @@ __decorate([
     __metadata("design:paramtypes", [Object, spend_talent_point_dto_1.SpendTalentPointDto]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "spendTalentPoint", null);
+__decorate([
+    (0, common_1.Get)('archetypes'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "listSelectableArchetypes", null);
+__decorate([
+    (0, common_1.Post)('select-archetype'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, select_archetype_dto_1.SelectArchetypeDto]),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "selectArchetype", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([
     (0, common_1.Controller)('character'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),

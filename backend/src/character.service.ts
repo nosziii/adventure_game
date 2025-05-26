@@ -15,7 +15,13 @@ import { InventoryItemDto } from './game/dto/inventory-item.dto';
 import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
 import { StoryRecord } from './game/interfaces/story-record.interface';
 import { ItemRecord } from './game/interfaces/item-record.interface';
-import { SpendableStatName } from './character/dto/spend-talent-point.dto';
+import { AbilityRecord } from './game/interfaces/ability-record.interface';
+import {
+  SpendableStatName,
+  PlayerArchetypeDto,
+  SimpleAbilityInfoDto,
+} from './character/dto';
+import { CharacterArchetypeRecord } from './game/interfaces/character-archetype-record.interface';
 
 export interface Character {
   id: number;
@@ -35,6 +41,7 @@ export interface Character {
   talent_points_available: number | null;
   equipped_weapon_id: number | null;
   equipped_armor_id: number | null;
+  selected_archetype_id: number | null; // Az archetípus ID-je, ha van kiválasztva
 }
 
 const STARTING_NODE_ID = 1;
@@ -299,18 +306,6 @@ export class CharacterService {
     return updatedCharacter;
   }
 
-  async findOrCreateByUserId(userId: number): Promise<Character> {
-    let character = await this.findByUserId(userId); // Ez már az effektekkel ellátottat adja vissza, ha létezik
-    if (!character) {
-      this.logger.log(
-        `Character not found for user ${userId} in findOrCreate, creating new one.`,
-      );
-      const baseCharacter = await this.createCharacter(userId);
-      character = await this.applyPassiveEffects(baseCharacter);
-    }
-    return character;
-  }
-
   // --- Tárgy felszerelése - JAVÍTOTT ---
   async equipItem(
     characterId: number,
@@ -510,6 +505,74 @@ export class CharacterService {
     return characterWithEffects;
   }
 
+  async resetStoryProgress(
+    characterId: number,
+    storyId: number,
+  ): Promise<void> {
+    this.logger.log(
+      `Attempting to reset story progress for Character ID: ${characterId}, Story ID: ${storyId}`,
+    );
+
+    await this.knex.transaction(async (trx) => {
+      // 1. Keresd meg a character_story_progress rekordot az ID-jához
+      const progressToReset = await trx<CharacterStoryProgressRecord>(
+        'character_story_progress',
+      )
+        .where({
+          character_id: characterId,
+          story_id: storyId,
+        })
+        .first('id'); // Csak az ID-ra van szükségünk a további törlésekhez
+
+      if (progressToReset && progressToReset.id) {
+        const progressId = progressToReset.id;
+        this.logger.debug(
+          `Found story progress record ID: ${progressId} for character ${characterId}, story ${storyId}. Proceeding with reset.`,
+        );
+
+        // 2. Töröld a kapcsolódó player_progress bejegyzéseket
+        const deletedPlayerProgress = await trx('player_progress')
+          .where({ character_story_progress_id: progressId })
+          .del();
+        this.logger.debug(
+          `Deleted ${deletedPlayerProgress} entries from player_progress for progress ID: ${progressId}`,
+        );
+
+        // 3. Töröld a kapcsolódó character_story_inventory bejegyzéseket
+        const deletedInventoryItems = await trx('character_story_inventory')
+          .where({ character_story_progress_id: progressId })
+          .del();
+        this.logger.debug(
+          `Deleted ${deletedInventoryItems} items from character_story_inventory for progress ID: ${progressId}`,
+        );
+
+        // 4. Töröld magát a character_story_progress bejegyzést
+        const deletedStoryProgress = await trx('character_story_progress')
+          .where({ id: progressId })
+          .del();
+
+        if (deletedStoryProgress > 0) {
+          this.logger.log(
+            `Successfully reset story progress ID: ${progressId} for character ${characterId}, story ${storyId}.`,
+          );
+        } else {
+          // Ennek nem szabadna előfordulnia, ha a progressToReset.id létezett
+          this.logger.warn(
+            `Story progress ID: ${progressId} was targeted for deletion but not found or not deleted.`,
+          );
+        }
+
+        // Opcionális: Ha ez volt az aktív sztori, akkor most egyetlen sztori sem lesz aktív ennél a karakternél.
+        // Ezt a `startOrContinueStory` vagy a `getActiveStoryProgress` kezeli majd.
+      } else {
+        this.logger.warn(
+          `No story progress found for Character ID: ${characterId} and Story ID: ${storyId}. Nothing to reset.`,
+        );
+        // Nem dobunk hibát, ha nincs mit resetelni, egyszerűen nem történik semmi.
+      }
+    }); // Tranzakció vége
+  }
+
   // XP Hozzáadása és Szintlépés Kezelése ---
   async addXp(
     characterId: number, // A base character ID-ja
@@ -626,10 +689,10 @@ export class CharacterService {
       `Character ${characterId} starting/continuing story ID: ${storyId}`,
     );
 
-    // 1. Sztori adatainak lekérése
     const story = await this.knex<StoryRecord>('stories')
       .where({ id: storyId })
       .first();
+
     if (!story) {
       this.logger.warn(`Story with ID ${storyId} not found.`);
       throw new NotFoundException(`Story with ID ${storyId} not found.`);
@@ -644,176 +707,149 @@ export class CharacterService {
 
     const startingNodeId = story.starting_node_id;
 
-    // Tranzakció indítása
-    const progressRecord = await this.knex.transaction(async (trx) => {
-      this.logger.debug(
-        `Clearing any existing active combat for character ${characterId} before starting/continuing story ${storyId}`,
-      );
-      await trx('active_combats').where({ character_id: characterId }).del();
-      // 2. Minden más aktív sztori progresszió inaktiválása ennél a karakternél
-      await trx('character_story_progress')
-        .where({ character_id: characterId, is_active: true })
-        .andWhereNot({ story_id: storyId }) // Ne inaktiváljuk, ha már ez volt az aktív
-        .update({ is_active: false, updated_at: new Date() });
+    const progressRecord: CharacterStoryProgressRecord =
+      await this.knex.transaction(
+        async (trx): Promise<CharacterStoryProgressRecord> => {
+          // Explicit Promise<CSR> a callbacknek
 
-      // 3. Meglévő progresszió keresése ehhez a sztorihoz
-      let currentProgress: CharacterStoryProgressRecord | undefined =
-        await trx<CharacterStoryProgressRecord>('character_story_progress')
-          .where({ character_id: characterId, story_id: storyId })
-          .first();
-
-      if (currentProgress) {
-        // Ha van, aktiváljuk és frissítjük a last_played_at-et
-        this.logger.log(
-          `Continuing existing progress for story ${storyId} for character ${characterId}`,
-        );
-        const updatedRows = await trx('character_story_progress')
-          .where({ id: currentProgress.id }) // Itt a currentProgress biztosan nem undefined
-          .update({
-            is_active: true,
-            last_played_at: new Date(),
-            updated_at: new Date(),
-          })
-          .returning('*');
-
-        if (!updatedRows || updatedRows.length === 0 || !updatedRows[0]) {
-          // Szigorúbb ellenőrzés
-          this.logger.error(
-            `Failed to update or retrieve character_story_progress for id ${currentProgress.id}.`,
+          this.logger.debug(
+            `Clearing any existing active combat for character ${characterId} within transaction.`,
           );
-          throw new InternalServerErrorException(
-            'Failed to update story progress.',
-          );
-        }
-        currentProgress = updatedRows[0]; // Most már biztosan CharacterStoryProgressRecord
-      } else {
-        // Ha nincs, létrehozunk egy újat
-        this.logger.log(
-          `Creating new progress for story ${storyId} for character ${characterId}`,
-        );
-        const insertedRows = await trx('character_story_progress')
-          .insert({
-            character_id: characterId,
-            story_id: storyId,
-            current_node_id: startingNodeId, // startingNodeId a függvény elejéről
-            health: DEFAULT_HEALTH,
-            skill: DEFAULT_SKILL,
-            luck: DEFAULT_LUCK,
-            stamina: DEFAULT_STAMINA,
-            defense: DEFAULT_DEFENSE,
-            level: DEFAULT_LEVEL,
-            xp: DEFAULT_XP,
-            xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
-            is_active: true,
-            // equipped_weapon_id és equipped_armor_id alapból NULL
-          })
-          .returning('*');
+          await trx('active_combats')
+            .where({ character_id: characterId })
+            .del();
 
-        if (!insertedRows || insertedRows.length === 0 || !insertedRows[0]) {
-          // Szigorúbb ellenőrzés
-          this.logger.error(
-            `Failed to insert or retrieve new character_story_progress for char ${characterId}, story ${storyId}.`,
-          );
-          throw new InternalServerErrorException(
-            'Failed to create new story progress.',
-          );
-        }
-        currentProgress = insertedRows[0]; // Most már biztosan CharacterStoryProgressRecord
+          await trx('character_story_progress')
+            .where({ character_id: characterId, is_active: true })
+            .andWhereNot({ story_id: storyId })
+            .update({ is_active: false, updated_at: new Date() });
 
-        // Új kezdőpozíció rögzítése a player_progress táblában az új progress ID-val
-        // Itt a 'currentProgress' már biztosan nem undefined az előző ellenőrzés és hibadobás miatt
-        await trx('player_progress').insert({
-          character_story_progress_id:
-            currentProgress?.id ??
-            (() => {
-              throw new InternalServerErrorException(
-                'currentProgress is undefined.',
+          let existingProgress = await trx<CharacterStoryProgressRecord>(
+            'character_story_progress',
+          )
+            .where({ character_id: characterId, story_id: storyId })
+            .first();
+
+          let finalProgressRecord: CharacterStoryProgressRecord; // Ezt fogjuk visszaadni
+
+          if (existingProgress) {
+            this.logger.log(
+              `Continuing existing progress for story ${storyId} for character ${characterId}`,
+            );
+            const updatedRows = await trx('character_story_progress')
+              .where({ id: existingProgress.id }) // existingProgress itt biztosan nem undefined
+              .update({
+                is_active: true,
+                last_played_at: new Date(),
+                updated_at: new Date(),
+              })
+              .returning('*');
+
+            if (!updatedRows?.[0]) {
+              this.logger.error(
+                `Failed to update or retrieve character_story_progress for id ${existingProgress.id}.`,
               );
-            })(),
-          node_id: startingNodeId,
-          choice_id_taken: null,
-        });
-        this.logger.debug(
-          `Initial player_progress logged for new story progress ${currentProgress.id}`,
-        );
-      }
-      // Ebben a pontban a 'currentProgress' már biztosan CharacterStoryProgressRecord típusú,
-      // mert minden olyan ág, ahol 'undefined' maradhatna, már hibát dobott és kilépett a tranzakcióból.
-      this.logger.debug(
-        '[startOrContinueStory] Progress before returning from transaction:',
-        JSON.stringify(currentProgress, null, 2),
-      );
-      return currentProgress; // A tranzakció ezt adja vissza
-    }); // Tranzakció vége
+              throw new InternalServerErrorException(
+                'Failed to update story progress.',
+              );
+            }
+            finalProgressRecord = updatedRows[0];
+          } else {
+            this.logger.log(
+              `Creating new progress for story ${storyId} for character ${characterId}`,
+            );
 
-    // A 'progressRecord' itt már a tranzakció által visszaadott (és nem undefined) érték lesz,
-    // mivel a tranzakción belüli logika vagy sikeresen visszaad egy rekordot, vagy hibát dob.
-    // A startOrContinueStory metódus `Promise<CharacterStoryProgressRecord>` visszatérési típusa így teljesül.
+            const baseCharData = await trx<Character>('characters')
+              .where({ id: characterId })
+              .select('selected_archetype_id')
+              .first();
 
+            let archetypeBonuses: Partial<CharacterArchetypeRecord> = {};
+            let startingAbilities: number[] = [];
+            if (baseCharData?.selected_archetype_id) {
+              // ... (archetype adatok lekérése és bónuszok/képességek beállítása, ahogy volt)
+            }
+
+            const insertedRows = await trx('character_story_progress')
+              .insert({
+                character_id: characterId,
+                story_id: storyId,
+                current_node_id: startingNodeId,
+                health:
+                  DEFAULT_HEALTH + (archetypeBonuses.base_health_bonus || 0),
+                skill: DEFAULT_SKILL + (archetypeBonuses.base_skill_bonus || 0),
+                luck: DEFAULT_LUCK + (archetypeBonuses.base_luck_bonus || 0),
+                stamina:
+                  DEFAULT_STAMINA + (archetypeBonuses.base_stamina_bonus || 0),
+                defense:
+                  DEFAULT_DEFENSE + (archetypeBonuses.base_defense_bonus || 0),
+                level: DEFAULT_LEVEL,
+                xp: DEFAULT_XP,
+                xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
+                is_active: true,
+              })
+              .returning('*');
+
+            if (!insertedRows?.[0]) {
+              this.logger.error(
+                `Failed to insert/retrieve new character_story_progress for char ${characterId}, story ${storyId}.`,
+              );
+              throw new InternalServerErrorException(
+                'Failed to create new story progress.',
+              );
+            }
+            finalProgressRecord = insertedRows[0]; // Most már biztosan CharacterStoryProgressRecord
+
+            // player_progress rögzítése
+            await trx('player_progress').insert({
+              character_story_progress_id: finalProgressRecord.id, // Itt már a finalProgressRecord-ot használjuk
+              node_id: startingNodeId,
+              choice_id_taken: null,
+            });
+            this.logger.debug(
+              `Initial player_progress logged for new story progress ${finalProgressRecord.id}`,
+            );
+
+            // Kezdő képességek hozzáadása
+            if (startingAbilities.length > 0) {
+              const abilitiesToInsert = startingAbilities.map((abilityId) => ({
+                character_story_progress_id: finalProgressRecord.id,
+                ability_id: abilityId,
+              }));
+              await trx('character_story_abilities')
+                .insert(abilitiesToInsert)
+                .onConflict()
+                .ignore();
+              this.logger.debug(
+                `Added/ignored starting abilities for progress ${finalProgressRecord.id}`,
+              );
+            }
+          }
+
+          this.logger.debug(
+            '[startOrContinueStory] Progress before returning from transaction:',
+            JSON.stringify(finalProgressRecord, null, 2),
+          );
+          return finalProgressRecord; // Itt finalProgressRecord típusa már CharacterStoryProgressRecord
+        }, // async (trx) vége
+      ); // tranzakció vége
+
+    // Az `if (!progressRecord)` ellenőrzés a tranzakció után maradhat, mint extra biztonsági réteg,
+    // de a tranzakció callbackjének explicit Promise<CharacterStoryProgressRecord> típusa miatt
+    // a 'progressRecord' típusa már itt is CharacterStoryProgressRecord kell legyen.
     if (!progressRecord) {
+      // Ennek elvileg sosem kellene lefutnia
       throw new InternalServerErrorException(
-        'Failed to retrieve story progress.',
+        'Transaction failed to return a progress record.',
       );
     }
+
     this.logger.debug(
       '[startOrContinueStory] Progress record after transaction:',
       JSON.stringify(progressRecord, null, 2),
     );
-    return progressRecord;
+    return progressRecord; // A metódus visszatérési típusa Promise<CharacterStoryProgressRecord>
   }
-
-  async resetStoryProgress(
-    characterId: number,
-    storyId: number,
-  ): Promise<void> {
-    this.logger.log(
-      `Character ${characterId} attempting to reset progress for story ID: ${storyId}`,
-    );
-
-    await this.knex.transaction(async (trx) => {
-      const progress = await trx<CharacterStoryProgressRecord>(
-        'character_story_progress',
-      )
-        .where({ character_id: characterId, story_id: storyId })
-        .first('id'); // Csak az ID-ra van szükségünk a hivatkozott táblákhoz
-
-      if (progress && progress.id) {
-        const progressId = progress.id;
-        this.logger.debug(`Found story progress ID: ${progressId} to reset.`);
-
-        // 1. Kapcsolódó player_progress bejegyzések törlése
-        await trx('player_progress')
-          .where({ character_story_progress_id: progressId })
-          .del();
-        this.logger.debug(
-          `Deleted player_progress entries for progress ID: ${progressId}`,
-        );
-
-        // 2. Kapcsolódó character_story_inventory bejegyzések törlése
-        await trx('character_story_inventory')
-          .where({ character_story_progress_id: progressId })
-          .del();
-        this.logger.debug(
-          `Deleted character_story_inventory entries for progress ID: ${progressId}`,
-        );
-
-        // 3. Maga a character_story_progress bejegyzés törlése
-        await trx('character_story_progress').where({ id: progressId }).del();
-        this.logger.log(
-          `Story progress ID: ${progressId} has been reset for character ${characterId}.`,
-        );
-
-        // Opcionális: Ha ez volt az aktív sztori, és nincs más aktív,
-        // akkor itt nem állítunk be újat, a játékos a dashboardra kerül.
-      } else {
-        this.logger.warn(
-          `No story progress found for character ${characterId} and story ${storyId} to reset.`,
-        );
-        // Nem dobunk hibát, ha nincs mit resetelni, egyszerűen nem történik semmi.
-      }
-    });
-  }
-
   async spendTalentPointOnStat(
     characterId: number, // Base character ID
     statName: SpendableStatName,
@@ -869,5 +905,169 @@ export class CharacterService {
       `Updating story progress ${activeStoryProgress.id} after spending talent point. Updates: ${JSON.stringify(updates)}`,
     );
     return this.updateStoryProgress(activeStoryProgress.id, updates);
+  }
+
+  // Karakter keresése vagy létrehozása userId alapján
+  async findOrCreateByUserId(
+    userId: number,
+    preferredArchetypeId?: number | null,
+  ): Promise<Character> {
+    let character = await this.knex<Character>('characters')
+      .where({ user_id: userId })
+      .first();
+    if (character) {
+      this.logger.debug(
+        `Found existing character ID ${character.id} for user ID ${userId}`,
+      );
+      // Ha van preferredArchetypeId és a karakternek még nincs, vagy frissíteni akarjuk:
+      if (
+        preferredArchetypeId &&
+        character.selected_archetype_id !== preferredArchetypeId
+      ) {
+        this.logger.log(
+          `Updating selected_archetype_id for character ${character.id} to ${preferredArchetypeId}`,
+        );
+        const [updatedCharacter] = await this.knex('characters')
+          .where({ id: character.id })
+          .update({
+            selected_archetype_id: preferredArchetypeId,
+            updated_at: new Date(),
+          })
+          .returning('*');
+        character = updatedCharacter || character; // Ha az update nem ad vissza, marad a régi
+      }
+    } else {
+      this.logger.log(
+        `No character found for user ID ${userId}. Creating new character.`,
+      );
+      const defaultName = 'Kalandor'; // Vagy az archetípusból származtatott név
+      const [newCharacter] = await this.knex('characters')
+        .insert({
+          user_id: userId,
+          name: defaultName,
+          role: 'player', // Alapértelmezett szerepkör
+          selected_archetype_id: preferredArchetypeId, // Itt állítjuk be
+        })
+        .returning('*');
+
+      if (!newCharacter) {
+        // Biztonsági ellenőrzés
+        this.logger.error(
+          `Failed to create or retrieve new character for user ID ${userId}.`,
+        );
+        throw new InternalServerErrorException(
+          'Character creation failed unexpectedly.',
+        );
+      }
+      character = newCharacter;
+      this.logger.log(
+        `New character created with ID: ${character!.id}, ArchetypeID: ${preferredArchetypeId}`,
+      );
+    }
+    if (!character)
+      throw new InternalServerErrorException(
+        'Failed to find or create character.',
+      );
+    return character; // Visszaadja a baseCharacter-t (effektek nélkül)
+  }
+
+  async getSelectableArchetypes(): Promise<PlayerArchetypeDto[]> {
+    this.logger.log(
+      'Fetching selectable character archetypes for players with ability details',
+    );
+    try {
+      const archetypes = await this.knex<CharacterArchetypeRecord>(
+        'character_archetypes',
+      )
+        // .where({ is_player_selectable: true }) // Ha lenne ilyen flag
+        .select('*') // Most minden oszlop kell az archetípusból
+        .orderBy('name', 'asc');
+
+      const result: PlayerArchetypeDto[] = [];
+
+      for (const arch of archetypes) {
+        let abilitiesDetails: SimpleAbilityInfoDto[] = [];
+        if (arch.starting_ability_ids && arch.starting_ability_ids.length > 0) {
+          const abilities = await this.knex<AbilityRecord>('abilities')
+            .whereIn('id', arch.starting_ability_ids)
+            .select('id', 'name', 'description');
+          abilitiesDetails = abilities.map((a) => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+          }));
+        }
+
+        result.push({
+          id: arch.id,
+          name: arch.name,
+          description: arch.description,
+          iconPath: arch.icon_path,
+          baseHealthBonus: arch.base_health_bonus,
+          baseSkillBonus: arch.base_skill_bonus,
+          baseLuckBonus: arch.base_luck_bonus,
+          baseStaminaBonus: arch.base_stamina_bonus,
+          baseDefenseBonus: arch.base_defense_bonus,
+          startingAbilities: abilitiesDetails,
+        });
+      }
+      return result;
+    } catch (error) {
+      this.logger.error(
+        'Failed to fetch selectable archetypes with abilities',
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Could not retrieve character archetypes.',
+      );
+    }
+  }
+  // Karakter archetípusának beállítása
+  async selectArchetypeForCharacter(
+    characterId: number,
+    archetypeId: number,
+  ): Promise<Character> {
+    this.logger.log(
+      `Character ${characterId} attempting to select archetype ID: ${archetypeId}`,
+    );
+
+    // Ellenőrizzük, hogy létezik-e ilyen archetípus (opcionális, de ajánlott)
+    const archetypeExists = await this.knex('character_archetypes')
+      .where({ id: archetypeId })
+      .first();
+    if (!archetypeExists) {
+      this.logger.warn(
+        `Attempted to select non-existent archetype ID: ${archetypeId} for character ${characterId}`,
+      );
+      throw new NotFoundException(
+        `Archetype with ID ${archetypeId} not found.`,
+      );
+    }
+
+    const [updatedCharacter] = await this.knex('characters')
+      .where({ id: characterId })
+      .update({
+        selected_archetype_id: archetypeId,
+        updated_at: new Date(),
+      })
+      .returning('*'); // Visszaadjuk a teljes frissített karakter sort
+
+    if (!updatedCharacter) {
+      // Ennek nem szabadna előfordulnia, ha a characterId valid
+      this.logger.error(
+        `Failed to update archetype for character ID ${characterId}. Character not found.`,
+      );
+      throw new NotFoundException(
+        `Character with ID ${characterId} not found for archetype update.`,
+      );
+    }
+    this.logger.log(
+      `Character ${characterId} successfully selected archetype ID: ${archetypeId}`,
+    );
+
+    // Nem kell itt applyPassiveEffects, mert ez csak a base character-t érinti.
+    // Az effektek akkor kerülnek alkalmazásra, amikor a GameService egy sztorihoz
+    // létrehozza/betölti a character_story_progress-t.
+    return updatedCharacter;
   }
 }

@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
 import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
-import { SpendableStatName } from './character/dto/spend-talent-point.dto';
+import { SpendableStatName, PlayerArchetypeDto } from './character/dto';
 export interface Character {
     id: number;
     user_id: number;
@@ -20,6 +20,7 @@ export interface Character {
     talent_points_available: number | null;
     equipped_weapon_id: number | null;
     equipped_armor_id: number | null;
+    selected_archetype_id: number | null;
 }
 export declare class CharacterService {
     private readonly knex;
@@ -34,10 +35,10 @@ export declare class CharacterService {
     updateStoryProgress(progressId: number, updates: Partial<Omit<CharacterStoryProgressRecord, 'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'>>): Promise<CharacterStoryProgressRecord>;
     createCharacter(userId: number): Promise<Character>;
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
-    findOrCreateByUserId(userId: number): Promise<Character>;
     equipItem(characterId: number, itemId: number): Promise<CharacterStoryProgressRecord>;
     unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<CharacterStoryProgressRecord>;
     applyPassiveEffects(character: Character): Promise<Character>;
+    resetStoryProgress(characterId: number, storyId: number): Promise<void>;
     addXp(characterId: number, xpToAdd: number): Promise<{
         leveledUp: boolean;
         messages: string[];
@@ -45,6 +46,8 @@ export declare class CharacterService {
     }>;
     getActiveStoryProgress(characterId: number): Promise<CharacterStoryProgressRecord | null>;
     startOrContinueStory(characterId: number, storyId: number): Promise<CharacterStoryProgressRecord>;
-    resetStoryProgress(characterId: number, storyId: number): Promise<void>;
     spendTalentPointOnStat(characterId: number, statName: SpendableStatName): Promise<CharacterStoryProgressRecord>;
+    findOrCreateByUserId(userId: number, preferredArchetypeId?: number | null): Promise<Character>;
+    getSelectableArchetypes(): Promise<PlayerArchetypeDto[]>;
+    selectArchetypeForCharacter(characterId: number, archetypeId: number): Promise<Character>;
 }

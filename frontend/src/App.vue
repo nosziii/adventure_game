@@ -12,6 +12,7 @@ import AppHeader from './components/AppHeader.vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useGameStore } from './stores/game'
 
+
 const route = useRoute()
 // const router = useRouter();
 const authStore = useAuthStore()
