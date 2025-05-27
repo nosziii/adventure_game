@@ -19,8 +19,7 @@ const passport_1 = require("@nestjs/passport");
 const character_service_1 = require("./character.service");
 const class_validator_1 = require("class-validator");
 const game_service_1 = require("./game/game.service");
-const spend_talent_point_dto_1 = require("./character/dto/spend-talent-point.dto");
-const select_archetype_dto_1 = require("./character/dto/select-archetype.dto");
+const dto_1 = require("./character/dto");
 class EquipItemDto {
     itemId;
 }
@@ -113,14 +112,16 @@ let CharacterController = CharacterController_1 = class CharacterController {
             defense: characterWithEffects.defense,
         };
     }
-    async startStory(req, storyId) {
+    async beginNewPlaythrough(req, storyId, body) {
         const userId = req.user.id;
         const character = await this.characterService.findOrCreateByUserId(userId);
-        this.logger.log(`User ${userId} (Character ${character.id}) requested to start/continue story ${storyId}`);
-        await this.characterService.startOrContinueStory(character.id, storyId);
-        this.logger.log(`Story ${storyId} activated for character ${character.id}. Fetching initial game state.`);
-        const newGameState = await this.gameService.getCurrentGameState(userId);
-        return newGameState;
+        if (!character) {
+            throw new common_1.NotFoundException('Character not found for user.');
+        }
+        this.logger.log(`User ${userId} (Character ${character.id}) beginning new playthrough of story ${storyId} with archetype ${body.archetypeId}`);
+        await this.characterService.beginNewStoryPlaythrough(character.id, storyId, body.archetypeId);
+        this.logger.log(`New playthrough started. Fetching initial game state for user ${userId}.`);
+        return this.gameService.getCurrentGameState(userId);
     }
     async resetStory(req, storyId) {
         const userId = req.user.id;
@@ -178,14 +179,14 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "unequip", null);
 __decorate([
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
-    (0, common_1.Post)('story/:storyId/start'),
+    (0, common_1.Post)('story/:storyId/begin'),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Param)('storyId', common_1.ParseIntPipe)),
+    __param(2, (0, common_1.Body)(common_1.ValidationPipe)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Number]),
+    __metadata("design:paramtypes", [Object, Number, dto_1.BeginStoryWithArchetypeDto]),
     __metadata("design:returntype", Promise)
-], CharacterController.prototype, "startStory", null);
+], CharacterController.prototype, "beginNewPlaythrough", null);
 __decorate([
     (0, common_1.Post)('story/:storyId/reset'),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
@@ -200,7 +201,7 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, spend_talent_point_dto_1.SpendTalentPointDto]),
+    __metadata("design:paramtypes", [Object, dto_1.SpendTalentPointDto]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "spendTalentPoint", null);
 __decorate([
@@ -214,7 +215,7 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, select_archetype_dto_1.SelectArchetypeDto]),
+    __metadata("design:paramtypes", [Object, dto_1.SelectArchetypeDto]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "selectArchetype", null);
 exports.CharacterController = CharacterController = CharacterController_1 = __decorate([

@@ -534,46 +534,103 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.debug(`Updating story progress ${activeStoryProgress.id} after spending talent point. Updates: ${JSON.stringify(updates)}`);
         return this.updateStoryProgress(activeStoryProgress.id, updates);
     }
-    async findOrCreateByUserId(userId, preferredArchetypeId) {
+    async findOrCreateByUserId(userId) {
         let character = await this.knex('characters')
             .where({ user_id: userId })
             .first();
-        if (character) {
-            this.logger.debug(`Found existing character ID ${character.id} for user ID ${userId}`);
-            if (preferredArchetypeId &&
-                character.selected_archetype_id !== preferredArchetypeId) {
-                this.logger.log(`Updating selected_archetype_id for character ${character.id} to ${preferredArchetypeId}`);
-                const [updatedCharacter] = await this.knex('characters')
-                    .where({ id: character.id })
-                    .update({
-                    selected_archetype_id: preferredArchetypeId,
-                    updated_at: new Date(),
-                })
-                    .returning('*');
-                character = updatedCharacter || character;
-            }
-        }
-        else {
-            this.logger.log(`No character found for user ID ${userId}. Creating new character.`);
-            const defaultName = 'Kalandor';
+        if (!character) {
+            this.logger.log(`No character for user ID ${userId}. Creating new base character.`);
             const [newCharacter] = await this.knex('characters')
-                .insert({
-                user_id: userId,
-                name: defaultName,
-                role: 'player',
-                selected_archetype_id: preferredArchetypeId,
-            })
+                .insert({ user_id: userId, name: 'Kalandor', role: 'player' })
                 .returning('*');
-            if (!newCharacter) {
-                this.logger.error(`Failed to create or retrieve new character for user ID ${userId}.`);
-                throw new common_1.InternalServerErrorException('Character creation failed unexpectedly.');
-            }
             character = newCharacter;
-            this.logger.log(`New character created with ID: ${character.id}, ArchetypeID: ${preferredArchetypeId}`);
         }
         if (!character)
-            throw new common_1.InternalServerErrorException('Failed to find or create character.');
+            throw new common_1.InternalServerErrorException('Failed to find or create base character.');
         return character;
+    }
+    async setActiveStory(characterId, storyId) {
+        this.logger.log(`Character ${characterId} attempting to set story ID: ${storyId} as active.`);
+        await this.knex.transaction(async (trx) => {
+            await trx('character_story_progress')
+                .where({ character_id: characterId, is_active: true })
+                .andWhereNot({ story_id: storyId })
+                .update({ is_active: false, updated_at: new Date() });
+            const [updatedRow] = await trx('character_story_progress')
+                .where({ character_id: characterId, story_id: storyId })
+                .update({ is_active: true, last_played_at: new Date() })
+                .returning('*');
+            if (!updatedRow) {
+                this.logger.log(`No existing progress for story ${storyId}, character ${characterId}. New playthrough needed.`);
+                return null;
+            }
+            this.logger.log(`Story progress ${updatedRow.id} activated for story ${storyId}, character ${characterId}.`);
+            return updatedRow;
+        });
+        const progress = await this.getActiveStoryProgress(characterId);
+        return progress && progress.story_id === storyId ? progress : null;
+    }
+    async beginNewStoryPlaythrough(characterId, storyId, archetypeId) {
+        this.logger.log(`Character ${characterId} beginning new playthrough for story ${storyId} with archetype ${archetypeId}`);
+        const story = await this.knex('stories')
+            .where({ id: storyId, is_published: true })
+            .first();
+        if (!story)
+            throw new common_1.NotFoundException(`Published story with ID ${storyId} not found.`);
+        const archetype = await this.knex('character_archetypes')
+            .where({ id: archetypeId })
+            .first();
+        if (!archetype)
+            throw new common_1.NotFoundException(`Archetype with ID ${archetypeId} not found.`);
+        await this.knex('character_story_progress')
+            .where({ character_id: characterId, is_active: true })
+            .update({ is_active: false, updated_at: new Date() });
+        const startingNodeId = story.starting_node_id;
+        const archetypeBonuses = {
+            health: archetype.base_health_bonus || 0,
+            skill: archetype.base_skill_bonus || 0,
+            luck: archetype.base_luck_bonus || 0,
+            stamina: archetype.base_stamina_bonus || 0,
+            defense: archetype.base_defense_bonus || 0,
+        };
+        const [newProgress] = await this.knex('character_story_progress')
+            .insert({
+            character_id: characterId,
+            story_id: storyId,
+            selected_archetype_id: archetypeId,
+            current_node_id: startingNodeId,
+            health: DEFAULT_HEALTH + archetypeBonuses.health,
+            skill: DEFAULT_SKILL + archetypeBonuses.skill,
+            luck: DEFAULT_LUCK + archetypeBonuses.luck,
+            stamina: DEFAULT_STAMINA + archetypeBonuses.stamina,
+            defense: DEFAULT_DEFENSE + archetypeBonuses.defense,
+            level: DEFAULT_LEVEL,
+            xp: DEFAULT_XP,
+            xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
+            is_active: true,
+            last_played_at: new Date(),
+        })
+            .returning('*');
+        if (!newProgress)
+            throw new common_1.InternalServerErrorException('Failed to create new story progress.');
+        const startingAbilities = archetype.starting_ability_ids || [];
+        if (startingAbilities.length > 0) {
+            const abilitiesToInsert = startingAbilities.map((abilityId) => ({
+                character_story_progress_id: newProgress.id,
+                ability_id: abilityId,
+            }));
+            await this.knex('character_story_abilities')
+                .insert(abilitiesToInsert)
+                .onConflict()
+                .ignore();
+        }
+        await this.knex('player_progress').insert({
+            character_story_progress_id: newProgress.id,
+            node_id: startingNodeId,
+            choice_id_taken: null,
+        });
+        this.logger.log(`New playthrough (ProgressID: ${newProgress.id}) started for story ${storyId}, char ${characterId} with archetype ${archetypeId}`);
+        return newProgress;
     }
     async getSelectableArchetypes() {
         this.logger.log('Fetching selectable character archetypes for players with ability details');

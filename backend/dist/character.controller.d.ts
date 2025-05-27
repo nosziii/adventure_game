@@ -1,10 +1,8 @@
 import { CharacterService } from './character.service';
 import { CharacterStatsDto } from './game/dto/character-stats.dto';
 import { GameService } from './game/game.service';
-import { GameStateDto } from './game/dto/game-state.dto';
-import { SpendTalentPointDto } from './character/dto/spend-talent-point.dto';
-import { PlayerArchetypeDto } from './character/dto/player-archetype.dto';
-import { SelectArchetypeDto } from './character/dto/select-archetype.dto';
+import { GameStateDto } from './game/dto';
+import { SelectArchetypeDto, PlayerArchetypeDto, SpendTalentPointDto, BeginStoryWithArchetypeDto } from './character/dto';
 import { UserDto } from './auth/dto/user.dto';
 declare class EquipItemDto {
     itemId: number;
@@ -19,7 +17,7 @@ export declare class CharacterController {
     constructor(characterService: CharacterService, gameService: GameService);
     equipItem(req: any, body: EquipItemDto): Promise<CharacterStatsDto>;
     unequip(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
-    startStory(req: any, storyId: number): Promise<GameStateDto>;
+    beginNewPlaythrough(req: any, storyId: number, body: BeginStoryWithArchetypeDto): Promise<GameStateDto>;
     resetStory(req: any, storyId: number): Promise<void>;
     spendTalentPoint(req: any, spendTalentPointDto: SpendTalentPointDto): Promise<GameStateDto>;
     listSelectableArchetypes(): Promise<PlayerArchetypeDto[]>;

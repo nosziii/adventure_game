@@ -17,4 +17,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./spend-talent-point.dto"), exports);
 __exportStar(require("./player-archetype.dto"), exports);
 __exportStar(require("./select-archetype.dto"), exports);
+__exportStar(require("./begin-story-with-archetype.dto"), exports);
 //# sourceMappingURL=index.js.map

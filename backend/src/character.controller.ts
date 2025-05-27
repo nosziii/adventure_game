@@ -19,10 +19,13 @@ import { CharacterService, Character } from './character.service';
 import { CharacterStatsDto } from './game/dto/character-stats.dto'; // Használjuk a meglévő DTO-t a válaszhoz
 import { IsInt, IsNotEmpty, IsIn } from 'class-validator'; // Validációhoz
 import { GameService } from './game/game.service';
-import { GameStateDto } from './game/dto/game-state.dto';
-import { SpendTalentPointDto } from './character/dto/spend-talent-point.dto'; // DTO a talent point költéshez
-import { PlayerArchetypeDto } from './character/dto/player-archetype.dto'; // DTO az archetype-okhoz
-import { SelectArchetypeDto } from './character/dto/select-archetype.dto'; // DTO az archetípus kiválasztásához
+import { GameStateDto } from './game/dto';
+import {
+  SelectArchetypeDto,
+  PlayerArchetypeDto,
+  SpendTalentPointDto,
+  BeginStoryWithArchetypeDto,
+} from './character/dto'; // DTO az archetípus kiválasztásához
 import { UserDto } from './auth/dto/user.dto'; // DTO a felhasználó adatokhoz
 
 // DTO az equip kéréshez
@@ -152,36 +155,36 @@ export class CharacterController {
     };
   }
 
-  @UseGuards(AuthGuard('jwt'))
-  @Post('story/:storyId/start') // POST /api/character/story/1/start
-  async startStory(
+  @Post('story/:storyId/begin') // POST /api/character/story/:storyId/begin
+  async beginNewPlaythrough(
     @Request() req,
     @Param('storyId', ParseIntPipe) storyId: number,
+    @Body(ValidationPipe) body: BeginStoryWithArchetypeDto, // Új DTO a body-hoz
   ): Promise<GameStateDto> {
-    // Visszaadjuk a teljes új játékállapotot
-    const userId = req.user.id; // A req.user már tartalmazza a user id-t a JwtStrategy-ből
-
-    // 1. Megkeressük a karaktert a user ID alapján (ez adja a characterId-t)
-    const character = await this.characterService.findOrCreateByUserId(userId);
-    // A findOrCreateByUserId már visszaadja az alap Character objektumot,
-    // ami tartalmazza a character.id-t.
+    const userId = req.user.id;
+    // A CharacterService.findOrCreateByUserId-t már nem kell itt hívni, ha a beginNewStoryPlaythrough kezeli a karakter ID-t.
+    // De a characterId-t valahonnan meg kell szereznünk. A userId-ből:
+    const character = await this.characterService.findOrCreateByUserId(userId); // Ez biztosítja, hogy van base character
+    if (!character) {
+      throw new NotFoundException('Character not found for user.');
+    }
 
     this.logger.log(
-      `User ${userId} (Character ${character.id}) requested to start/continue story ${storyId}`,
+      `User ${userId} (Character ${character.id}) beginning new playthrough of story ${storyId} with archetype ${body.archetypeId}`,
     );
 
-    // 2. Meghívjuk a service metódust a sztori aktiválásához/létrehozásához
-    // Ez frissíti a character_story_progress táblát és beállítja az is_active-ot.
-    await this.characterService.startOrContinueStory(character.id, storyId);
+    // Ez a service metódus létrehozza a character_story_progress-t, beállítja aktívvá stb.
+    await this.characterService.beginNewStoryPlaythrough(
+      character.id,
+      storyId,
+      body.archetypeId,
+    );
+
     this.logger.log(
-      `Story ${storyId} activated for character ${character.id}. Fetching initial game state.`,
+      `New playthrough started. Fetching initial game state for user ${userId}.`,
     );
-
-    // 3. Lekérjük a frissített játékállapotot a GameService-en keresztül
-    // A GameService.getCurrentGameState-nek már az aktív sztori progressziót kell használnia!
-    const newGameState = await this.gameService.getCurrentGameState(userId);
-
-    return newGameState;
+    // Visszaadjuk a friss játékállapotot az új sztori kezdetével
+    return this.gameService.getCurrentGameState(userId);
   }
 
   // --- ÚJ VÉGPONT: Sztori Haladásának Resetelése ---

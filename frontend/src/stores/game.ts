@@ -519,5 +519,39 @@ export const useGameStore = defineStore("game", {
         this.loading = false;
       }
     },
+    async beginNewStoryWithArchetype(
+      storyId: number,
+      archetypeId: number
+    ): Promise<boolean> {
+      this.loading = true;
+      this.error = null;
+      console.log(
+        `[GameStore] Attempting to begin new playthrough for story ${storyId} with archetype ${archetypeId}`
+      );
+      try {
+        // Ez a végpont hozza létre a character_story_progress-t az archetípussal,
+        // és visszaadja a kezdő GameStateDto-t.
+        const response = await apiClient.post<GameStateResponse>(
+          `/character/story/${storyId}/begin`,
+          { archetypeId }
+        );
+        this._updateStateFromResponse(response.data);
+        console.log(
+          `New playthrough for story ${storyId} with archetype ${archetypeId} started successfully.`
+        );
+        return true;
+      } catch (err: any) {
+        console.error(
+          `Failed to begin new playthrough for story ${storyId} with archetype ${archetypeId}:`,
+          err
+        );
+        this.error =
+          err.response?.data?.message ||
+          "Nem sikerült elindítani az új játékmenetet a kiválasztott karaktertípussal.";
+        return false;
+      } finally {
+        this.loading = false;
+      }
+    },
   }, // actions vége
 });

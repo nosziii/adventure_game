@@ -47,7 +47,9 @@ export declare class CharacterService {
     getActiveStoryProgress(characterId: number): Promise<CharacterStoryProgressRecord | null>;
     startOrContinueStory(characterId: number, storyId: number): Promise<CharacterStoryProgressRecord>;
     spendTalentPointOnStat(characterId: number, statName: SpendableStatName): Promise<CharacterStoryProgressRecord>;
-    findOrCreateByUserId(userId: number, preferredArchetypeId?: number | null): Promise<Character>;
+    findOrCreateByUserId(userId: number): Promise<Character>;
+    setActiveStory(characterId: number, storyId: number): Promise<CharacterStoryProgressRecord | null>;
+    beginNewStoryPlaythrough(characterId: number, storyId: number, archetypeId: number): Promise<CharacterStoryProgressRecord>;
     getSelectableArchetypes(): Promise<PlayerArchetypeDto[]>;
     selectArchetypeForCharacter(characterId: number, archetypeId: number): Promise<Character>;
 }

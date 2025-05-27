@@ -13,6 +13,9 @@
       <router-link v-if="authStore.isAuthenticated && authStore.isAdmin" :to="{ name: 'admin-dashboard' }" class="themed-button admin-button-stats">
         Admin
       </router-link>
+      <button v-if="authStore.isAuthenticated" @click="handleDashboard" class="themed-button logout-button-stats">
+        Dashboard
+      </button> 
       <button v-if="authStore.isAuthenticated" @click="handleLogout" class="themed-button logout-button-stats">
         Kilépés
       </button>
@@ -41,6 +44,9 @@ const handleLogout = () => {
   console.log('Logging out...')
   authStore.logout()
   router.push({ name: 'login' })
+}
+const handleDashboard = () => {
+  router.push({ name: 'dashboard' })
 }
 
   </script>
