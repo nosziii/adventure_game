@@ -44,6 +44,7 @@ const mapArchetypeRecordToDto = (
     baseStaminaBonus: archetype.base_stamina_bonus,
     baseDefenseBonus: archetype.base_defense_bonus,
     startingAbilityIds: archetype.starting_ability_ids, // Knex a JSONB-t általában tömbként/objektumként adja vissza
+    learnableAbilityIds: archetype.learnable_ability_ids,
     createdAt: archetype.created_at,
     updatedAt: archetype.updated_at,
   };

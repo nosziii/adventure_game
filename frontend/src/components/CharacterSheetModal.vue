@@ -62,13 +62,53 @@
         <p v-if="gameStore.isLoading" class="loading-text small">Pont elköltése folyamatban...</p>
         <p v-if="gameStore.getError" class="error-message small">{{ gameStore.getError }}</p>
       </div>
-      
+       <hr class="divider-major" />
+
+        <div class="char-section">
+          <h3>Képességek</h3>
+          <div v-if="gameStore.isLoadingLearnableAbilities" class="loading-text small">Képességek töltése...</div>
+          <div v-else-if="gameStore.getLearnAbilityError" class="error-message small">{{ gameStore.getLearnAbilityError }}</div>
+          
+          <div v-else>
+            <h4>Megtanulható Képességek:</h4>
+            <ul v-if="learnableAndNotYetLearned.length > 0" class="abilities-list">
+              <li v-for="ability in learnableAndNotYetLearned" :key="ability.id" class="ability-item">
+                <div class="ability-info">
+                  <strong>{{ ability.name }}</strong> (Szint: {{ability.levelRequirement}}, Költség: {{ability.talentPointCost}} TP)
+                  <p class="ability-desc">{{ ability.description }}</p>
+                  <p v-if="ability.effectString" class="ability-effect"><i>Hatás: {{ ability.effectString }}</i></p>
+                  <p v-if="ability.prerequisites && ability.prerequisites.length > 0" class="ability-prereq">
+                    Előfeltételek: {{ getPrerequisiteNames(ability.prerequisites) }}
+                  </p>
+                </div>
+                <button 
+                  @click="handleLearnAbility(ability.id)" 
+                  :disabled="!ability.canLearn || gameStore.isLoading" 
+                  class="learn-button themed-button"
+                  :title="ability.canLearn ? `Megtanulom (${ability.talentPointCost} TP)` : (ability.reasonCantLearn || 'Nem tanulható')"
+                >
+                  {{ ability.canLearn ? 'Megtanul' : 'Nem elérhető' }}
+                </button>
+              </li>
+            </ul>
+            <p v-else><i>Jelenleg nincs több megtanulható képességed az archetípusodhoz/szintedhez.</i></p>
+
+            <h4 class="mt-20">Már Megtanult Képességek:</h4>
+            <ul v-if="alreadyLearnedAbilities.length > 0" class="abilities-list learned">
+              <li v-for="ability in alreadyLearnedAbilities" :key="ability.id" class="ability-item learned">
+                <strong>{{ ability.name }}</strong>
+                <p class="ability-desc">{{ ability.description }}</p>
+              </li>
+            </ul>
+            <p v-else><i>Még nem tanultál képességeket.</i></p>
+          </div>
+        </div>
       </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed,onMounted } from 'vue';
 import { useGameStore } from '../stores/game';
 // import type { CharacterStats } from '@/types/game.types'; // SpendableStatName is in gameStore now
 import type { SpendableStatName } from "../types/character.dto.types";
@@ -90,6 +130,37 @@ const handleSpendPoint = async (statName: SpendableStatName) => {
   await gameStore.spendTalentPoint(statName);
   // Az UI automatikusan frissül, mert a gameStore.characterStats reaktív
 };
+
+// Képesség tanulás kezelése
+const handleLearnAbility = async (abilityId: number) => {
+  await gameStore.learnAbilityAction(abilityId);
+  // A store akció már újrahívja a fetchLearnableAbilities-t, így a lista frissül
+};
+
+// Szűrés a template-nek
+const learnableAndNotYetLearned = computed(() => 
+  gameStore.getLearnableAbilities.filter(ab => !ab.isAlreadyLearned)
+);
+const alreadyLearnedAbilities = computed(() => 
+  gameStore.getLearnableAbilities.filter(ab => ab.isAlreadyLearned)
+);
+
+// Segédfüggvény az előfeltétel nevekhez (opcionális, javítja a kiírást)
+const getPrerequisiteNames = (prereqIds: number[] | null): string => {
+    if (!prereqIds || prereqIds.length === 0) return 'Nincs';
+    // Ehhez az adminAbilitiesStore-ra is szükség lenne, hogy a neveket lekérjük
+    // Vagy a LearnableAbilityDto tartalmazhatná a prereq neveket.
+    // Most csak ID-kat írunk ki.
+    return prereqIds.map(id => `ID:${id}`).join(', ');
+};
+
+
+onMounted(() => {
+  // Amikor a modal megnyílik, lekérjük a megtanulható képességeket
+  if (gameStore.getLearnableAbilities.length === 0) { // Csak ha még nincs betöltve
+      gameStore.fetchLearnableAbilities();
+  }
+});
 </script>
 
 <style scoped>
@@ -233,5 +304,40 @@ h3 {
     padding: 5px;
 }
 .error-message.small { color: #ff8080; }
+
+.divider-major { border-top: 2px solid var(--panel-border); margin: 30px 0; }
+.divider-minor { border-top: 1px dashed rgba(var(--panel-border-rgb, 70, 62, 82), 0.5); margin: 15px 0;}
+
+.char-section { margin-bottom: 20px; }
+.char-section h3 { font-size: 1.3em; }
+
+.abilities-list { list-style: none; padding: 0; }
+.ability-item {
+  background-color: rgba(var(--input-bg-rgb, 50,50,80), 0.3); /* input-bg-rgb kellene a :root-ba */
+  padding: 10px 15px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--panel-border-rgb, 70, 62, 82), 0.4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.ability-item.learned {
+    background-color: rgba(var(--accent-rgb, 76, 175, 80), 0.1); /* Halvány zöldes a megtanultaknak */
+    border-left: 3px solid var(--accent-secondary);
+}
+.ability-info strong {
+  font-family: 'Cinzel', serif;
+  color: var(--text-primary);
+  font-size: 1.1em;
+}
+.ability-desc { font-size: 0.85em; color: var(--text-secondary); margin: 3px 0; }
+.ability-effect, .ability-prereq { font-size: 0.75em; color: #a090b0; margin: 2px 0; }
+
+.learn-button { /* A themed-button stílusát használja, de lehet egyedi */ }
+.mt-20 { margin-top: 20px; }
+
+.loading-text.small, .error-message.small { font-size: 0.9em; padding: 8px; }
 
 </style>

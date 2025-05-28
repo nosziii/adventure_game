@@ -9,6 +9,7 @@ export interface CharacterArchetypeRecord {
     base_stamina_bonus: number;
     base_defense_bonus: number;
     starting_ability_ids: number[] | null;
+    learnable_ability_ids: number[] | null;
     created_at: Date;
     updated_at: Date;
 }

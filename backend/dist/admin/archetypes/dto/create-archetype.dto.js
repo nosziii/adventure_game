@@ -21,6 +21,7 @@ class CreateArchetypeDto {
     baseStaminaBonus;
     baseDefenseBonus;
     startingAbilityIds;
+    learnableAbilityIds;
 }
 exports.CreateArchetypeDto = CreateArchetypeDto;
 __decorate([
@@ -83,4 +84,13 @@ __decorate([
     }),
     __metadata("design:type", Object)
 ], CreateArchetypeDto.prototype, "startingAbilityIds", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)({
+        message: 'A megtanulható képesség ID-knak egy tömbnek kell lennie.',
+    }),
+    (0, class_validator_1.IsInt)({ each: true }),
+    (0, class_validator_1.Min)(1, { each: true }),
+    __metadata("design:type", Object)
+], CreateArchetypeDto.prototype, "learnableAbilityIds", void 0);
 //# sourceMappingURL=create-archetype.dto.js.map

@@ -9,6 +9,7 @@ export declare class ArchetypeAdminDto {
     baseStaminaBonus: number;
     baseDefenseBonus: number;
     startingAbilityIds: number[] | null;
+    learnableAbilityIds: number[] | null;
     createdAt: Date;
     updatedAt: Date;
 }

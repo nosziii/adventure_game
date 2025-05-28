@@ -122,11 +122,16 @@ let CharacterService = CharacterService_1 = class CharacterService {
             return false;
         }
     }
-    async updateStoryProgress(progressId, updates) {
+    async updateStoryProgress(progressId, updates, trx) {
         this.logger.debug(`Updating story progress ID: ${progressId} with data: ${JSON.stringify(updates)}`);
         const finalUpdates = { ...updates, updated_at: new Date() };
-        const [updatedRecord] = await this.knex('character_story_progress')
-            .where({ id: progressId })
+        const queryBuilder = this.knex('character_story_progress').where({
+            id: progressId,
+        });
+        if (trx) {
+            queryBuilder.transacting(trx);
+        }
+        const [updatedRecord] = await queryBuilder
             .update(finalUpdates)
             .returning('*');
         if (!updatedRecord) {

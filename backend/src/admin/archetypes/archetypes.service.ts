@@ -24,7 +24,11 @@ export class AdminArchetypesService {
   ): Partial<
     Omit<CharacterArchetypeRecord, 'id' | 'created_at' | 'updated_at'>
   > {
-    const dbData: any = {};
+    const dbData: any = {
+      // Alapértelmezett null értékek, ha kellenek, vagy a DB séma kezeli
+    };
+
+    // Name, description, iconPath, és a base...Bonus mezők
     if (dto.name !== undefined) dbData.name = dto.name;
     if (dto.description !== undefined) dbData.description = dto.description;
     if (dto.iconPath !== undefined) dbData.icon_path = dto.iconPath;
@@ -39,13 +43,22 @@ export class AdminArchetypesService {
     if (dto.baseDefenseBonus !== undefined)
       dbData.base_defense_bonus = dto.baseDefenseBonus;
 
+    // startingAbilityIds
     if (dto.startingAbilityIds !== undefined) {
-      // JAVÍTÁS: Expliciten JSON stringgé alakítjuk a tömböt a JSONB oszlophoz
-      // Ha null-t akarunk tárolni, akkor null-t adjunk át, ne a "null" stringet.
+      // Az UpdateArchetypeDto-ban is léteznie kell opcionálisként
       dbData.starting_ability_ids =
         dto.startingAbilityIds === null
           ? null
           : JSON.stringify(dto.startingAbilityIds);
+    }
+
+    // learnableAbilityIds
+    if (dto.learnableAbilityIds !== undefined) {
+      // Az UpdateArchetypeDto-ban is léteznie kell opcionálisként
+      dbData.learnable_ability_ids =
+        dto.learnableAbilityIds === null
+          ? null
+          : JSON.stringify(dto.learnableAbilityIds);
     }
     return dbData;
   }

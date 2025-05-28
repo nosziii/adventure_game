@@ -207,14 +207,21 @@ export class CharacterService {
         'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'
       >
     >,
+    trx?: Knex.Transaction,
   ): Promise<CharacterStoryProgressRecord> {
     this.logger.debug(
       `Updating story progress ID: ${progressId} with data: ${JSON.stringify(updates)}`,
     );
     const finalUpdates = { ...updates, updated_at: new Date() };
+    const queryBuilder = this.knex('character_story_progress').where({
+      id: progressId,
+    });
+    if (trx) {
+      // Ha kaptunk tranzakciót, használjuk azt
+      queryBuilder.transacting(trx);
+    }
 
-    const [updatedRecord] = await this.knex('character_story_progress')
-      .where({ id: progressId })
+    const [updatedRecord] = await queryBuilder
       .update(finalUpdates)
       .returning('*');
 

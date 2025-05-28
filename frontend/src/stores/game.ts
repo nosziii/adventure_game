@@ -12,6 +12,7 @@ import type {
   PlayerMapEdge,
   PlayerMapData,
   CombatActionDetails,
+  LearnableAbility,
 } from "../types/game.types";
 import { useStoryStore } from "./story";
 import type { SpendableStatName } from "../types/character.dto.types";
@@ -35,6 +36,9 @@ interface GameState {
   mapEdges: PlayerMapEdge[];
   minimapVisible: boolean;
   loadingMinimap: boolean;
+  learnableAbilities: LearnableAbility[]; // <-- ÚJ
+  isLoadingLearnableAbilities: boolean; // <-- ÚJ
+  learnAbilityError: string | null;
 }
 
 export const useGameStore = defineStore("game", {
@@ -44,6 +48,9 @@ export const useGameStore = defineStore("game", {
     characterStats: null,
     currentRoundDetailedActions: [],
     messages: [],
+    learnableAbilities: [],
+    isLoadingLearnableAbilities: false,
+    learnAbilityError: null,
     loading: false,
     error: null,
     combatState: null,
@@ -85,6 +92,11 @@ export const useGameStore = defineStore("game", {
     getMapEdges: (state): PlayerMapEdge[] => state.mapEdges,
     isMinimapVisible: (state): boolean => state.minimapVisible,
     isLoadingMinimap: (state): boolean => state.loadingMinimap,
+    getLearnableAbilities: (state): LearnableAbility[] =>
+      state.learnableAbilities, // <-- ÚJ
+    isLoadingLearnableAbilities: (state): boolean =>
+      state.isLoadingLearnableAbilities, // <-- ÚJ
+    getLearnAbilityError: (state): string | null => state.learnAbilityError,
   },
 
   actions: {
@@ -548,6 +560,65 @@ export const useGameStore = defineStore("game", {
         this.error =
           err.response?.data?.message ||
           "Nem sikerült elindítani az új játékmenetet a kiválasztott karaktertípussal.";
+        return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchLearnableAbilities() {
+      this.isLoadingLearnableAbilities = true;
+      this.learnAbilityError = null;
+      this.error = null; // Általános hibát is törölhetjük
+      console.log("[GameStore] Fetching learnable abilities...");
+      try {
+        const response = await apiClient.get<LearnableAbility[]>(
+          "/player-abilities/learnable"
+        );
+        this.learnableAbilities = response.data;
+        console.log(
+          `[GameStore] Fetched ${this.learnableAbilities.length} learnable abilities.`
+        );
+      } catch (err: any) {
+        console.error("Failed to fetch learnable abilities:", err);
+        this.learnAbilityError =
+          err.response?.data?.message ||
+          "Nem sikerült betölteni a megtanulható képességeket.";
+        this.error = this.learnAbilityError; // Általános hibába is betehetjük
+        this.learnableAbilities = [];
+      } finally {
+        this.isLoadingLearnableAbilities = false;
+      }
+    },
+
+    async learnAbilityAction(abilityId: number): Promise<boolean> {
+      this.loading = true; // Használhatjuk az általános loading flaget
+      this.learnAbilityError = null;
+      this.error = null;
+      console.log(`[GameStore] Attempting to learn ability ID: ${abilityId}`);
+      try {
+        // A backend /player-abilities/learn végpontja GameStateResponse-t ad vissza
+        const response = await apiClient.post<GameStateResponse>(
+          "/player-abilities/learn",
+          { abilityId }
+        );
+
+        this._updateStateFromResponse(response.data); // Frissítjük a teljes játékállapotot (benne a talent pontokkal)
+
+        // Sikeres tanulás után újra le kell kérni a megtanulható képességek listáját,
+        // mert a feltételek (pl. pontok, már megtanult) változhattak.
+        await this.fetchLearnableAbilities();
+
+        console.log(
+          `Ability ${abilityId} learned successfully. Game state and learnable abilities refreshed.`
+        );
+        return true;
+      } catch (err: any) {
+        console.error(`Failed to learn ability ${abilityId}:`, err);
+        const errorMessage =
+          err.response?.data?.message ||
+          `Nem sikerült megtanulni a(z) ${abilityId} ID-jú képességet.`;
+        this.learnAbilityError = errorMessage;
+        this.error = errorMessage;
         return false;
       } finally {
         this.loading = false;

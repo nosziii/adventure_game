@@ -62,4 +62,12 @@ export class CreateArchetypeDto {
     message: 'Minden kezdő képesség ID-nak legalább 1-nek kell lennie.',
   })
   startingAbilityIds?: number[] | null; // A JSONB-t tömbként várjuk
+
+  @IsOptional()
+  @IsArray({
+    message: 'A megtanulható képesség ID-knak egy tömbnek kell lennie.',
+  })
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  learnableAbilityIds?: number[] | null;
 }

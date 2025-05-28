@@ -12,6 +12,7 @@ class ArchetypeAdminDto {
     baseStaminaBonus;
     baseDefenseBonus;
     startingAbilityIds;
+    learnableAbilityIds;
     createdAt;
     updatedAt;
 }

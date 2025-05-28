@@ -1,5 +1,8 @@
 // backend/seeds/initial_story.js - FRISSÍTETT
 
+const ABILITIES_TABLE = 'abilities';
+const ARCHETYPES_TABLE = 'character_archetypes';
+
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
@@ -14,7 +17,7 @@ exports.seed = async function (knex) {
   // Aztán a choice-ok (amik story_node-ra és item-re hivatkoznak)
   await knex('choices').del();
   // Aztán a story_node_item (amik story_node-ra és item-re hivatkoznak)
-  await knex('stories').del(); 
+  await knex('stories').del();
   // Aztán a story_node-ok (amik enemy-re és item-re hivatkoznak)
   await knex('story_nodes').del();
   // Aztán az enemies (amik item-re hivatkoznak)
@@ -38,7 +41,8 @@ exports.seed = async function (knex) {
     {
       id: 2,
       name: 'Gyógyító Ital',
-      description: 'Egy kis üvegcsényi piros folyadék. Visszaállít némi életerőt.',
+      description:
+        'Egy kis üvegcsényi piros folyadék. Visszaállít némi életerőt.',
       type: 'potion',
       effect: 'heal+30', // Kód értelmezi majd
       usable: true, // Használható
@@ -49,7 +53,7 @@ exports.seed = async function (knex) {
       description: 'Egy régi, nehéz kulcs. Vajon mit nyit?',
       type: 'key',
       effect: null,
-      usable: false
+      usable: false,
     },
     {
       id: 4, // Következő szabad ID
@@ -58,7 +62,7 @@ exports.seed = async function (knex) {
       type: 'armor',
       effect: 'defense+3', // +3 védelem
       usable: false, // Felszerelés
-    }
+    },
   ]);
   console.log('Items inserted.');
 
@@ -77,8 +81,10 @@ exports.seed = async function (knex) {
       special_attack_name: 'Bődületes Bunkócsapás',
       special_attack_damage_multiplier: 2.5, // 2.5x sebzés
       special_attack_charge_turns: 1, // 1 kör töltés után támad
-      special_attack_telegraph_text: 'Az Ogre mély levegőt vesz, és magasra emeli óriási bunkóját, láthatóan egy hatalmas csapásra készül!',
-      special_attack_execute_text: 'Az Ogre teljes erejéből lesújt rád a Bődületes Bunkócsapással!'
+      special_attack_telegraph_text:
+        'Az Ogre mély levegőt vesz, és magasra emeli óriási bunkóját, láthatóan egy hatalmas csapásra készül!',
+      special_attack_execute_text:
+        'Az Ogre teljes erejéből lesújt rád a Bődületes Bunkócsapással!',
     },
   ]);
   console.log('Enemies inserted.');
@@ -98,9 +104,9 @@ exports.seed = async function (knex) {
     // Node 3 mostantól az Ogre legyőzése utáni állapot lehetne, de a tervben Node 8 volt ez.
     // Hagyjuk ki a 3-ast, vagy adjunk neki új szerepet? Legyen a régi ogre helyett ez a vereség?
     {
-        id: 3, // Legyen ez a Vereség node (korábban az ogre volt itt)
-        text: 'Túl sokáig haboztál, és valami a sötétből elkapott... A kalandod itt véget ért.',
-        is_end: true,
+      id: 3, // Legyen ez a Vereség node (korábban az ogre volt itt)
+      text: 'Túl sokáig haboztál, és valami a sötétből elkapott... A kalandod itt véget ért.',
+      is_end: true,
     },
     {
       id: 4, // Bokor (Új)
@@ -122,9 +128,18 @@ exports.seed = async function (knex) {
     //     text: 'Nagy nehezen legyűröd az ogrét! A kunyhóban kutatva találsz egy gyógyító italt a holmijai között.',
     //     item_reward_id: 2, // Megkapod a 2-es ID-jű tárgyat (Gyógyító Ital)
     // },
-    { id: 8, text: 'Nagy nehezen legyűröd az ogrét! A holmijai között egy rozsdás kulcsot találsz.' }, // Már nem ad italt itt!
-    { id: 10, text: 'A kunyhó hátsó részében egy erős, zárt ajtót találsz, ami egy pincébe vezethet.'}, // <-- ÚJ NODE: Pinceajtó
-    { id: 11, text: 'A kulccsal kinyitod az ajtót és leereszkedsz a sötét, dohos pincébe. Egy ládát látsz a sarokban!'},
+    {
+      id: 8,
+      text: 'Nagy nehezen legyűröd az ogrét! A holmijai között egy rozsdás kulcsot találsz.',
+    }, // Már nem ad italt itt!
+    {
+      id: 10,
+      text: 'A kunyhó hátsó részében egy erős, zárt ajtót találsz, ami egy pincébe vezethet.',
+    }, // <-- ÚJ NODE: Pinceajtó
+    {
+      id: 11,
+      text: 'A kulccsal kinyitod az ajtót és leereszkedsz a sötét, dohos pincébe. Egy ládát látsz a sarokban!',
+    },
     // Node 9 nem kell, mert a Node 3 lett a vereség vége.
   ]);
   console.log('Story nodes inserted/updated.');
@@ -137,25 +152,52 @@ exports.seed = async function (knex) {
       source_node_id: 1,
       target_node_id: 2,
       text: 'Elindulsz az ösvényen. (Költség: Gyógyító Ital)',
-      item_cost_id: 2
+      item_cost_id: 2,
     }, // -> Manó
     { source_node_id: 1, target_node_id: 6, text: 'Odamész a kunyhóhoz.' }, // -> Kunyhó bejárata
-    { source_node_id: 1, target_node_id: 4, text: 'Megvizsgálod a zizegő bokrot.' }, // -> Bokor
+    {
+      source_node_id: 1,
+      target_node_id: 4,
+      text: 'Megvizsgálod a zizegő bokrot.',
+    }, // -> Bokor
 
     // Node 4 választása
-    { source_node_id: 4, target_node_id: 1, text: 'Felveszed a kardot és visszamész.' }, // -> Erdőszél
+    {
+      source_node_id: 4,
+      target_node_id: 1,
+      text: 'Felveszed a kardot és visszamész.',
+    }, // -> Erdőszél
 
     // Node 6 választásai
-    { source_node_id: 6, target_node_id: 7, text: 'Bemész a kunyhóba.', required_stat_check: 'skill >= 10',required_item_id: 1 }, // -> Ogre Harc (feltétellel)
-    { source_node_id: 6, target_node_id: 2, text: 'Inkább elsunnyogsz az ösvény felé.' }, // -> Manó
+    {
+      source_node_id: 6,
+      target_node_id: 7,
+      text: 'Bemész a kunyhóba.',
+      required_stat_check: 'skill >= 10',
+      required_item_id: 1,
+    }, // -> Ogre Harc (feltétellel)
+    {
+      source_node_id: 6,
+      target_node_id: 2,
+      text: 'Inkább elsunnyogsz az ösvény felé.',
+    }, // -> Manó
 
     // Node 8 választása (Győzelem után)
     // { source_node_id: 8, target_node_id: 2, text: 'Elhagyod a kunyhót.' }, // -> Manó
-     // Node 8 (Győzelem) választása MOST Node 10-re mutat
+    // Node 8 (Győzelem) választása MOST Node 10-re mutat
     { source_node_id: 8, target_node_id: 10, text: 'Körülnézel a kunyhóban.' }, // <-- MÓDOSÍTOTT CÉL
     // Node 10 (Pinceajtó) választásai (ÚJAK)
-    { source_node_id: 10, target_node_id: 11, text: 'Kinyitod az ajtót a kulccsal.', required_item_id: 3 }, // <-- Kell a kulcs (ID=3)
-    { source_node_id: 10, target_node_id: 2, text: 'Inkább elhagyod a kunyhót az ösvény felé.' }, // -> Manó
+    {
+      source_node_id: 10,
+      target_node_id: 11,
+      text: 'Kinyitod az ajtót a kulccsal.',
+      required_item_id: 3,
+    }, // <-- Kell a kulcs (ID=3)
+    {
+      source_node_id: 10,
+      target_node_id: 2,
+      text: 'Inkább elhagyod a kunyhót az ösvény felé.',
+    }, // -> Manó
   ]);
   console.log('Choices inserted.');
 
@@ -163,9 +205,10 @@ exports.seed = async function (knex) {
     {
       id: 1, // Adjunk neki explicit ID-t a könnyebb hivatkozásért
       title: 'Az Elveszett Kaland Kezdete',
-      description: 'Egy klasszikus kaland egy sötét erdőben, egy rejtélyes kunyhóval, ogréval és egy barátságos manóval.',
+      description:
+        'Egy klasszikus kaland egy sötét erdőben, egy rejtélyes kunyhóval, ogréval és egy barátságos manóval.',
       starting_node_id: 1, // Feltételezzük, hogy a Node ID 1 a kezdőpontja ennek a sztorinak
-      is_published: true   // Legyen publikált, hogy a játékosok lássák
+      is_published: true, // Legyen publikált, hogy a játékosok lássák
     },
     // Ide vehetsz fel majd másik sztorit is teszteléshez, pl.:
     // {
@@ -175,28 +218,64 @@ exports.seed = async function (knex) {
     //   starting_node_id: X, // Ehhez kellene egy új kezdő node ID
     //   is_published: false
     // }
-]);
+  ]);
 
-const ABILITIES_TABLE = 'abilities'
+  await knex(ABILITIES_TABLE).del(); // Régi képességek törlése
+  await knex(ABILITIES_TABLE).insert([
+    {
+      id: 1,
+      name: 'Kitartás I',
+      description: 'Növeli a maximális életerőt (Stamina) +10 ponttal.',
+      type: 'PASSIVE_STAT',
+      effect_string: 'stamina+10',
+      talent_point_cost: 1,
+      level_requirement: 2,
+    },
+    {
+      id: 2,
+      name: 'Élesebb Penge I',
+      description: 'Növeli a fegyverek sebzését +1 ponttal.',
+      type: 'PASSIVE_COMBAT_MODIFIER',
+      effect_string: 'weapon_damage_bonus+1',
+      talent_point_cost: 2,
+      level_requirement: 3,
+    },
+    {
+      id: 3,
+      name: 'Erős Vágás',
+      description:
+        'Egy erőteljes támadás, ami több állóképességbe kerül, de nagyobbat sebez.',
+      type: 'ACTIVE_COMBAT_ACTION',
+      effect_string: 'damage_multiplier:1.5;stamina_cost:15', // Ez még csak példa string
+      talent_point_cost: 3,
+      level_requirement: 5,
+    },
+  ]);
+  console.log('Abilities seeded.');
 
-await knex(ABILITIES_TABLE).del(); // Régi képességek törlése
-await knex(ABILITIES_TABLE).insert([
-  { 
-    id: 1, name: 'Kitartás I', description: 'Növeli a maximális életerőt (Stamina) +10 ponttal.', 
-    type: 'PASSIVE_STAT', effect_string: 'stamina+10', 
-    talent_point_cost: 1, level_requirement: 2 
-  },
-  { 
-    id: 2, name: 'Élesebb Penge I', description: 'Növeli a fegyverek sebzését +1 ponttal.', 
-    type: 'PASSIVE_COMBAT_MODIFIER', effect_string: 'weapon_damage_bonus+1', 
-    talent_point_cost: 2, level_requirement: 3 
-  },
-  { 
-    id: 3, name: 'Erős Vágás', description: 'Egy erőteljes támadás, ami több állóképességbe kerül, de nagyobbat sebez.', 
-    type: 'ACTIVE_COMBAT_ACTION', effect_string: 'damage_multiplier:1.5;stamina_cost:15', // Ez még csak példa string
-    talent_point_cost: 3, level_requirement: 5 
-  },
-]);
-console.log('Abilities seeded.');
+  await knex(ARCHETYPES_TABLE).del();
+  await knex(ARCHETYPES_TABLE).insert([
+    {
+      id: 1,
+      name: 'Harcos',
+      description: '...',
+      icon_path: '/images/archetypes/warrior.png',
+      base_stamina_bonus: 20,
+      base_skill_bonus: 5,
+      starting_ability_ids: JSON.stringify([3]), // Pl. "Erős Vágás"
+      learnable_ability_ids: JSON.stringify([1, 2, 3]), // Pl. Kitartás, Élesebb penge, Erős vágás
+    },
+    {
+      id: 2,
+      name: 'Varázsló',
+      description: '...',
+      icon_path: '/images/archetypes/mage.png',
+      base_luck_bonus: 5,
+      starting_ability_ids: JSON.stringify([]), // Nincs kezdő, vagy egy alap varázslat
+      learnable_ability_ids: JSON.stringify([]), // TODO: Ide varázslat ID-k kellenek
+    },
+    // ... (többi archetípus)
+  ]);
+  console.log('Character archetypes seeded with learnable abilities.');
   console.log('Seeding complete!');
 };

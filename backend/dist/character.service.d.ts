@@ -32,7 +32,7 @@ export declare class CharacterService {
     hasStoryItem(progressId: number, itemId: number, quantity?: number): Promise<boolean>;
     addStoryItem(progressId: number, itemId: number, quantity?: number): Promise<void>;
     removeStoryItem(progressId: number, itemId: number, quantity?: number): Promise<boolean>;
-    updateStoryProgress(progressId: number, updates: Partial<Omit<CharacterStoryProgressRecord, 'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'>>): Promise<CharacterStoryProgressRecord>;
+    updateStoryProgress(progressId: number, updates: Partial<Omit<CharacterStoryProgressRecord, 'id' | 'character_id' | 'story_id' | 'created_at' | 'updated_at'>>, trx?: Knex.Transaction): Promise<CharacterStoryProgressRecord>;
     createCharacter(userId: number): Promise<Character>;
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
     equipItem(characterId: number, itemId: number): Promise<CharacterStoryProgressRecord>;

@@ -112,6 +112,8 @@ export interface GameStateResponse {
   equippedArmorId?: number | null;
   equippedWeaponId?: number | null;
   roundActions?: CombatActionDetails[] | null;
+  talentPointsAvailable?: number | null;
+  // activeCombatAbilities?: SimpleAbilityInfo[];
 }
 
 export interface StoryInfo {
@@ -123,4 +125,18 @@ export interface PlayerStoryListItem extends StoryInfo {
   lastPlayedAt: string | null; // A Date stringgé konvertálódik JSON-ben
   currentNodeIdInStory: number | null;
   isActive: boolean;
+}
+export interface LearnableAbility {
+  // Korábban LearnableAbilityDto volt a backend DTO neve
+  id: number;
+  name: string;
+  description: string;
+  type: string; // Pl. 'PASSIVE_STAT', 'ACTIVE_COMBAT_ACTION'
+  effectString: string | null;
+  talentPointCost: number;
+  levelRequirement: number;
+  prerequisites: number[] | null; // Előfeltétel képesség ID-k
+  canLearn: boolean; // A játékos jelenleg meg tudja-e tanulni
+  reasonCantLearn?: string; // Ha nem, miért (pl. "Nem elég magas a szinted", "Nincs elég TP")
+  isAlreadyLearned: boolean;
 }

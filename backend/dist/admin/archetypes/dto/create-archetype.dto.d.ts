@@ -8,4 +8,5 @@ export declare class CreateArchetypeDto {
     baseStaminaBonus?: number;
     baseDefenseBonus?: number;
     startingAbilityIds?: number[] | null;
+    learnableAbilityIds?: number[] | null;
 }

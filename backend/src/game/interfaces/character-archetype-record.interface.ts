@@ -9,6 +9,7 @@ export interface CharacterArchetypeRecord {
   base_stamina_bonus: number;
   base_defense_bonus: number;
   starting_ability_ids: number[] | null; // A Knex a JSONB-t általában automatikusan objektummá/tömbbé alakítja
+  learnable_ability_ids: number[] | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -9,6 +9,7 @@ export class ArchetypeAdminDto {
   baseStaminaBonus: number;
   baseDefenseBonus: number;
   startingAbilityIds: number[] | null; // A JSONB-ből number[] lesz
+  learnableAbilityIds: number[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

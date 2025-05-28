@@ -47,6 +47,12 @@ let AdminArchetypesService = AdminArchetypesService_1 = class AdminArchetypesSer
                     ? null
                     : JSON.stringify(dto.startingAbilityIds);
         }
+        if (dto.learnableAbilityIds !== undefined) {
+            dbData.learnable_ability_ids =
+                dto.learnableAbilityIds === null
+                    ? null
+                    : JSON.stringify(dto.learnableAbilityIds);
+        }
         return dbData;
     }
     async findAll() {
