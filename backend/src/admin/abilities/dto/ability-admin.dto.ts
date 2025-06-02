@@ -7,6 +7,7 @@ export class AbilityAdminDto {
   talentPointCost: number;
   levelRequirement: number;
   prerequisites: any | null; // JSONB, lehet string[] vagy number[] vagy komplexebb
+  allowedArchetypeIds: number[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

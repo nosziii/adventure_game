@@ -51,6 +51,12 @@
         <small>Add meg a szükséges képesség ID-kat JSON tömb formátumban, pl. `[1, 5]`.</small>
       </div>
 
+      <div class="form-group">
+        <label for="allowedArchetypeIds">Engedélyezett Archetípus ID-k (vesszővel elválasztva, pl. 1,2):</label>
+        <input type="text" id="allowedArchetypeIds" v-model="allowedArchetypeIdsString" placeholder="pl. 1, 2 vagy hagyd üresen (mindenkinek)"/>
+        <small>Ha üres, minden archetípus számára elérhető. Különben csak a megadottaknak.</small>
+      </div>
+
 
       <div class="form-actions">
         <button type="submit" :disabled="store.isLoading || pageLoading">
@@ -89,11 +95,13 @@ const getInitialAbilityData = (): AdminCreateAbilityPayload => ({
   talentPointCost: 1,
   levelRequirement: 1,
   prerequisites: null,
+  allowedArchetypeIds: null,
 });
 
 const abilityData = ref<AdminCreateAbilityPayload | AdminUpdateAbilityPayload>(getInitialAbilityData());
 // A prerequisites mezőt külön stringként kezeljük a formban, majd konvertáljuk
 const prerequisitesString = ref<string>('');
+const allowedArchetypeIdsString = ref<string>('');
 
 
 onMounted(async () => {
@@ -118,22 +126,16 @@ onMounted(async () => {
 });
 
 watch(() => store.getCurrentAbility, (currentAbility) => {
-    localError.value = null; // Hiba törlése, ha a store adat változik
+    localError.value = null;
     if (isEditing.value && currentAbility) {
-        abilityData.value = {
-            name: currentAbility.name,
-            description: currentAbility.description,
-            type: currentAbility.type,
-            effectString: currentAbility.effectString ?? null,
-            talentPointCost: currentAbility.talentPointCost,
-            levelRequirement: currentAbility.levelRequirement,
-            prerequisites: currentAbility.prerequisites, // Ez már a helyes formátumban van a store-ból (any)
-        };
-        // A prerequisites-t stringgé alakítjuk a text inputhoz
+        abilityData.value = { ...currentAbility }; // Ez már tartalmazza az allowedArchetypeIds: number[] | null-t
         prerequisitesString.value = currentAbility.prerequisites ? JSON.stringify(currentAbility.prerequisites) : '';
+        // Az allowedArchetypeIds (number[] | null) stringgé alakítása a text inputhoz
+        allowedArchetypeIdsString.value = currentAbility.allowedArchetypeIds ? currentAbility.allowedArchetypeIds.join(', ') : '';
     } else if (!isEditing.value) {
         abilityData.value = getInitialAbilityData();
         prerequisitesString.value = '';
+        allowedArchetypeIdsString.value = '';
     }
 }, { immediate: true, deep: true });
 
@@ -159,8 +161,28 @@ const handleSubmit = async () => {
           return;
       }
   }
+  let parsedAllowedArchetypeIds: number[] | null = null;
+  if (allowedArchetypeIdsString.value.trim() !== '') {
+      const ids = allowedArchetypeIdsString.value
+          .split(',')
+          .map(idStr => parseInt(idStr.trim(), 10))
+          .filter(idNum => !isNaN(idNum) && idNum > 0);
+      if (ids.length > 0) {
+          parsedAllowedArchetypeIds = ids;
+      } else if (allowedArchetypeIdsString.value.trim() !== '') {
+          // Volt valami beírva, de nem lett belőle valid ID lista
+          localError.value = "Az Engedélyezett Archetípus ID-k érvénytelen formátumúak (pozitív számok legyenek, vesszővel elválasztva, pl. 1,2).";
+          return;
+      }
+      // Ha üres volt a string, a parsedAllowedArchetypeIds null marad, ami jó.
+  }
   
-  const payload = { ...abilityData.value, prerequisites: prerequisitesValue };
+  const payload = { ...abilityData.value, 
+    prerequisites: prerequisitesValue, 
+    allowedArchetypeIds: parsedAllowedArchetypeIds };
+    // Biztosítjuk a default értékeket, ha a number inputok üresek maradnának
+  payload.talentPointCost = Number(payload.talentPointCost) >= 0 ? Number(payload.talentPointCost) : 1;
+  payload.levelRequirement = Number(payload.levelRequirement) >= 1 ? Number(payload.levelRequirement) : 1;
 
   if (isEditing.value && abilityId.value !== null) {
     result = await store.updateAbility(abilityId.value, payload as AdminUpdateAbilityPayload);
@@ -265,6 +287,19 @@ small {
   justify-content: space-between;
   align-items: center;
   margin-top: 1.5rem;
+}
+
+button {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  border: none;
+  background: var(--button-bg);
+  color: var(--button-text);
+  margin-right: 0.8rem;
 }
 
 .btn {

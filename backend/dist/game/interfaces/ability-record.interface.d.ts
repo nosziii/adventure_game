@@ -7,6 +7,7 @@ export interface AbilityRecord {
     talent_point_cost: number;
     level_requirement: number;
     prerequisites: any | null;
+    allowed_archetype_ids: number[] | null;
     created_at: Date;
     updated_at: Date;
 }

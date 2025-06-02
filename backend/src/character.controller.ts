@@ -186,6 +186,37 @@ export class CharacterController {
     // Visszaadjuk a friss játékállapotot az új sztori kezdetével
     return this.gameService.getCurrentGameState(userId);
   }
+  @UseGuards(AuthGuard('jwt'))
+  @Post('story/:storyId/start') // POST /api/character/story/1/start
+  async startStory(
+    @Request() req,
+    @Param('storyId', ParseIntPipe) storyId: number,
+  ): Promise<GameStateDto> {
+    // Visszaadjuk a teljes új játékállapotot
+    const userId = req.user.id; // A req.user már tartalmazza a user id-t a JwtStrategy-ből
+
+    // 1. Megkeressük a karaktert a user ID alapján (ez adja a characterId-t)
+    const character = await this.characterService.findOrCreateByUserId(userId);
+    // A findOrCreateByUserId már visszaadja az alap Character objektumot,
+    // ami tartalmazza a character.id-t.
+
+    this.logger.log(
+      `User ${userId} (Character ${character.id}) requested to start/continue story ${storyId}`,
+    );
+
+    // 2. Meghívjuk a service metódust a sztori aktiválásához/létrehozásához
+    // Ez frissíti a character_story_progress táblát és beállítja az is_active-ot.
+    await this.characterService.startOrContinueStory(character.id, storyId);
+    this.logger.log(
+      `Story ${storyId} activated for character ${character.id}. Fetching initial game state.`,
+    );
+
+    // 3. Lekérjük a frissített játékállapotot a GameService-en keresztül
+    // A GameService.getCurrentGameState-nek már az aktív sztori progressziót kell használnia!
+    const newGameState = await this.gameService.getCurrentGameState(userId);
+
+    return newGameState;
+  }
 
   // --- ÚJ VÉGPONT: Sztori Haladásának Resetelése ---
   @Post('story/:storyId/reset') // POST /api/character/story/1/reset

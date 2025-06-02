@@ -22,6 +22,7 @@
               <th>Típus</th>
               <th>Költség (TP)</th>
               <th>Szint Köv.</th>
+              <th>Enged. Archetype ID-k</th> 
               <th>Műveletek</th>
             </tr>
           </thead>
@@ -32,6 +33,8 @@
               <td>{{ ability.type }}</td>
               <td>{{ ability.talentPointCost }}</td>
               <td>{{ ability.levelRequirement }}</td>
+              <td>{{ ability.allowedArchetypeIds ? ability.allowedArchetypeIds.join(', ') : '-' }}</td> 
+           
               <td>
                 <button @click="goToEditAbility(ability.id)" class="btn btn-secondary">✏️ Szerkesztés</button>
                 <button @click="handleDeleteAbility(ability.id, ability.name)" class="btn btn-danger">🗑️ Törlés</button>

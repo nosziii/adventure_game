@@ -18,6 +18,7 @@ export declare class CharacterController {
     equipItem(req: any, body: EquipItemDto): Promise<CharacterStatsDto>;
     unequip(req: any, body: UnequipItemDto): Promise<CharacterStatsDto>;
     beginNewPlaythrough(req: any, storyId: number, body: BeginStoryWithArchetypeDto): Promise<GameStateDto>;
+    startStory(req: any, storyId: number): Promise<GameStateDto>;
     resetStory(req: any, storyId: number): Promise<void>;
     spendTalentPoint(req: any, spendTalentPointDto: SpendTalentPointDto): Promise<GameStateDto>;
     listSelectableArchetypes(): Promise<PlayerArchetypeDto[]>;

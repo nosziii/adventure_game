@@ -31,8 +31,16 @@ export class AdminAbilitiesService {
     if (dto.levelRequirement !== undefined)
       dbData.level_requirement = dto.levelRequirement;
     // A prerequisites JSONB, ha a DTO stringként küldi a JSON-t, a DB driver kezeli. Ha objektum, akkor is.
-    if (dto.prerequisites !== undefined)
-      dbData.prerequisites = dto.prerequisites;
+    if (dto.prerequisites !== undefined) {
+      dbData.prerequisites =
+        dto.prerequisites === null ? null : JSON.stringify(dto.prerequisites);
+    }
+    if (dto.allowedArchetypeIds !== undefined) {
+      dbData.allowed_archetype_ids =
+        dto.allowedArchetypeIds === null
+          ? null
+          : JSON.stringify(dto.allowedArchetypeIds);
+    }
     return dbData;
   }
 

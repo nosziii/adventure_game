@@ -132,6 +132,7 @@ export interface AdminAbilityData {
   talentPointCost: number;
   levelRequirement: number;
   prerequisites: any | null; // JSONB, lehet string[] vagy number[]
+  allowedArchetypeIds: number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -144,6 +145,7 @@ export interface AdminCreateAbilityPayload {
   effectString?: string | null;
   talentPointCost?: number; // Backend defaultol, de frontendről is küldhetjük
   levelRequirement?: number; // Backend defaultol
+  allowedArchetypeIds?: number[] | null;
   prerequisites?: any | null;
 }
 

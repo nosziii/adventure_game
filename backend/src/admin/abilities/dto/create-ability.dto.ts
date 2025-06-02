@@ -8,6 +8,7 @@ import {
   MaxLength,
   IsJSON,
   IsEnum,
+  IsArray,
 } from 'class-validator';
 
 // Definiálhatunk egy enumot a képességtípusokhoz a jobb validációért
@@ -48,4 +49,18 @@ export class CreateAbilityDto {
   // @IsJSON() // Ha a JSONB stringként érkezik és validálni akarjuk
   // Vagy @IsArray() és @IsInt({ each: true }) ha pl. number[] tömböt várunk
   prerequisites?: any | null; // Lehet pl. number[] az ability ID-khoz
+
+  @IsOptional()
+  @IsArray({
+    message: 'Az engedélyezett archetípus ID-knak egy tömbnek kell lennie.',
+  })
+  @IsInt({
+    each: true,
+    message: 'Minden engedélyezett archetípus ID-nak számnak kell lennie.',
+  })
+  @Min(1, {
+    each: true,
+    message: 'Minden engedélyezett archetípus ID legalább 1 legyen.',
+  })
+  allowedArchetypeIds?: number[] | null;
 }

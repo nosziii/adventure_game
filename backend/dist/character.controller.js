@@ -123,6 +123,15 @@ let CharacterController = CharacterController_1 = class CharacterController {
         this.logger.log(`New playthrough started. Fetching initial game state for user ${userId}.`);
         return this.gameService.getCurrentGameState(userId);
     }
+    async startStory(req, storyId) {
+        const userId = req.user.id;
+        const character = await this.characterService.findOrCreateByUserId(userId);
+        this.logger.log(`User ${userId} (Character ${character.id}) requested to start/continue story ${storyId}`);
+        await this.characterService.startOrContinueStory(character.id, storyId);
+        this.logger.log(`Story ${storyId} activated for character ${character.id}. Fetching initial game state.`);
+        const newGameState = await this.gameService.getCurrentGameState(userId);
+        return newGameState;
+    }
     async resetStory(req, storyId) {
         const userId = req.user.id;
         const character = await this.characterService.findOrCreateByUserId(userId);
@@ -187,6 +196,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number, dto_1.BeginStoryWithArchetypeDto]),
     __metadata("design:returntype", Promise)
 ], CharacterController.prototype, "beginNewPlaythrough", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Post)('story/:storyId/start'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('storyId', common_1.ParseIntPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Number]),
+    __metadata("design:returntype", Promise)
+], CharacterController.prototype, "startStory", null);
 __decorate([
     (0, common_1.Post)('story/:storyId/reset'),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),

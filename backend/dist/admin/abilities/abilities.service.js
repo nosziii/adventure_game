@@ -37,8 +37,16 @@ let AdminAbilitiesService = AdminAbilitiesService_1 = class AdminAbilitiesServic
             dbData.talent_point_cost = dto.talentPointCost;
         if (dto.levelRequirement !== undefined)
             dbData.level_requirement = dto.levelRequirement;
-        if (dto.prerequisites !== undefined)
-            dbData.prerequisites = dto.prerequisites;
+        if (dto.prerequisites !== undefined) {
+            dbData.prerequisites =
+                dto.prerequisites === null ? null : JSON.stringify(dto.prerequisites);
+        }
+        if (dto.allowedArchetypeIds !== undefined) {
+            dbData.allowed_archetype_ids =
+                dto.allowedArchetypeIds === null
+                    ? null
+                    : JSON.stringify(dto.allowedArchetypeIds);
+        }
         return dbData;
     }
     async findAll() {

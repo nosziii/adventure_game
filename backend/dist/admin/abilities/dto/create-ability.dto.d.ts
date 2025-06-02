@@ -11,4 +11,5 @@ export declare class CreateAbilityDto {
     talentPointCost: number;
     levelRequirement: number;
     prerequisites?: any | null;
+    allowedArchetypeIds?: number[] | null;
 }

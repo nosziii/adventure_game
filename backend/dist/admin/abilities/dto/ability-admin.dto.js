@@ -10,6 +10,7 @@ class AbilityAdminDto {
     talentPointCost;
     levelRequirement;
     prerequisites;
+    allowedArchetypeIds;
     createdAt;
     updatedAt;
 }

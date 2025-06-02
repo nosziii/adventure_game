@@ -33,6 +33,7 @@ const mapAbilityRecordToDto = (ability: AbilityRecord): AbilityAdminDto => {
     talentPointCost: ability.talent_point_cost, // snake_case -> camelCase
     levelRequirement: ability.level_requirement, // snake_case -> camelCase
     prerequisites: ability.prerequisites,
+    allowedArchetypeIds: ability.allowed_archetype_ids, // JSONB-ként tárolva, Knex általában tömbként adja vissza
     createdAt: ability.created_at,
     updatedAt: ability.updated_at,
   };

@@ -48,8 +48,18 @@ export class PlayerAbilitiesService {
           .first()
       : null;
 
-    const archetypeLearnableAbilityIds =
-      archetype?.learnable_ability_ids || null;
+    let archetypeLearnableAbilityIds = archetype?.learnable_ability_ids || null;
+    if (baseCharacter.selected_archetype_id) {
+      // Használjuk a baseCharacter.selected_archetype_id-t!
+      const archetype = await this.knex<CharacterArchetypeRecord>(
+        'character_archetypes',
+      )
+        .where({ id: baseCharacter.selected_archetype_id })
+        .first(); // Tegyük fel, hogy a CharacterArchetypeRecord tartalmaz egy 'learnable_ability_ids: number[] | null' mezőt
+      if (archetype) {
+        archetypeLearnableAbilityIds = archetype.learnable_ability_ids; // Ez lehet number[] vagy null
+      }
+    }
 
     let abilitiesQuery = this.knex<AbilityRecord>('abilities').select('*');
 
@@ -153,24 +163,53 @@ export class PlayerAbilitiesService {
         `Ability with ID ${abilityIdToLearn} not found.`,
       );
 
-    // Archetípus korlátozás ellenőrzése
-    if (activeProgress.selected_archetype_id) {
-      const archetype = await this.knex<CharacterArchetypeRecord>(
-        'character_archetypes',
-      )
-        .where({ id: activeProgress.selected_archetype_id })
-        .select('name', 'learnable_ability_ids')
-        .first();
+    this.logger.debug(
+      `User ${userId} (ProgressID: ${activeProgress.id}) attempting to learn AbilityID: ${abilityIdToLearn} ("${abilityToLearn.name}")`,
+    );
+
+    // Archetípus korlátozás ellenőrzése (az abilities.allowed_archetype_ids alapján)
+    if (
+      abilityToLearn.allowed_archetype_ids &&
+      Array.isArray(abilityToLearn.allowed_archetype_ids) &&
+      abilityToLearn.allowed_archetype_ids.length > 0
+    ) {
       if (
-        archetype &&
-        archetype.learnable_ability_ids &&
-        !archetype.learnable_ability_ids.includes(abilityIdToLearn)
+        !baseCharacter.selected_archetype_id ||
+        !abilityToLearn.allowed_archetype_ids.includes(
+          baseCharacter.selected_archetype_id,
+        )
       ) {
+        const archetype = baseCharacter.selected_archetype_id
+          ? await this.knex<CharacterArchetypeRecord>('character_archetypes')
+              .where({ id: baseCharacter.selected_archetype_id })
+              .first()
+          : null;
         throw new ForbiddenException(
-          `A karaktered archetípusa (${archetype.name}) nem tanulhatja meg ezt a képességet: ${abilityToLearn.name}.`,
+          `A karaktered archetípusa (${archetype?.name || 'Nincs'}) nem tanulhatja meg ezt a képességet: ${abilityToLearn.name}. Engedélyezett: ${abilityToLearn.allowed_archetype_ids.join(',')}`,
         );
       }
     }
+
+    // Archetípus korlátozás ellenőrzése
+    // TODO: ez valoszinu duplikacio elenorizni a fenti validacioval
+
+    // if (activeProgress.selected_archetype_id) {
+    //   const archetype = await this.knex<CharacterArchetypeRecord>(
+    //     'character_archetypes',
+    //   )
+    //     .where({ id: activeProgress.selected_archetype_id })
+    //     .select('name', 'learnable_ability_ids')
+    //     .first();
+    //   if (
+    //     archetype &&
+    //     archetype.learnable_ability_ids &&
+    //     !archetype.learnable_ability_ids.includes(abilityIdToLearn)
+    //   ) {
+    //     throw new ForbiddenException(
+    //       `A karaktered archetípusa (${archetype.name}) nem tanulhatja meg ezt a képességet: ${abilityToLearn.name}.`,
+    //     );
+    //   }
+    // }
 
     const alreadyLearned = await this.knex('character_story_abilities')
       .where({

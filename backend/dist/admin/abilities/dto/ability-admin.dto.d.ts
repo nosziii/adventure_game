@@ -7,6 +7,7 @@ export declare class AbilityAdminDto {
     talentPointCost: number;
     levelRequirement: number;
     prerequisites: any | null;
+    allowedArchetypeIds: number[] | null;
     createdAt: Date;
     updatedAt: Date;
 }

@@ -38,7 +38,15 @@ let PlayerAbilitiesService = PlayerAbilitiesService_1 = class PlayerAbilitiesSer
                 .where({ id: activeProgress.selected_archetype_id })
                 .first()
             : null;
-        const archetypeLearnableAbilityIds = archetype?.learnable_ability_ids || null;
+        let archetypeLearnableAbilityIds = archetype?.learnable_ability_ids || null;
+        if (baseCharacter.selected_archetype_id) {
+            const archetype = await this.knex('character_archetypes')
+                .where({ id: baseCharacter.selected_archetype_id })
+                .first();
+            if (archetype) {
+                archetypeLearnableAbilityIds = archetype.learnable_ability_ids;
+            }
+        }
         let abilitiesQuery = this.knex('abilities').select('*');
         if (archetypeLearnableAbilityIds) {
             if (archetypeLearnableAbilityIds.length === 0) {
@@ -108,15 +116,18 @@ let PlayerAbilitiesService = PlayerAbilitiesService_1 = class PlayerAbilitiesSer
             .first();
         if (!abilityToLearn)
             throw new common_1.NotFoundException(`Ability with ID ${abilityIdToLearn} not found.`);
-        if (activeProgress.selected_archetype_id) {
-            const archetype = await this.knex('character_archetypes')
-                .where({ id: activeProgress.selected_archetype_id })
-                .select('name', 'learnable_ability_ids')
-                .first();
-            if (archetype &&
-                archetype.learnable_ability_ids &&
-                !archetype.learnable_ability_ids.includes(abilityIdToLearn)) {
-                throw new common_1.ForbiddenException(`A karaktered archetípusa (${archetype.name}) nem tanulhatja meg ezt a képességet: ${abilityToLearn.name}.`);
+        this.logger.debug(`User ${userId} (ProgressID: ${activeProgress.id}) attempting to learn AbilityID: ${abilityIdToLearn} ("${abilityToLearn.name}")`);
+        if (abilityToLearn.allowed_archetype_ids &&
+            Array.isArray(abilityToLearn.allowed_archetype_ids) &&
+            abilityToLearn.allowed_archetype_ids.length > 0) {
+            if (!baseCharacter.selected_archetype_id ||
+                !abilityToLearn.allowed_archetype_ids.includes(baseCharacter.selected_archetype_id)) {
+                const archetype = baseCharacter.selected_archetype_id
+                    ? await this.knex('character_archetypes')
+                        .where({ id: baseCharacter.selected_archetype_id })
+                        .first()
+                    : null;
+                throw new common_1.ForbiddenException(`A karaktered archetípusa (${archetype?.name || 'Nincs'}) nem tanulhatja meg ezt a képességet: ${abilityToLearn.name}. Engedélyezett: ${abilityToLearn.allowed_archetype_ids.join(',')}`);
             }
         }
         const alreadyLearned = await this.knex('character_story_abilities')

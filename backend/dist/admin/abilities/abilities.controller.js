@@ -32,6 +32,7 @@ const mapAbilityRecordToDto = (ability) => {
         talentPointCost: ability.talent_point_cost,
         levelRequirement: ability.level_requirement,
         prerequisites: ability.prerequisites,
+        allowedArchetypeIds: ability.allowed_archetype_ids,
         createdAt: ability.created_at,
         updatedAt: ability.updated_at,
     };

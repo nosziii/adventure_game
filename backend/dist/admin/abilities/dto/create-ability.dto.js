@@ -25,6 +25,7 @@ class CreateAbilityDto {
     talentPointCost = 1;
     levelRequirement = 1;
     prerequisites;
+    allowedArchetypeIds;
 }
 exports.CreateAbilityDto = CreateAbilityDto;
 __decorate([
@@ -62,4 +63,19 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], CreateAbilityDto.prototype, "prerequisites", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)({
+        message: 'Az engedélyezett archetípus ID-knak egy tömbnek kell lennie.',
+    }),
+    (0, class_validator_1.IsInt)({
+        each: true,
+        message: 'Minden engedélyezett archetípus ID-nak számnak kell lennie.',
+    }),
+    (0, class_validator_1.Min)(1, {
+        each: true,
+        message: 'Minden engedélyezett archetípus ID legalább 1 legyen.',
+    }),
+    __metadata("design:type", Object)
+], CreateAbilityDto.prototype, "allowedArchetypeIds", void 0);
 //# sourceMappingURL=create-ability.dto.js.map

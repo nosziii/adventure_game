@@ -97,15 +97,10 @@ export const useAdminAbilitiesStore = defineStore("adminAbilities", {
       console.log("Creating new ability for admin with payload:", payload);
       try {
         // A prerequisites mezőt stringként küldjük, ha a backend JSONB-ként stringet vár
-        const payloadToSend = {
-          ...payload,
-          prerequisites: payload.prerequisites
-            ? JSON.stringify(payload.prerequisites)
-            : null,
-        };
+
         const response = await apiClient.post<AdminAbilityData>(
           "/admin/abilities",
-          payloadToSend
+          payload
         );
         this.abilities.push(response.data);
         console.log("Ability created successfully:", response.data);
