@@ -9,6 +9,8 @@ class NodeDto {
     health_effect;
     item_reward_id;
     enemy_id;
+    victoryNodeId;
+    defeatNodeId;
     created_at;
     updated_at;
 }

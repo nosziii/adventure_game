@@ -68,6 +68,54 @@ export class CharacterService {
 
   constructor(@Inject(KNEX_CONNECTION) private readonly knex: Knex) {}
 
+  public async getHydratedCharacterForStory(
+    baseCharacterId: number,
+    activeStoryProgressId?: number, // Opcionális, ha nincs, megpróbáljuk lekérni az aktívat
+  ): Promise<Character | null> {
+    // Visszaad Character-t vagy null-t, ha nincs progresszió
+
+    const baseChar = await this.findById(baseCharacterId); // Feltételezve, hogy ez a base char-t adja vissza
+    if (!baseChar) {
+      this.logger.warn(
+        `Base character not found for ID: ${baseCharacterId} in getHydratedCharacterForStory`,
+      );
+      return null;
+    }
+
+    let progressToUse = activeStoryProgressId
+      ? await this.knex<CharacterStoryProgressRecord>(
+          'character_story_progress',
+        )
+          .where({ id: activeStoryProgressId, character_id: baseCharacterId })
+          .first()
+      : await this.getActiveStoryProgress(baseCharacterId);
+
+    if (!progressToUse) {
+      this.logger.warn(
+        `No active or specified story progress found for character ID: ${baseCharacterId} in getHydratedCharacterForStory`,
+      );
+      return null;
+    }
+
+    let hydratedCharacter: Character = {
+      ...baseChar, // id, user_id, name, role, created_at, updated_at, selected_archetype_id
+      health: progressToUse.health,
+      skill: progressToUse.skill,
+      luck: progressToUse.luck,
+      stamina: progressToUse.stamina,
+      defense: progressToUse.defense,
+      level: progressToUse.level,
+      xp: progressToUse.xp,
+      xp_to_next_level: progressToUse.xp_to_next_level,
+      current_node_id: progressToUse.current_node_id,
+      equipped_weapon_id: progressToUse.equipped_weapon_id,
+      equipped_armor_id: progressToUse.equipped_armor_id,
+      talent_points_available: progressToUse.talent_points_available, // Ha ez is a Character típus része
+    };
+
+    return this.applyPassiveEffects(hydratedCharacter); // Alkalmazzuk a passzív effekteket
+  }
+
   // Karakter lekérdezése userId alapján
   async findByUserId(userId: number): Promise<Character | undefined> {
     this.logger.debug(`Finding character for user ID: ${userId}`);
@@ -678,13 +726,23 @@ export class CharacterService {
     characterId: number,
   ): Promise<CharacterStoryProgressRecord | null> {
     this.logger.debug(
-      `Workspaceing active story progress for character ID: ${characterId}`,
+      `Fetching active story progress for character ID: ${characterId}`,
     );
     const progress = await this.knex<CharacterStoryProgressRecord>(
       'character_story_progress',
     )
       .where({ character_id: characterId, is_active: true })
+      .orderBy('last_played_at', 'desc') // A legutóbb játszott aktívat vesszük
       .first();
+    if (progress) {
+      this.logger.debug(
+        `Active progress found: ID ${progress.id}, StoryID: ${progress.story_id}, NodeID: ${progress.current_node_id}`,
+      );
+    } else {
+      this.logger.warn(
+        `No active progress found for character ID ${characterId}`,
+      );
+    }
     return progress || null;
   }
 

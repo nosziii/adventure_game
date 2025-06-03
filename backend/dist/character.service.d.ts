@@ -26,6 +26,7 @@ export declare class CharacterService {
     private readonly knex;
     private readonly logger;
     constructor(knex: Knex);
+    getHydratedCharacterForStory(baseCharacterId: number, activeStoryProgressId?: number): Promise<Character | null>;
     findByUserId(userId: number): Promise<Character | undefined>;
     findById(id: number): Promise<Character | undefined>;
     getStoryInventory(progressId: number): Promise<InventoryItemDto[]>;

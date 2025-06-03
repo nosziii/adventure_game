@@ -5,6 +5,7 @@ import {
   Logger,
   InternalServerErrorException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from '../../database/database.module'; // Igazítsd az útvonalat!
@@ -30,6 +31,10 @@ export class AdminNodesService {
     if (dto.item_reward_id !== undefined)
       dbData.item_reward_id = dto.item_reward_id;
     if (dto.enemy_id !== undefined) dbData.enemy_id = dto.enemy_id;
+    if (dto.victoryNodeId !== undefined)
+      dbData.victory_node_id = dto.victoryNodeId;
+    if (dto.defeatNodeId !== undefined)
+      dbData.defeat_node_id = dto.defeatNodeId;
     // created_at, updated_at automatikus
     return dbData;
   }
@@ -57,17 +62,27 @@ export class AdminNodesService {
   }
 
   async create(createNodeDto: CreateNodeDto): Promise<StoryNode> {
-    this.logger.log(`Attempting to create new story node`);
+    this.logger.log('Attempting to create new story node');
+    const dbNodeData = this.dtoToDbNode(createNodeDto);
+    // Alapértelmezett érték beállítása, ha a DTO nem tartalmazza és a DB séma nem defaultolja
+    if (dbNodeData.is_end === undefined) {
+      dbNodeData.is_end = false;
+    }
     try {
-      const dbNodeData = this.dtoToDbNode(createNodeDto); // Átalakítás DB formátumra
       const [newNode] = await this.knex('story_nodes')
         .insert(dbNodeData)
-        .returning('*'); // Visszakérjük a DB által generált ID-t és alapértékeket
+        .returning('*');
       this.logger.log(`Story node created with ID: ${newNode.id}`);
-      return newNode; // Visszaadjuk a DB objektumot (snake_case)
-    } catch (error) {
+      return newNode;
+    } catch (error: any) {
       this.logger.error(`Failed to create story node: ${error}`, error.stack);
-      // TODO: Specifikusabb hibakezelés (pl. unique constraint violation?)
+      // Itt lehetne specifikusabb hibakezelés FK sértésekre (item_reward_id, enemy_id, victory/defeat_node_id)
+      if (error.code === '23503') {
+        // Foreign key violation
+        throw new BadRequestException(
+          'Invalid reference ID provided (e.g., item, enemy, or target node does not exist).',
+        );
+      }
       throw new InternalServerErrorException('Failed to create story node.');
     }
   }
@@ -75,32 +90,33 @@ export class AdminNodesService {
   // ÚJ: Node Frissítése
   async update(id: number, updateNodeDto: UpdateNodeDto): Promise<StoryNode> {
     this.logger.log(`Attempting to update story node with ID: ${id}`);
+    const dbNodeUpdates = this.dtoToDbNode(updateNodeDto);
+
+    if (Object.keys(dbNodeUpdates).length === 0) {
+      this.logger.warn(`Update called for node ${id} with empty data.`);
+      return this.findOne(id);
+    }
     try {
-      const dbNodeUpdates = this.dtoToDbNode(updateNodeDto); // Átalakítás DB formátumra
-
-      // Ellenőrizzük, hogy van-e mit frissíteni
-      if (Object.keys(dbNodeUpdates).length === 0) {
-        this.logger.warn(`Update called for node ${id} with empty data.`);
-        // Visszaadjuk a meglévőt, vagy hibát dobunk? Adjunk vissza meglévőt.
-        return this.findOne(id);
-      }
-
       const [updatedNode] = await this.knex('story_nodes')
         .where({ id })
         .update(dbNodeUpdates)
         .returning('*');
-
       if (!updatedNode) {
-        this.logger.warn(`Story node with ID ${id} not found for update.`);
         throw new NotFoundException(`Story node with ID ${id} not found.`);
       }
       this.logger.log(`Story node ${id} updated successfully.`);
-      return updatedNode; // Visszaadjuk a DB objektumot (snake_case)
-    } catch (error) {
+      return updatedNode;
+    } catch (error: any) {
       this.logger.error(
         `Failed to update story node ${id}: ${error}`,
         error.stack,
       );
+      if (error.code === '23503') {
+        // Foreign key violation
+        throw new BadRequestException(
+          'Invalid reference ID provided for update (e.g., item, enemy, or target node does not exist).',
+        );
+      }
       throw new InternalServerErrorException('Failed to update story node.');
     }
   }

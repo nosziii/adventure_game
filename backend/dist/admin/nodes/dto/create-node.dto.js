@@ -18,6 +18,8 @@ class CreateNodeDto {
     health_effect;
     item_reward_id;
     enemy_id;
+    victoryNodeId;
+    defeatNodeId;
 }
 exports.CreateNodeDto = CreateNodeDto;
 __decorate([
@@ -53,4 +55,16 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Object)
 ], CreateNodeDto.prototype, "enemy_id", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], CreateNodeDto.prototype, "victoryNodeId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], CreateNodeDto.prototype, "defeatNodeId", void 0);
 //# sourceMappingURL=create-node.dto.js.map

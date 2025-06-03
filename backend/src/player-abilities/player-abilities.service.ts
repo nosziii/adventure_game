@@ -39,45 +39,12 @@ export class PlayerAbilitiesService {
       this.logger.warn(
         `No active story progress for character ${baseCharacter.id} to list learnable abilities.`,
       );
-      return []; // Vagy dobhatnánk NotFoundException-t
+      return [];
     }
 
-    const archetype = activeProgress.selected_archetype_id
-      ? await this.knex<CharacterArchetypeRecord>('character_archetypes')
-          .where({ id: activeProgress.selected_archetype_id })
-          .first()
-      : null;
-
-    let archetypeLearnableAbilityIds = archetype?.learnable_ability_ids || null;
-    if (baseCharacter.selected_archetype_id) {
-      // Használjuk a baseCharacter.selected_archetype_id-t!
-      const archetype = await this.knex<CharacterArchetypeRecord>(
-        'character_archetypes',
-      )
-        .where({ id: baseCharacter.selected_archetype_id })
-        .first(); // Tegyük fel, hogy a CharacterArchetypeRecord tartalmaz egy 'learnable_ability_ids: number[] | null' mezőt
-      if (archetype) {
-        archetypeLearnableAbilityIds = archetype.learnable_ability_ids; // Ez lehet number[] vagy null
-      }
-    }
-
-    let abilitiesQuery = this.knex<AbilityRecord>('abilities').select('*');
-
-    if (archetypeLearnableAbilityIds) {
-      if (archetypeLearnableAbilityIds.length === 0) {
-        this.logger.debug(
-          `Archetype for progress ${activeProgress.id} has an empty learnable_ability_ids list.`,
-        );
-        return []; // Ha az archetípusnak nincs expliciten megadva tanulható képessége (és üres a lista)
-      }
-      abilitiesQuery = abilitiesQuery.whereIn(
-        'id',
-        archetypeLearnableAbilityIds,
-      );
-    }
-    // Ha archetypeLearnableAbilityIds === null (nincs korlátozva az archetípus által), akkor minden képességet listázunk (a többi feltétel alapján)
-
-    const allPotentiallyLearnableAbilities = await abilitiesQuery;
+    // Összes képesség lekérése az adatbázisból
+    const allAbilitiesFromDb =
+      await this.knex<AbilityRecord>('abilities').select('*');
 
     const learnedAbilitiesResult = await this.knex('character_story_abilities')
       .where({ character_story_progress_id: activeProgress.id })
@@ -88,7 +55,7 @@ export class PlayerAbilitiesService {
 
     const learnableDtos: LearnableAbilityDto[] = [];
 
-    for (const ability of allPotentiallyLearnableAbilities) {
+    for (const ability of allAbilitiesFromDb) {
       let canLearnThisAbility = true;
       let reason = '';
       const isLearned = learnedAbilityIds.has(ability.id);
@@ -97,20 +64,51 @@ export class PlayerAbilitiesService {
         canLearnThisAbility = false;
         reason = 'Már megtanultad.';
       } else {
-        if (activeProgress.level < ability.level_requirement) {
+        // 1. Archetípus korlátozás ellenőrzése (az abilities.allowed_archetype_ids alapján)
+        if (
+          ability.allowed_archetype_ids &&
+          Array.isArray(ability.allowed_archetype_ids) &&
+          ability.allowed_archetype_ids.length > 0
+        ) {
+          if (
+            !baseCharacter.selected_archetype_id ||
+            !ability.allowed_archetype_ids.includes(
+              baseCharacter.selected_archetype_id,
+            )
+          ) {
+            canLearnThisAbility = false;
+            reason += `Ezt a képességet a te archetípusod (${baseCharacter.selected_archetype_id ? 'ID: ' + baseCharacter.selected_archetype_id : 'Nincs'}) nem tanulhatja meg. `;
+          }
+        }
+        // Ha egy képességnek van allowed_archetype_ids listája, de a karakternek nincs archetípusa, akkor nem tanulhatja.
+        // (Ez a fenti if már lefedi, ha a selected_archetype_id null)
+
+        // 2. Szint követelmény (ha még tanulható)
+        if (
+          canLearnThisAbility &&
+          activeProgress.level < (ability.level_requirement ?? 1)
+        ) {
           canLearnThisAbility = false;
           reason += `Szint követelmény: ${ability.level_requirement} (Jelenlegi: ${activeProgress.level}). `;
         }
+        // 3. Tehetségpont (ha még tanulható)
         if (
+          canLearnThisAbility &&
           (activeProgress.talent_points_available ?? 0) <
-          ability.talent_point_cost
+            (ability.talent_point_cost ?? 1)
         ) {
           canLearnThisAbility = false;
-          reason += `Nincs elég tehetségpontod. (Szükséges: ${ability.talent_point_cost}, Rendelkezésre áll: ${activeProgress.talent_points_available ?? 0}). `;
+          reason += `Nincs elég tehetségpontod (Szükséges: ${ability.talent_point_cost}, Van: ${activeProgress.talent_points_available ?? 0}). `;
         }
-        if (ability.prerequisites && ability.prerequisites.length > 0) {
+        // 4. Előfeltételek (ha még tanulható)
+        if (
+          canLearnThisAbility &&
+          ability.prerequisites &&
+          Array.isArray(ability.prerequisites) &&
+          ability.prerequisites.length > 0
+        ) {
           const missingPrereqs = ability.prerequisites.filter(
-            (prereqId) => !learnedAbilityIds.has(prereqId),
+            (prereqId) => !learnedAbilityIds.has(prereqId as number),
           );
           if (missingPrereqs.length > 0) {
             canLearnThisAbility = false;
@@ -131,7 +129,7 @@ export class PlayerAbilitiesService {
         talentPointCost: ability.talent_point_cost,
         levelRequirement: ability.level_requirement,
         prerequisites: ability.prerequisites,
-        canLearn: canLearnThisAbility && !isLearned,
+        canLearn: canLearnThisAbility && !isLearned, // A canLearn már tartalmazza a legtöbb logikát
         reasonCantLearn: reason.trim() || undefined,
         isAlreadyLearned: isLearned,
       });

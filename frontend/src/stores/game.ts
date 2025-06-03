@@ -94,8 +94,8 @@ export const useGameStore = defineStore("game", {
     isLoadingMinimap: (state): boolean => state.loadingMinimap,
     getLearnableAbilities: (state): LearnableAbility[] =>
       state.learnableAbilities, // <-- ÚJ
-    isLoadingLearnableAbilities: (state): boolean =>
-      state.isLoadingLearnableAbilities, // <-- ÚJ
+    getIsLoadingLearnableAbilities: (state): boolean =>
+      state.isLoadingLearnableAbilities,
     getLearnAbilityError: (state): string | null => state.learnAbilityError,
   },
 

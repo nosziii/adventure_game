@@ -31,6 +31,8 @@ const mapStoryNodeToNodeDto = (node) => {
         enemy_id: node.enemy_id,
         created_at: node.created_at,
         updated_at: node.updated_at,
+        victoryNodeId: node.victory_node_id,
+        defeatNodeId: node.defeat_node_id,
     };
 };
 const mapChoiceRecordToChoiceAdminDto = (choice) => {

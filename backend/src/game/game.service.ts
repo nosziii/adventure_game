@@ -26,6 +26,7 @@ import {
   PlayerStoryListItemDto,
 } from './dto';
 import { StoryNode } from './interfaces/story-node.interface';
+import { ItemRecord } from './interfaces/item-record.interface';
 import { ChoiceRecord } from './interfaces/choice-record.interface';
 import { EnemyRecord } from './interfaces/enemy-record.interface';
 import { CharacterStoryProgressRecord } from './interfaces/character-story-progres-record.interface';
@@ -61,34 +62,52 @@ export class GameService {
   }
   // A GameController ezt fogja hívni
   async processCombatAction(
-    userId: number,
+    userId: number, // Ezt a userId-t használjuk a baseCharacter és az activeStoryProgress lekéréséhez
     actionDto: CombatActionDto,
   ): Promise<GameStateDto> {
-    this.logger.log(`GameService processing combat action for user ${userId}`);
-    // Meghívjuk a CombatService-t
+    this.logger.log(
+      `[GameService.processCombatAction] UserID: ${userId}, Action: ${actionDto.action}`,
+    );
+
     const combatResult: CombatResult =
       await this.combatService.handleCombatAction(userId, actionDto);
 
-    // Lekérdezzük a legfrissebb inventoryt a frissített karakterhez
-    // A combatResult.character már a harc utáni/közbeni állapotot tükrözi
-    const inventory = await this.characterService.getStoryInventory(
-      combatResult.character.id,
+    const finalCharacterAfterCombat = combatResult.character;
+    const baseCharacterId = finalCharacterAfterCombat.id; // Ez a characters.id
+
+    // Szükségünk van az aktív sztori progresszió ID-jára az inventoryhoz és a choice checkhez
+    const activeStoryProgress =
+      await this.characterService.getActiveStoryProgress(baseCharacterId);
+    if (!activeStoryProgress) {
+      // Ennek nem szabadna előfordulnia, ha a harc éppen zajlott, vagy épp most ért véget.
+      this.logger.error(
+        `[processCombatAction] CRITICAL: No active story progress found for character ${baseCharacterId} after combat action!`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to retrieve active story progress after combat action.',
+      );
+    }
+    const storyProgressId = activeStoryProgress.id;
+
+    // Helyes inventory lekérdezés a sztori-specifikus progresszió alapján
+    const inventory =
+      await this.characterService.getStoryInventory(storyProgressId);
+    this.logger.debug(
+      `[processCombatAction] Inventory fetched for StoryProgressID: ${storyProgressId}`,
     );
-    const characterForDto = this.mapCharacterToDto(combatResult.character);
+
+    const characterForDto = this.mapCharacterToDto(finalCharacterAfterCombat);
 
     if (combatResult.isCombatOver) {
       this.logger.log(
-        `Combat finished for user ${userId}. New node: ${combatResult.nextNodeId}`,
+        `[processCombatAction] Combat finished. NextNodeID: ${combatResult.nextNodeId}`,
       );
-      // A karakter current_node_id-ja már frissítve van a CombatService által.
-      // Most a getCurrentGameState-et hívjuk, ami az új node-ot adja vissza.
-      // DE! A getCurrentGameState újra lekérdezné a karaktert. Egyszerűbb itt összeállítani.
 
       const finalNode = combatResult.nextNodeId
         ? await this.knex<StoryNode>('story_nodes')
             .where({ id: combatResult.nextNodeId })
             .first()
-        : null; // Ha valamiért nincs nextNodeId (nem kellene)
+        : null;
 
       const choicesForFinalNode =
         finalNode && !finalNode.is_end
@@ -99,10 +118,12 @@ export class GameService {
                   potentialChoices.map(async (choice) => ({
                     id: choice.id,
                     text: choice.text,
+                    // A checkChoiceAvailability-nek a frissített karakterállapotot (finalCharacterAfterCombat)
+                    // és a helyes storyProgressId-t adjuk át.
                     isAvailable: await this.checkChoiceAvailability(
                       choice,
-                      combatResult.character,
-                      combatResult.character.id, // <-- Az activeStoryProgress.id
+                      finalCharacterAfterCombat,
+                      storyProgressId, // <-- HELYES ID
                     ),
                   })),
                 ),
@@ -115,24 +136,25 @@ export class GameService {
           : null,
         choices: choicesForFinalNode,
         character: characterForDto,
-        combat: null, // Harc véget ért
-        inventory: inventory,
+        combat: null,
+        inventory: inventory, // Helyesen a sztori-specifikus leltár
         roundActions: combatResult.roundActions,
-        equippedWeaponId: combatResult.character.equipped_weapon_id,
-        equippedArmorId: combatResult.character.equipped_armor_id,
+        equippedWeaponId: finalCharacterAfterCombat.equipped_weapon_id,
+        equippedArmorId: finalCharacterAfterCombat.equipped_armor_id,
+        // messages: ... ha lenne
       };
     } else {
       // Harc folytatódik
-      this.logger.log(`Combat continues for user ${userId}.`);
+      this.logger.log(`[processCombatAction] Combat continues.`);
       return {
         node: null,
         choices: [],
         character: characterForDto,
-        combat: combatResult.enemy ?? null, // A CombatService által visszaadott frissített enemy állapot
-        inventory: inventory,
+        combat: combatResult.enemy ?? null,
+        inventory: inventory, // Helyesen a sztori-specifikus leltár
         roundActions: combatResult.roundActions,
-        equippedWeaponId: combatResult.character.equipped_weapon_id,
-        equippedArmorId: combatResult.character.equipped_armor_id,
+        equippedWeaponId: finalCharacterAfterCombat.equipped_weapon_id,
+        equippedArmorId: finalCharacterAfterCombat.equipped_armor_id,
       };
     }
   }
@@ -630,89 +652,97 @@ export class GameService {
     userId: number,
     itemId: number,
   ): Promise<CharacterStatsDto> {
+    // Visszatérési típust is érdemes lehet GameStateDto-ra váltani a konzisztencia miatt
     this.logger.log(
       `Attempting to use item ${itemId} for user ${userId} outside of combat.`,
     );
 
-    // 1. Ellenőrizzük, hogy nincs-e harcban
-    const character = await this.characterService.findOrCreateByUserId(userId); // Kell a karakter
-    const activeCombat = await this.knex('active_combats')
-      .where({ character_id: character.id })
-      .first();
-    if (activeCombat) {
+    const baseCharacter =
+      await this.characterService.findOrCreateByUserId(userId);
+    const activeStoryProgress =
+      await this.characterService.getActiveStoryProgress(baseCharacter.id);
+
+    if (!activeStoryProgress) {
       this.logger.warn(
-        `User ${userId} tried to use item ${itemId} outside combat, but is in combat.`,
+        `User ${userId} (Character ${baseCharacter.id}) has no active story progress to use item from.`,
       );
+      throw new BadRequestException('No active story to use items in.');
+    }
+    const progressId = activeStoryProgress.id; // EZ A FONTOS ID A SZTORI-SPECIFIKUS MŰVELETEKHEZ
+
+    // Ellenőrizzük, hogy nincs-e harcban (ez a logika maradhat a baseCharacter.id alapján,
+    // mivel az active_combats még character_id-t használ)
+    const existingCombat = await this.knex('active_combats')
+      .where({ character_id: baseCharacter.id })
+      .first();
+    if (existingCombat) {
       throw new ForbiddenException(
         'Cannot use items this way while in combat.',
       );
     }
 
-    // 2. Van-e ilyen tárgya és használható-e?
+    // Van-e ilyen tárgya a sztori-specifikus leltárban?
     const hasItem = await this.characterService.hasStoryItem(
-      character.id,
+      progressId,
       itemId,
-    );
+      1,
+    ); // <--- JAVÍTVA: progressId használata
     if (!hasItem) {
       this.logger.warn(
-        `User ${userId} tried to use item ${itemId} but doesn't have it.`,
+        `User ${userId} (StoryProgress ${progressId}) tried to use item ${itemId} but doesn't have it.`,
       );
-      throw new BadRequestException('You do not have this item.');
+      throw new BadRequestException(
+        'You do not have this item in your current story inventory.',
+      );
     }
 
-    const item = await this.knex('items').where({ id: itemId }).first();
-    if (!item) {
+    const item = await this.knex<ItemRecord>('items')
+      .where({ id: itemId })
+      .first();
+    if (!item)
       throw new InternalServerErrorException('Item data inconsistency.');
-    }
-
-    if (!item.usable) {
-      this.logger.warn(
-        `User ${userId} tried to use non-usable item ${itemId}.`,
-      );
+    if (!item.usable)
       throw new BadRequestException(`This item (${item.name}) cannot be used.`);
-    }
 
-    // 3. Effektus alkalmazása (egyelőre csak heal)
     let characterStatsUpdated = false;
+    let newPlayerHealth = activeStoryProgress.health; // A sztori progresszió HP-jából indulunk
+
     if (item.effect && item.effect.startsWith('heal+')) {
       const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
       if (healAmount > 0) {
-        const maxHp = 100; // TODO: Használj valós max HP-t
-        const currentHealth = character.health;
-        const newHealth = Math.min(maxHp, currentHealth + healAmount);
+        const maxHp = activeStoryProgress.stamina ?? 100; // Max HP a progresszióból
+        const previousPlayerHealth = newPlayerHealth;
+        newPlayerHealth = Math.min(maxHp, newPlayerHealth + healAmount);
 
-        if (newHealth > currentHealth) {
-          // Csak akkor használjuk el, ha tényleg gyógyít
+        if (newPlayerHealth > previousPlayerHealth) {
           this.logger.log(
-            `Applying heal effect: ${healAmount} to character ${character.id}. New health: ${newHealth}`,
+            `Applying heal effect: ${healAmount} to StoryProgress ${progressId}. New health: ${newPlayerHealth}`,
           );
-          await this.characterService.updateCharacter(character.id, {
-            health: newHealth,
-          });
-          // Tárgy eltávolítása
+          // Sztori progresszió HP-jának frissítése
+          await this.characterService.updateStoryProgress(progressId, {
+            health: newPlayerHealth,
+          }); // <--- JAVÍTVA
+
+          // Tárgy eltávolítása a sztori-specifikus leltárból
           const removed = await this.characterService.removeStoryItem(
-            character.id,
+            progressId,
             itemId,
             1,
-          );
-          if (!removed) {
+          ); // <--- JAVÍTVA
+          if (!removed)
             this.logger.error(
-              `Failed to remove item ${itemId} after use for character ${character.id}!`,
+              `Failed to remove item ${itemId} after use for StoryProgress ${progressId}!`,
             );
-            // Lehet, hogy itt vissza kellene vonni a HP update-et? Vagy csak logolni.
-          }
-          characterStatsUpdated = true; // Jelezzük, hogy volt változás
+          characterStatsUpdated = true;
         } else {
           this.logger.log(
-            `Character ${character.id} health already full, item ${itemId} not consumed.`,
+            `StoryProgress ${progressId} health already full, item ${itemId} not consumed.`,
           );
-          // Itt nem dobunk hibát, csak nem történt semmi.
         }
       } else {
-        this.logger.warn(`Item ${itemId} has zero heal amount.`);
+        this.logger.warn(`Item ${itemId} has zero or invalid heal amount.`);
       }
     } else {
-      // TODO: Más típusú tárgyak használata harcon kívül (pl. kulcs?)
       this.logger.warn(
         `Item ${itemId} has unhandled usable effect: ${item.effect}`,
       );
@@ -721,20 +751,23 @@ export class GameService {
       );
     }
 
-    // 4. Frissített karakter adatok visszaadása
-    // Ha volt változás, újra lekérdezzük, hogy a legfrissebbet adjuk vissza
-    const finalCharacter = characterStatsUpdated
-      ? await this.characterService.findById(character.id)
-      : character; // Ha nem volt változás, jó a régi
-
-    if (!finalCharacter) {
-      // Extra check
+    // Frissített karakter adatok visszaadása (a teljes GameStateDto jobb lenne)
+    // Ehhez újra le kellene kérni a "hidratált" karaktert az aktív progresszió alapján
+    const finalHydratedCharacter =
+      await this.characterService.getHydratedCharacterForStory(
+        baseCharacter.id,
+        progressId,
+      ); // Feltételezve, hogy a _getHydratedCharacter public, vagy van egy publikus wrapperje
+    if (!finalHydratedCharacter) {
       throw new InternalServerErrorException(
-        'Character data not found after using item.',
+        'Character data not found after using item (for DTO).',
       );
     }
+    return this.mapCharacterToDto(finalHydratedCharacter);
 
-    return this.mapCharacterToDto(finalCharacter); // Csak a statokat adjuk vissza
+    // VAGY ha a Controller majd hívja a getCurrentGameState-et, akkor itt elég lehet egy void vagy boolean:
+    // if (characterStatsUpdated) return; // Vagy return true;
+    // throw new BadRequestException('Item had no effect.'); // Ha nem történt semmi
   } // useItemOutOfCombat vége
 
   // --- Játékos haladásának lekérdezése ---

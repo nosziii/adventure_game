@@ -38,6 +38,38 @@ let CharacterService = CharacterService_1 = class CharacterService {
     constructor(knex) {
         this.knex = knex;
     }
+    async getHydratedCharacterForStory(baseCharacterId, activeStoryProgressId) {
+        const baseChar = await this.findById(baseCharacterId);
+        if (!baseChar) {
+            this.logger.warn(`Base character not found for ID: ${baseCharacterId} in getHydratedCharacterForStory`);
+            return null;
+        }
+        let progressToUse = activeStoryProgressId
+            ? await this.knex('character_story_progress')
+                .where({ id: activeStoryProgressId, character_id: baseCharacterId })
+                .first()
+            : await this.getActiveStoryProgress(baseCharacterId);
+        if (!progressToUse) {
+            this.logger.warn(`No active or specified story progress found for character ID: ${baseCharacterId} in getHydratedCharacterForStory`);
+            return null;
+        }
+        let hydratedCharacter = {
+            ...baseChar,
+            health: progressToUse.health,
+            skill: progressToUse.skill,
+            luck: progressToUse.luck,
+            stamina: progressToUse.stamina,
+            defense: progressToUse.defense,
+            level: progressToUse.level,
+            xp: progressToUse.xp,
+            xp_to_next_level: progressToUse.xp_to_next_level,
+            current_node_id: progressToUse.current_node_id,
+            equipped_weapon_id: progressToUse.equipped_weapon_id,
+            equipped_armor_id: progressToUse.equipped_armor_id,
+            talent_points_available: progressToUse.talent_points_available,
+        };
+        return this.applyPassiveEffects(hydratedCharacter);
+    }
     async findByUserId(userId) {
         this.logger.debug(`Finding character for user ID: ${userId}`);
         const character = await this.knex('characters')
@@ -402,10 +434,17 @@ let CharacterService = CharacterService_1 = class CharacterService {
         };
     }
     async getActiveStoryProgress(characterId) {
-        this.logger.debug(`Workspaceing active story progress for character ID: ${characterId}`);
+        this.logger.debug(`Fetching active story progress for character ID: ${characterId}`);
         const progress = await this.knex('character_story_progress')
             .where({ character_id: characterId, is_active: true })
+            .orderBy('last_played_at', 'desc')
             .first();
+        if (progress) {
+            this.logger.debug(`Active progress found: ID ${progress.id}, StoryID: ${progress.story_id}, NodeID: ${progress.current_node_id}`);
+        }
+        else {
+            this.logger.warn(`No active progress found for character ID ${characterId}`);
+        }
         return progress || null;
     }
     async startOrContinueStory(characterId, storyId) {

@@ -54,6 +54,31 @@
           </option>
         </select>
       </div>
+      <div v-if="nodeData.enemy_id">
+        <hr />
+        <h3 class="sub-header">Harc Kimenetele (Csak ha van ellenfél)</h3>
+        <div class="form-group">
+          <label for="victoryNodeId">Győzelem Esetén Következő Node ID (opcionális):</label>
+          <select id="victoryNodeId" v-model="nodeData.victoryNodeId">
+            <option :value="null">Nincs (vagy globális default)</option>
+            <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
+              ID: {{ node.id }} - {{ truncateText(node.text, 50) }}
+            </option>
+          </select>
+          <small>Ha nincs megadva, a globális győzelmi node-ra lép (ha van ilyen beállítva).</small>
+        </div>
+
+        <div class="form-group">
+          <label for="defeatNodeId">Vereség Esetén Következő Node ID (opcionális):</label>
+          <select id="defeatNodeId" v-model="nodeData.defeatNodeId">
+            <option :value="null">Nincs (vagy globális default)</option>
+            <option v-for="node in adminNodesStore.allNodes" :key="node.id" :value="node.id">
+              ID: {{ node.id }} - {{ truncateText(node.text, 50) }}
+            </option>
+          </select>
+          <small>Ha nincs megadva, a globális vereségi node-ra lép (ha van ilyen beállítva).</small>
+        </div>
+      </div>
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" :disabled="store.isLoading || pageLoading">
@@ -80,10 +105,12 @@ const adminItemsStore = useAdminItemsStore();     // Item store példány
 const adminEnemiesStore = useAdminEnemiesStore(); // Enemy store példány
 const router = useRouter();
 const route = useRoute();
+const adminNodesStore = useAdminNodesStore();
 
 const nodeId = ref<number | null>(null);
 const isEditing = computed(() => nodeId.value !== null);
 const pageLoading = ref(false); // Oldal betöltésének jelzése (listákhoz)
+const nodesStore = useAdminNodesStore();
 
 const getInitialNodeData = (): AdminCreateNodePayload => ({
   text: '',
@@ -92,6 +119,8 @@ const getInitialNodeData = (): AdminCreateNodePayload => ({
   health_effect: null,
   item_reward_id: null,
   enemy_id: null,
+  victoryNodeId: null,
+  defeatNodeId: null, 
 });
 
 const nodeData = ref<AdminCreateNodePayload | AdminUpdateNodePayload>(getInitialNodeData());
@@ -99,35 +128,37 @@ const successMessage = ref<string | null>(null);
 
 onMounted(async () => {
   pageLoading.value = true;
-  store.error = null; // Clear previous errors for node store
-  adminItemsStore.error = null; // Clear previous errors for items store
-  adminEnemiesStore.error = null; // Clear previous errors for enemies store
+  nodesStore.error = null;      // A node-specifikus store error mezőjét nullázzuk
+  adminItemsStore.error = null;
+  adminEnemiesStore.error = null;
+  // NINCS AdminNodeData.error, mert az AdminNodeData egy TÍPUS
 
-  const fetchListsPromise = Promise.all([
+  const fetchPromises = [
     adminItemsStore.fetchItems(),
-    adminEnemiesStore.fetchEnemies()
-  ]);
+    adminEnemiesStore.fetchEnemies(),
+    nodesStore.fetchNodes()    // A nodesStore.fetchNodes() metódusát hívjuk
+  ];
 
   const idParam = route.params.id;
   if (idParam) {
     const idToFetch = Array.isArray(idParam) ? parseInt(idParam[0], 10) : parseInt(idParam, 10);
     if (!isNaN(idToFetch)) {
       nodeId.value = idToFetch;
-      await store.fetchNode(nodeId.value); // Ez beállítja a store.currentNode-t
+      // A nodesStore.fetchNode() metódusát hívjuk, nem a 'store'-ét, ha a 'nodesStore'-t használjuk
+      fetchPromises.push(nodesStore.fetchNode(nodeId.value) as Promise<any>); 
     } else {
-      store.error = "Érvénytelen Node ID."; nodeId.value = null;
-      nodeData.value = getInitialNodeData();
+      nodesStore.error = "Érvénytelen Node ID."; 
+      nodeId.value = null;
     }
   } else {
-    store.currentNode = null;
-    nodeData.value = getInitialNodeData();
+    nodesStore.currentNode = null; // A nodesStore currentNode-ját nullázzuk
   }
-
+  
   try {
-    await fetchListsPromise;
-  } catch (listError) {
-    console.error("Failed to fetch lists for dropdowns", listError);
-    // A store-ok error mezői már tartalmazzák a specifikus hibákat
+    await Promise.all(fetchPromises);
+  } catch (error) {
+    console.error("Failed to fetch data for node edit page", error);
+    // Az egyes store-ok error mezője már beállítódik a saját fetch* akcióikban
   }
   pageLoading.value = false;
 });
@@ -141,6 +172,8 @@ watch(() => store.getCurrentNode, (currentNode) => {
             health_effect: currentNode.health_effect ?? null,
             item_reward_id: currentNode.item_reward_id ?? null,
             enemy_id: currentNode.enemy_id ?? null,
+            victoryNodeId: currentNode.victoryNodeId ?? null,
+            defeatNodeId: currentNode.defeatNodeId ?? null, 
         };
     } else if (!isEditing.value) {
         nodeData.value = getInitialNodeData();
@@ -149,7 +182,7 @@ watch(() => store.getCurrentNode, (currentNode) => {
 
 const handleSubmit = async () => {
   successMessage.value = null;
-  store.error = null;
+  nodesStore.error = null;
   let result: AdminNodeData | null = null;
 
   if (!nodeData.value.text) {
@@ -168,6 +201,11 @@ const handleSubmit = async () => {
   if (result) {
     setTimeout(() => router.push({ name: 'admin-nodes-list' }), 1500);
   }
+};
+
+const truncateText = (text: string | null, length: number): string => {
+    if (!text) return '-'; // Kezeljük a null esetet is
+    return text.length > length ? text.substring(0, length) + '...' : text;
 };
 </script>
 

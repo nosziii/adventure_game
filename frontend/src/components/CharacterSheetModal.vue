@@ -66,7 +66,7 @@
 
         <div class="char-section">
           <h3>Képességek</h3>
-          <div v-if="gameStore.isLoadingLearnableAbilities" class="loading-text small">Képességek töltése...</div>
+          <div v-if="gameStore.getIsLoadingLearnableAbilities" class="loading-text small">Képességek töltése...</div>
           <div v-else-if="gameStore.getLearnAbilityError" class="error-message small">{{ gameStore.getLearnAbilityError }}</div>
           
           <div v-else>

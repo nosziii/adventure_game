@@ -6,6 +6,8 @@ export interface AdminNodeData {
   is_end: boolean;
   health_effect: number | null;
   item_reward_id: number | null;
+  victoryNodeId: number | null; // Győzelem esetén hova irányít
+  defeatNodeId: number | null; // Vereség esetén hova irányít
   enemy_id: number | null;
   created_at: string; // A backend Date-t küld, de az Axios/JSON stringgé alakíthatja
   updated_at: string; // Fontos lehet a Date objektummá alakítás a frontend oldalon, ha szükséges
@@ -19,6 +21,8 @@ export interface AdminCreateNodePayload {
   health_effect?: number | null;
   item_reward_id?: number | null;
   enemy_id?: number | null;
+  victoryNodeId?: number | null;
+  defeatNodeId?: number | null;
 }
 
 // Choice adatok az admin listához és szerkesztéshez

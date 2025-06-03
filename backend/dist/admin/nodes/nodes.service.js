@@ -37,6 +37,10 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
             dbData.item_reward_id = dto.item_reward_id;
         if (dto.enemy_id !== undefined)
             dbData.enemy_id = dto.enemy_id;
+        if (dto.victoryNodeId !== undefined)
+            dbData.victory_node_id = dto.victoryNodeId;
+        if (dto.defeatNodeId !== undefined)
+            dbData.defeat_node_id = dto.defeatNodeId;
         return dbData;
     }
     async findAll() {
@@ -55,9 +59,12 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
         return node;
     }
     async create(createNodeDto) {
-        this.logger.log(`Attempting to create new story node`);
+        this.logger.log('Attempting to create new story node');
+        const dbNodeData = this.dtoToDbNode(createNodeDto);
+        if (dbNodeData.is_end === undefined) {
+            dbNodeData.is_end = false;
+        }
         try {
-            const dbNodeData = this.dtoToDbNode(createNodeDto);
             const [newNode] = await this.knex('story_nodes')
                 .insert(dbNodeData)
                 .returning('*');
@@ -66,23 +73,25 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
         }
         catch (error) {
             this.logger.error(`Failed to create story node: ${error}`, error.stack);
+            if (error.code === '23503') {
+                throw new common_1.BadRequestException('Invalid reference ID provided (e.g., item, enemy, or target node does not exist).');
+            }
             throw new common_1.InternalServerErrorException('Failed to create story node.');
         }
     }
     async update(id, updateNodeDto) {
         this.logger.log(`Attempting to update story node with ID: ${id}`);
+        const dbNodeUpdates = this.dtoToDbNode(updateNodeDto);
+        if (Object.keys(dbNodeUpdates).length === 0) {
+            this.logger.warn(`Update called for node ${id} with empty data.`);
+            return this.findOne(id);
+        }
         try {
-            const dbNodeUpdates = this.dtoToDbNode(updateNodeDto);
-            if (Object.keys(dbNodeUpdates).length === 0) {
-                this.logger.warn(`Update called for node ${id} with empty data.`);
-                return this.findOne(id);
-            }
             const [updatedNode] = await this.knex('story_nodes')
                 .where({ id })
                 .update(dbNodeUpdates)
                 .returning('*');
             if (!updatedNode) {
-                this.logger.warn(`Story node with ID ${id} not found for update.`);
                 throw new common_1.NotFoundException(`Story node with ID ${id} not found.`);
             }
             this.logger.log(`Story node ${id} updated successfully.`);
@@ -90,6 +99,9 @@ let AdminNodesService = AdminNodesService_1 = class AdminNodesService {
         }
         catch (error) {
             this.logger.error(`Failed to update story node ${id}: ${error}`, error.stack);
+            if (error.code === '23503') {
+                throw new common_1.BadRequestException('Invalid reference ID provided for update (e.g., item, enemy, or target node does not exist).');
+            }
             throw new common_1.InternalServerErrorException('Failed to update story node.');
         }
     }

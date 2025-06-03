@@ -45,12 +45,21 @@ let GameService = GameService_1 = class GameService {
         };
     }
     async processCombatAction(userId, actionDto) {
-        this.logger.log(`GameService processing combat action for user ${userId}`);
+        this.logger.log(`[GameService.processCombatAction] UserID: ${userId}, Action: ${actionDto.action}`);
         const combatResult = await this.combatService.handleCombatAction(userId, actionDto);
-        const inventory = await this.characterService.getStoryInventory(combatResult.character.id);
-        const characterForDto = this.mapCharacterToDto(combatResult.character);
+        const finalCharacterAfterCombat = combatResult.character;
+        const baseCharacterId = finalCharacterAfterCombat.id;
+        const activeStoryProgress = await this.characterService.getActiveStoryProgress(baseCharacterId);
+        if (!activeStoryProgress) {
+            this.logger.error(`[processCombatAction] CRITICAL: No active story progress found for character ${baseCharacterId} after combat action!`);
+            throw new common_1.InternalServerErrorException('Failed to retrieve active story progress after combat action.');
+        }
+        const storyProgressId = activeStoryProgress.id;
+        const inventory = await this.characterService.getStoryInventory(storyProgressId);
+        this.logger.debug(`[processCombatAction] Inventory fetched for StoryProgressID: ${storyProgressId}`);
+        const characterForDto = this.mapCharacterToDto(finalCharacterAfterCombat);
         if (combatResult.isCombatOver) {
-            this.logger.log(`Combat finished for user ${userId}. New node: ${combatResult.nextNodeId}`);
+            this.logger.log(`[processCombatAction] Combat finished. NextNodeID: ${combatResult.nextNodeId}`);
             const finalNode = combatResult.nextNodeId
                 ? await this.knex('story_nodes')
                     .where({ id: combatResult.nextNodeId })
@@ -62,7 +71,7 @@ let GameService = GameService_1 = class GameService {
                     .then((potentialChoices) => Promise.all(potentialChoices.map(async (choice) => ({
                     id: choice.id,
                     text: choice.text,
-                    isAvailable: await this.checkChoiceAvailability(choice, combatResult.character, combatResult.character.id),
+                    isAvailable: await this.checkChoiceAvailability(choice, finalCharacterAfterCombat, storyProgressId),
                 }))))
                 : [];
             return {
@@ -74,12 +83,12 @@ let GameService = GameService_1 = class GameService {
                 combat: null,
                 inventory: inventory,
                 roundActions: combatResult.roundActions,
-                equippedWeaponId: combatResult.character.equipped_weapon_id,
-                equippedArmorId: combatResult.character.equipped_armor_id,
+                equippedWeaponId: finalCharacterAfterCombat.equipped_weapon_id,
+                equippedArmorId: finalCharacterAfterCombat.equipped_armor_id,
             };
         }
         else {
-            this.logger.log(`Combat continues for user ${userId}.`);
+            this.logger.log(`[processCombatAction] Combat continues.`);
             return {
                 node: null,
                 choices: [],
@@ -87,8 +96,8 @@ let GameService = GameService_1 = class GameService {
                 combat: combatResult.enemy ?? null,
                 inventory: inventory,
                 roundActions: combatResult.roundActions,
-                equippedWeaponId: combatResult.character.equipped_weapon_id,
-                equippedArmorId: combatResult.character.equipped_armor_id,
+                equippedWeaponId: finalCharacterAfterCombat.equipped_weapon_id,
+                equippedArmorId: finalCharacterAfterCombat.equipped_armor_id,
             };
         }
     }
@@ -412,64 +421,66 @@ let GameService = GameService_1 = class GameService {
     }
     async useItemOutOfCombat(userId, itemId) {
         this.logger.log(`Attempting to use item ${itemId} for user ${userId} outside of combat.`);
-        const character = await this.characterService.findOrCreateByUserId(userId);
-        const activeCombat = await this.knex('active_combats')
-            .where({ character_id: character.id })
+        const baseCharacter = await this.characterService.findOrCreateByUserId(userId);
+        const activeStoryProgress = await this.characterService.getActiveStoryProgress(baseCharacter.id);
+        if (!activeStoryProgress) {
+            this.logger.warn(`User ${userId} (Character ${baseCharacter.id}) has no active story progress to use item from.`);
+            throw new common_1.BadRequestException('No active story to use items in.');
+        }
+        const progressId = activeStoryProgress.id;
+        const existingCombat = await this.knex('active_combats')
+            .where({ character_id: baseCharacter.id })
             .first();
-        if (activeCombat) {
-            this.logger.warn(`User ${userId} tried to use item ${itemId} outside combat, but is in combat.`);
+        if (existingCombat) {
             throw new common_1.ForbiddenException('Cannot use items this way while in combat.');
         }
-        const hasItem = await this.characterService.hasStoryItem(character.id, itemId);
+        const hasItem = await this.characterService.hasStoryItem(progressId, itemId, 1);
         if (!hasItem) {
-            this.logger.warn(`User ${userId} tried to use item ${itemId} but doesn't have it.`);
-            throw new common_1.BadRequestException('You do not have this item.');
+            this.logger.warn(`User ${userId} (StoryProgress ${progressId}) tried to use item ${itemId} but doesn't have it.`);
+            throw new common_1.BadRequestException('You do not have this item in your current story inventory.');
         }
-        const item = await this.knex('items').where({ id: itemId }).first();
-        if (!item) {
+        const item = await this.knex('items')
+            .where({ id: itemId })
+            .first();
+        if (!item)
             throw new common_1.InternalServerErrorException('Item data inconsistency.');
-        }
-        if (!item.usable) {
-            this.logger.warn(`User ${userId} tried to use non-usable item ${itemId}.`);
+        if (!item.usable)
             throw new common_1.BadRequestException(`This item (${item.name}) cannot be used.`);
-        }
         let characterStatsUpdated = false;
+        let newPlayerHealth = activeStoryProgress.health;
         if (item.effect && item.effect.startsWith('heal+')) {
             const healAmount = parseInt(item.effect.split('+')[1] ?? '0', 10);
             if (healAmount > 0) {
-                const maxHp = 100;
-                const currentHealth = character.health;
-                const newHealth = Math.min(maxHp, currentHealth + healAmount);
-                if (newHealth > currentHealth) {
-                    this.logger.log(`Applying heal effect: ${healAmount} to character ${character.id}. New health: ${newHealth}`);
-                    await this.characterService.updateCharacter(character.id, {
-                        health: newHealth,
+                const maxHp = activeStoryProgress.stamina ?? 100;
+                const previousPlayerHealth = newPlayerHealth;
+                newPlayerHealth = Math.min(maxHp, newPlayerHealth + healAmount);
+                if (newPlayerHealth > previousPlayerHealth) {
+                    this.logger.log(`Applying heal effect: ${healAmount} to StoryProgress ${progressId}. New health: ${newPlayerHealth}`);
+                    await this.characterService.updateStoryProgress(progressId, {
+                        health: newPlayerHealth,
                     });
-                    const removed = await this.characterService.removeStoryItem(character.id, itemId, 1);
-                    if (!removed) {
-                        this.logger.error(`Failed to remove item ${itemId} after use for character ${character.id}!`);
-                    }
+                    const removed = await this.characterService.removeStoryItem(progressId, itemId, 1);
+                    if (!removed)
+                        this.logger.error(`Failed to remove item ${itemId} after use for StoryProgress ${progressId}!`);
                     characterStatsUpdated = true;
                 }
                 else {
-                    this.logger.log(`Character ${character.id} health already full, item ${itemId} not consumed.`);
+                    this.logger.log(`StoryProgress ${progressId} health already full, item ${itemId} not consumed.`);
                 }
             }
             else {
-                this.logger.warn(`Item ${itemId} has zero heal amount.`);
+                this.logger.warn(`Item ${itemId} has zero or invalid heal amount.`);
             }
         }
         else {
             this.logger.warn(`Item ${itemId} has unhandled usable effect: ${item.effect}`);
             throw new common_1.BadRequestException(`Cannot use this type of item (${item.name}) right now.`);
         }
-        const finalCharacter = characterStatsUpdated
-            ? await this.characterService.findById(character.id)
-            : character;
-        if (!finalCharacter) {
-            throw new common_1.InternalServerErrorException('Character data not found after using item.');
+        const finalHydratedCharacter = await this.characterService.getHydratedCharacterForStory(baseCharacter.id, progressId);
+        if (!finalHydratedCharacter) {
+            throw new common_1.InternalServerErrorException('Character data not found after using item (for DTO).');
         }
-        return this.mapCharacterToDto(finalCharacter);
+        return this.mapCharacterToDto(finalHydratedCharacter);
     }
     async getPlayerProgress(userId) {
         this.logger.log(`Workspaceing rich player progress for user ID: ${userId}`);
