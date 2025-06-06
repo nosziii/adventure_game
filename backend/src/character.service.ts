@@ -16,6 +16,7 @@ import type { CharacterStoryProgressRecord } from './game/interfaces/character-s
 import { StoryRecord } from './game/interfaces/story-record.interface';
 import { ItemRecord } from './game/interfaces/item-record.interface';
 import { AbilityRecord } from './game/interfaces/ability-record.interface';
+import { AbilityType } from './admin/abilities/dto';
 import {
   SpendableStatName,
   PlayerArchetypeDto,
@@ -469,14 +470,19 @@ export class CharacterService {
   // TODO: Később ezt is bővíteni kellene
 
   // --- applyPassiveEffects : Már csak a felszerelt tárgyakat nézi ---
-  public async applyPassiveEffects(character: Character): Promise<Character> {
+  public async applyPassiveEffects(
+    character: Character,
+    storyProgressId?: number,
+  ): Promise<Character> {
     const characterWithEffects = { ...character }; // Másolat
     // Alapértelmezett defense érték beállítása, ha null (a DB defaultja 0 kellene legyen)
-    characterWithEffects.defense = characterWithEffects.defense ?? 0;
+    characterWithEffects.defense =
+      characterWithEffects.defense ?? DEFAULT_DEFENSE;
     // Alapértelmezett skill, luck, stamina is, ha lehetnek null-ok és számítunk velük
-    characterWithEffects.skill = characterWithEffects.skill ?? 0;
-    characterWithEffects.luck = characterWithEffects.luck ?? 0;
-    characterWithEffects.stamina = characterWithEffects.stamina ?? 100;
+    characterWithEffects.skill = characterWithEffects.skill ?? DEFAULT_SKILL;
+    characterWithEffects.luck = characterWithEffects.luck ?? DEFAULT_LUCK;
+    characterWithEffects.stamina =
+      characterWithEffects.stamina ?? DEFAULT_STAMINA;
 
     this.logger.debug(
       `Applying passive effects for char ${character.id}. Base Skill: ${character.skill}, Base Defense: ${character.defense}`,
@@ -557,6 +563,88 @@ export class CharacterService {
     } else {
       this.logger.debug('No items equipped, no passive effects to apply.');
     }
+
+    // 2. Megtanult passzív képességek hatásai
+    const progressIdToUse =
+      storyProgressId ||
+      (await this.getActiveStoryProgress(characterWithEffects.id))?.id;
+
+    if (progressIdToUse) {
+      const learnedAbilitiesLinks = await this.knex('character_story_abilities')
+        .where({ character_story_progress_id: progressIdToUse })
+        .select('ability_id');
+
+      if (learnedAbilitiesLinks.length > 0) {
+        const learnedAbilityIds = learnedAbilitiesLinks.map(
+          (link) => link.ability_id,
+        );
+        const abilitiesData = await this.knex<AbilityRecord>(
+          'abilities',
+        ).whereIn('id', learnedAbilityIds);
+
+        for (const ability of abilitiesData) {
+          if (
+            (ability.type === AbilityType.PASSIVE_STAT ||
+              ability.type === AbilityType.PASSIVE_COMBAT_MODIFIER) &&
+            ability.effect_string
+          ) {
+            this.logger.debug(
+              `Applying passive ability: ${ability.name} (${ability.effect_string})`,
+            );
+            const effects = ability.effect_string.split(';');
+            for (const effectPart of effects) {
+              const effectRegex = /(\w+)\s*([+-])\s*(\d+)/; // "stat+érték" vagy "stat-érték"
+              const match = effectPart.trim().match(effectRegex);
+              if (match) {
+                const [, statName, operator, valueStr] = match;
+                const value = parseInt(valueStr, 10);
+                const modifier = operator === '+' ? value : -value;
+
+                switch (statName.toLowerCase()) {
+                  case 'skill':
+                    characterWithEffects.skill =
+                      (characterWithEffects.skill ?? 0) + modifier;
+                    break;
+                  case 'luck':
+                    characterWithEffects.luck =
+                      (characterWithEffects.luck ?? 0) + modifier;
+                    break;
+                  case 'stamina':
+                    characterWithEffects.stamina =
+                      (characterWithEffects.stamina ?? 0) + modifier;
+                    break;
+                  case 'defense':
+                    characterWithEffects.defense =
+                      (characterWithEffects.defense ?? 0) + modifier;
+                    break;
+                  // TODO: Itt kellene kezelni az új, specifikusabb effekteket is, mint pl. 'weapon_damage_bonus'
+                  // Ezekhez lehet, hogy új mezőket kell felvenni a Character típusba/interfészbe,
+                  // vagy egy általánosabb 'modifiers' objektumot használni.
+                  default:
+                    this.logger.warn(
+                      `Unknown stat in PASSIVE ABILITY effect: ${statName} from ability ${ability.name}`,
+                    );
+                    break;
+                }
+              } else {
+                this.logger.warn(
+                  `Could not parse passive ability effect part: "${effectPart}" from ability ${ability.name}`,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+    // Ha a stamina (maxHP) változott, az aktuális HP-t is korrigálni kell, hogy ne legyen több a maximumnál
+    // (és szintlépéskor/gyógyuláskor már kezeltük a feltöltést)
+    if (characterWithEffects.health > characterWithEffects.stamina) {
+      characterWithEffects.health = characterWithEffects.stamina;
+    }
+
+    this.logger.log(
+      `Passive effects applied. Final Stats - Skill: ${characterWithEffects.skill}, Stamina: ${characterWithEffects.stamina}, Def: ${characterWithEffects.defense}`,
+    );
     return characterWithEffects;
   }
 

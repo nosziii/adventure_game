@@ -38,7 +38,7 @@ export declare class CharacterService {
     updateCharacter(characterId: number, updates: Partial<Omit<Character, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<Character>;
     equipItem(characterId: number, itemId: number): Promise<CharacterStoryProgressRecord>;
     unequipItem(characterId: number, itemType: 'weapon' | 'armor'): Promise<CharacterStoryProgressRecord>;
-    applyPassiveEffects(character: Character): Promise<Character>;
+    applyPassiveEffects(character: Character, storyProgressId?: number): Promise<Character>;
     resetStoryProgress(characterId: number, storyId: number): Promise<void>;
     addXp(characterId: number, xpToAdd: number): Promise<{
         leveledUp: boolean;

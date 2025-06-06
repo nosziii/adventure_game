@@ -17,6 +17,7 @@ exports.CharacterService = void 0;
 const common_1 = require("@nestjs/common");
 const knex_1 = require("knex");
 const database_module_1 = require("./database/database.module");
+const dto_1 = require("./admin/abilities/dto");
 const STARTING_NODE_ID = 1;
 const DEFAULT_HEALTH = 100;
 const DEFAULT_SKILL = 10;
@@ -281,12 +282,14 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.debug(`Unequipping slot ${equipSlotColumn} for story progress ${progressId}`);
         return this.updateStoryProgress(progressId, updates);
     }
-    async applyPassiveEffects(character) {
+    async applyPassiveEffects(character, storyProgressId) {
         const characterWithEffects = { ...character };
-        characterWithEffects.defense = characterWithEffects.defense ?? 0;
-        characterWithEffects.skill = characterWithEffects.skill ?? 0;
-        characterWithEffects.luck = characterWithEffects.luck ?? 0;
-        characterWithEffects.stamina = characterWithEffects.stamina ?? 100;
+        characterWithEffects.defense =
+            characterWithEffects.defense ?? DEFAULT_DEFENSE;
+        characterWithEffects.skill = characterWithEffects.skill ?? DEFAULT_SKILL;
+        characterWithEffects.luck = characterWithEffects.luck ?? DEFAULT_LUCK;
+        characterWithEffects.stamina =
+            characterWithEffects.stamina ?? DEFAULT_STAMINA;
         this.logger.debug(`Applying passive effects for char ${character.id}. Base Skill: ${character.skill}, Base Defense: ${character.defense}`);
         const equippedItemIds = [
             character.equipped_weapon_id,
@@ -343,6 +346,62 @@ let CharacterService = CharacterService_1 = class CharacterService {
         else {
             this.logger.debug('No items equipped, no passive effects to apply.');
         }
+        const progressIdToUse = storyProgressId ||
+            (await this.getActiveStoryProgress(characterWithEffects.id))?.id;
+        if (progressIdToUse) {
+            const learnedAbilitiesLinks = await this.knex('character_story_abilities')
+                .where({ character_story_progress_id: progressIdToUse })
+                .select('ability_id');
+            if (learnedAbilitiesLinks.length > 0) {
+                const learnedAbilityIds = learnedAbilitiesLinks.map((link) => link.ability_id);
+                const abilitiesData = await this.knex('abilities').whereIn('id', learnedAbilityIds);
+                for (const ability of abilitiesData) {
+                    if ((ability.type === dto_1.AbilityType.PASSIVE_STAT ||
+                        ability.type === dto_1.AbilityType.PASSIVE_COMBAT_MODIFIER) &&
+                        ability.effect_string) {
+                        this.logger.debug(`Applying passive ability: ${ability.name} (${ability.effect_string})`);
+                        const effects = ability.effect_string.split(';');
+                        for (const effectPart of effects) {
+                            const effectRegex = /(\w+)\s*([+-])\s*(\d+)/;
+                            const match = effectPart.trim().match(effectRegex);
+                            if (match) {
+                                const [, statName, operator, valueStr] = match;
+                                const value = parseInt(valueStr, 10);
+                                const modifier = operator === '+' ? value : -value;
+                                switch (statName.toLowerCase()) {
+                                    case 'skill':
+                                        characterWithEffects.skill =
+                                            (characterWithEffects.skill ?? 0) + modifier;
+                                        break;
+                                    case 'luck':
+                                        characterWithEffects.luck =
+                                            (characterWithEffects.luck ?? 0) + modifier;
+                                        break;
+                                    case 'stamina':
+                                        characterWithEffects.stamina =
+                                            (characterWithEffects.stamina ?? 0) + modifier;
+                                        break;
+                                    case 'defense':
+                                        characterWithEffects.defense =
+                                            (characterWithEffects.defense ?? 0) + modifier;
+                                        break;
+                                    default:
+                                        this.logger.warn(`Unknown stat in PASSIVE ABILITY effect: ${statName} from ability ${ability.name}`);
+                                        break;
+                                }
+                            }
+                            else {
+                                this.logger.warn(`Could not parse passive ability effect part: "${effectPart}" from ability ${ability.name}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (characterWithEffects.health > characterWithEffects.stamina) {
+            characterWithEffects.health = characterWithEffects.stamina;
+        }
+        this.logger.log(`Passive effects applied. Final Stats - Skill: ${characterWithEffects.skill}, Stamina: ${characterWithEffects.stamina}, Def: ${characterWithEffects.defense}`);
         return characterWithEffects;
     }
     async resetStoryProgress(characterId, storyId) {
