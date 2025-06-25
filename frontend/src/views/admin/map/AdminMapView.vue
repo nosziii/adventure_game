@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'; // nextTick hozzáadva
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'; // nextTick hozzáadva
 import { useAdminMapStore } from '../../../stores/adminMap';
 import { Network, type Options, type Data } from "vis-network"; // Importáld a típusokat is
 

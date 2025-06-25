@@ -93,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'; // computed és watch hozzáadva
+import { ref, onMounted, computed, watch } from 'vue'; // computed és watch hozzáadva
 import { useRouter, useRoute } from 'vue-router';
 import { useAdminNodesStore } from '../../../stores/adminNodes';
 import type { AdminCreateNodePayload, AdminUpdateNodePayload, AdminNodeData } from '../../../types/admin.types';

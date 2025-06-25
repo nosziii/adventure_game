@@ -71,7 +71,7 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAdminChoicesStore } from '../../../stores/adminChoices'; // Vagy relatív útvonal
 import type { AdminCreateChoicePayload, AdminUpdateChoicePayload, AdminChoiceData } from '../../../types/admin.types';

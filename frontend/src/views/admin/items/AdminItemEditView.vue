@@ -45,7 +45,7 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAdminItemsStore } from '../../../stores/adminItems'; // Vagy relatív útvonal
 import type { AdminCreateItemPayload, AdminUpdateItemPayload, AdminItemData } from '../../../types/admin.types';

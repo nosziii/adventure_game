@@ -68,8 +68,6 @@ export const useAdminMapStore = defineStore("adminMap", {
         const nodesFromApi = response.data.nodes;
         const choicesFromApi = response.data.choices; // Adatok lekérve
 
-        const START_NODE_ID = 1;
-
         this.visNodes = nodesFromApi.map((node) => {
           // node-ok feldolgozása
           let group = node.is_end

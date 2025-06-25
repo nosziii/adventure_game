@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useStoryStore } from '../stores/story';
@@ -111,12 +111,9 @@ import ImageGalleryTeaser from '../components/ImageGalleryTeaser.vue';
 import CharacterSlider from '../components/CharacterSlider.vue';
 
 const router = useRouter();
-const route = useRoute(); // Aktuális útvonal info
 const authStore = useAuthStore();
 const storyStore = useStoryStore();
 const gameStore = useGameStore();
-
-const successMessage = ref<string | null>(null); // Ha lenne itt üzenet
 
 const showArchetypeSelectionModal = ref(false);
 const storyIdForArchetypeSelection = ref<number | null>(null);

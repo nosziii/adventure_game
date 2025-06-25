@@ -6,7 +6,6 @@ import type {
   AdminCreateNodePayload,
   AdminUpdateNodePayload,
 } from "../types/admin.types";
-import type { StoryNodeData } from "../types/game.types"; // Vagy egy dedikált AdminNode típus
 
 // Állapot interfész
 interface AdminNodesState {

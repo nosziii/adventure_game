@@ -49,7 +49,7 @@
 
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'; // ref hozzáadva a szűrőhöz
+import { onMounted } from 'vue'; // ref hozzáadva a szűrőhöz
 import { useRouter } from 'vue-router';
 import { useAdminChoicesStore } from '../../../stores/adminChoices'; // Vagy relatív útvonal
 

@@ -9,7 +9,7 @@
 import { onMounted, computed } from 'vue'
 import { useAuthStore } from './stores/auth'
 import AppHeader from './components/AppHeader.vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useGameStore } from './stores/game'
 
 

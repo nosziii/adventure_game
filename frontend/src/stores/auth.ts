@@ -3,8 +3,6 @@ import apiClient from "../services/api";
 import type {
   User,
   LoginCredentials,
-  PlayerArchetypeDto,
-  AuthState,
   ArchetypeForSelection,
 } from "../types/auth.types";
 
