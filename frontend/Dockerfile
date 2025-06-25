@@ -1,29 +1,37 @@
-# frontend/Dockerfile
+# --- 1. Fázis: Build (Építő környezet) ---
+# Egy teljes Node.js környezettel kezdünk
+FROM node:20-alpine AS builder
 
-FROM node:20-alpine
-
+# Beállítjuk a munkakönyvtárat
 WORKDIR /app
 
-# Függőségek telepítése cache kihasználásával
+# Bemásoljuk a package.json és package-lock.json fájlokat
 COPY package*.json ./
+
+# Telepítjük a függőségeket
 RUN npm install
 
-# Forráskód másolása
+# Bemásoljuk a teljes forráskódot
 COPY . .
 
-# Vite alapértelmezett portja [FRONTEND_PORT a .env-ből]
-# Az EXPOSE csak dokumentációs célú a compose-ban
-EXPOSE 5173
+# Lefordítjuk az alkalmazást éles verzióra
+# Ez létrehozza a /app/dist mappát
+RUN npm run build
 
-# Indítsd a Vite fejlesztői szervert, hogy kívülről is elérhető legyen
-# A --host kapcsoló fontos a Docker konténeren belüli futtatáshoz
-CMD ["npm", "run", "dev", "--", "--host"]
 
-# --- Production Stage (ha később kell) ---
-# Építsd a statikus fájlokat
-# RUN npm run build
-# Második stage egy Nginx szerverrel a statikus fájlok kiszolgálására
-# FROM nginx:stable-alpine
-# COPY --from=0 /app/dist /usr/share/nginx/html
-# EXPOSE 80
-# CMD ["nginx", "-g", "daemon off;"]
+# --- 2. Fázis: Production (Éles környezet) ---
+# Egy pehelykönnyű Nginx szerverrel folytatjuk
+FROM nginx:1.27-alpine
+
+# Bemásoljuk a korábban létrehozott Nginx konfigurációs fájlt
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Bemásoljuk a lefordított alkalmazást az "builder" fázisból
+# az Nginx webszerver alapértelmezett mappájába
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Megmondjuk a Dockernek, hogy a 80-as portot használjuk
+EXPOSE 80
+
+# Az Nginx szerver elindítása
+CMD ["nginx", "-g", "daemon off;"]

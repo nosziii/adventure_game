@@ -62,7 +62,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT_OUT}"
     environment:
       - NODE_ENV=${NODE_ENV}
       # Ha Vite-ot használsz és kell az API URL:.env fájlból:
