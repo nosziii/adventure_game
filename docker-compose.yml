@@ -1,11 +1,9 @@
 # docker-compose.yml
 
-version: '3.8'
-
 services:
   # Adatbázis (PostgreSQL)
   db:
-    image: postgres:16-alpine 
+    image: postgres:16-alpine
     container_name: ${COMPOSE_PROJECT_NAME}_db
     restart: always
     environment:
@@ -88,11 +86,19 @@ services:
       - NODE_ENV=development # Vagy production, ha éles migrációt futtatsz
     volumes:
       - ./backend:/usr/src/app # Hozzáférés a knexfile-hoz és a migrációs fájlokhoz
+      - node_modules_volume:/usr/src/app/node_modules
     networks:
       - kalandjatek-network
     # Az alapértelmezett parancs futtatja a legfrissebb migrációkat.
     # Seedeléshez külön parancs kell (lásd lent).
-    command: ["npx", "knex", "migrate:latest", "--knexfile", "/usr/src/app/knexfile.js"]
+    command:
+      [
+        "npx",
+        "knex",
+        "migrate:latest",
+        "--knexfile",
+        "/usr/src/app/knexfile.js",
+      ]
 
 # Hálózat definiálása
 networks:
@@ -103,3 +109,4 @@ networks:
 volumes:
   postgres_data:
     driver: local
+  node_modules_volume:
