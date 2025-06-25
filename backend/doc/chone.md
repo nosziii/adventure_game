@@ -1,1 +1,1 @@
-sudo chown -R mzsolt:mzsolt .
+sudo chown -R user:user .
