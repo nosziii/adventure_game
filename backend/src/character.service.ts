@@ -1305,4 +1305,46 @@ export class CharacterService {
     // létrehozza/betölti a character_story_progress-t.
     return updatedCharacter;
   }
+  async getLearnedActiveCombatAbilities(
+    progressId: number,
+  ): Promise<SimpleAbilityInfoDto[]> {
+    this.logger.debug(
+      `Fetching learned active combat abilities for story progress ID: ${progressId}`,
+    );
+
+    const learnedAbilities = await this.knex('character_story_abilities as csa')
+      .join('abilities as a', 'a.id', 'csa.ability_id')
+      .where('csa.character_story_progress_id', progressId)
+      .andWhere('a.type', AbilityType.ACTIVE_COMBAT_ACTION) // Csak az aktív harci képességek
+      .select(
+        'a.id',
+        'a.name',
+        'a.description',
+        'a.type',
+        'a.effect_string as effectString', // Alias, hogy a DTO-nak megfeleljen
+        'a.talent_point_cost as talentPointCost',
+      );
+
+    return learnedAbilities.map((ability) => ({
+      id: ability.id,
+      name: ability.name,
+      description: ability.description,
+      type: ability.type,
+      effectString: ability.effectString,
+      talentPointCost: ability.talentPointCost,
+    }));
+  }
+
+  async hasLearnedAbility(
+    progressId: number,
+    abilityId: number,
+  ): Promise<boolean> {
+    const learnedAbility = await this.knex('character_story_abilities')
+      .where({
+        character_story_progress_id: progressId,
+        ability_id: abilityId,
+      })
+      .first();
+    return !!learnedAbility;
+  }
 }

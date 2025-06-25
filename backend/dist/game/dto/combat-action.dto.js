@@ -11,10 +11,11 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CombatActionDto = void 0;
 const class_validator_1 = require("class-validator");
-const allowedActions = ['attack', 'use_item', 'defend'];
+const allowedActions = ['attack', 'use_item', 'defend', 'use_ability'];
 class CombatActionDto {
     action;
     itemId;
+    abilityId;
 }
 exports.CombatActionDto = CombatActionDto;
 __decorate([
@@ -29,4 +30,12 @@ __decorate([
     (0, class_validator_1.IsInt)({ message: 'itemId must be an integer' }),
     __metadata("design:type", Number)
 ], CombatActionDto.prototype, "itemId", void 0);
+__decorate([
+    (0, class_validator_1.ValidateIf)((o) => o.action === 'use_ability'),
+    (0, class_validator_1.IsNotEmpty)({
+        message: 'abilityId megadása kötelező, ha az akció use_ability.',
+    }),
+    (0, class_validator_1.IsInt)({ message: 'Az abilityId számnak kell lennie.' }),
+    __metadata("design:type", Number)
+], CombatActionDto.prototype, "abilityId", void 0);
 //# sourceMappingURL=combat-action.dto.js.map

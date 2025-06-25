@@ -154,8 +154,11 @@ let GameService = GameService_1 = class GameService {
         const activeCombatDbRecord = await this.knex('active_combats')
             .where({ character_id: baseCharacter.id })
             .first();
-        if (activeCombatDbRecord) {
-            this.logger.log(`User ${userId} is in active combat (Combat ID: ${activeCombatDbRecord.id})`);
+        let availableAbilitiesForCombat = null;
+        if (activeCombatDbRecord && activeStoryProgress) {
+            this.logger.log(`User ${userId} is in active combat... fetching combat abilities.`);
+            availableAbilitiesForCombat =
+                await this.characterService.getLearnedActiveCombatAbilities(activeStoryProgress.id);
             const enemyBaseData = await this.knex('enemies')
                 .where({ id: activeCombatDbRecord.enemy_id })
                 .first();
@@ -187,6 +190,7 @@ let GameService = GameService_1 = class GameService {
                 roundActions: null,
                 equippedWeaponId: characterForState.equipped_weapon_id,
                 equippedArmorId: characterForState.equipped_armor_id,
+                availableCombatAbilities: availableAbilitiesForCombat,
             };
         }
         else {
@@ -202,6 +206,7 @@ let GameService = GameService_1 = class GameService {
                     roundActions: null,
                     equippedWeaponId: characterForState.equipped_weapon_id,
                     equippedArmorId: characterForState.equipped_armor_id,
+                    availableCombatAbilities: null,
                     messages: [
                         'Hiba: Nincs aktuális pozíció a sztoriban. Válassz sztorit a kezdőpanelen!',
                     ],

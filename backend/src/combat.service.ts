@@ -21,6 +21,8 @@ import {
   CombatActionRollDetailsDto,
 } from './combat/dto/combat-action-details.dto';
 
+import { AbilityRecord } from './game/interfaces/ability-record.interface';
+
 // A harc kimenetelét leíró interfész
 export interface CombatResult {
   character: Character; // Frissített karakter
@@ -618,6 +620,20 @@ export class CombatService {
       const result = await this._resolvePlayerDefend(activeCombat.id);
       roundActions.push(result.actionDetail);
       playerActionTookTurn = result.playerActionTookTurn;
+    } else if (actionDto.action === 'use_ability' && actionDto.abilityId) {
+      // <-- ÚJ ÁG
+      const result = await this._resolvePlayerAbilityUse(
+        characterForCombat,
+        enemyBaseData,
+        activeStoryProgress.id,
+        activeCombat.id,
+        actionDto.abilityId,
+        enemyCurrentHealth,
+      );
+      roundActions.push(result.actionDetail);
+      enemyCurrentHealth = result.updatedEnemyHealth;
+      characterForCombat = result.updatedCharacter;
+      playerActionTookTurn = true;
     } else {
       this.logger.error(`Unknown combat action received: ${actionDto.action}`);
       throw new BadRequestException('Invalid combat action.');
@@ -812,6 +828,123 @@ export class CombatService {
       enemy: enemyDtoForReturn,
       roundActions,
       isCombatOver: false,
+    };
+  }
+  private async _resolvePlayerAbilityUse(
+    characterForCombat: Character,
+    enemyBaseData: EnemyRecord,
+    activeStoryProgressId: number,
+    activeCombatId: number,
+    abilityId: number,
+    currentEnemyHealth: number,
+  ): Promise<{
+    actionDetail: CombatActionDetailsDto;
+    updatedEnemyHealth: number;
+    updatedCharacter: Character;
+  }> {
+    let character = { ...characterForCombat };
+    let enemyHealth = currentEnemyHealth;
+
+    const hasAbility = await this.characterService.hasLearnedAbility(
+      activeStoryProgressId,
+      abilityId,
+    );
+    if (!hasAbility) {
+      throw new ForbiddenException('You have not learned this ability.');
+    }
+
+    const ability = await this.knex<AbilityRecord>('abilities')
+      .where({ id: abilityId })
+      .first();
+    if (!ability || ability.type !== 'ACTIVE_COMBAT_ACTION') {
+      throw new BadRequestException('This ability cannot be used in combat.');
+    }
+
+    const actionDetail: CombatActionDetailsDto = {
+      actor: 'player',
+      actionType: 'use_ability', // A 3. pont javításával ez már helyes
+      description: `Használod: ${ability.name}!`,
+      outcome: 'no_effect', // Alapértelmezett kimenet
+    };
+
+    if (ability.effect_string) {
+      // Robusztusabb effectMap létrehozás
+      const effects = ability.effect_string
+        .split(';')
+        .filter((e) => e.trim() !== '');
+      const effectMap = new Map(
+        effects.map((e) => {
+          const parts = e.split(':');
+          return [parts[0]?.trim(), parts[1]?.trim()];
+        }),
+      );
+
+      if (effectMap.has('damage_multiplier')) {
+        const multiplier = parseFloat(
+          effectMap.get('damage_multiplier') ?? '1.0',
+        );
+
+        // Fegyver alapsebzésének lekérdezése (az _resolvePlayerAttack-ból átemelve)
+        let baseDamage = 1; // Alap ököl
+        if (character.equipped_weapon_id) {
+          const weapon = await this.knex<ItemRecord>('items')
+            .where({ id: character.equipped_weapon_id })
+            .first();
+          if (weapon?.effect) {
+            const weaponEffects = weapon.effect
+              .split(';')
+              .filter((e) => e.trim() !== '');
+            for (const effectPart of weaponEffects) {
+              const damageMatch = effectPart.trim().match(/damage\+(\d+)/);
+              if (damageMatch?.[1]) {
+                baseDamage = parseInt(damageMatch[1], 10);
+                break;
+              }
+            }
+          }
+        }
+        // --------------------------------------------------------------------------
+
+        const skillBonus = Math.floor((character.skill ?? 0) / 5);
+        const abilityDamage = Math.floor(
+          (baseDamage + skillBonus) * multiplier,
+        );
+
+        enemyHealth = Math.max(0, enemyHealth - abilityDamage);
+
+        actionDetail.outcome = 'ability_used_successfully';
+        actionDetail.damageDealt = abilityDamage;
+        actionDetail.targetActor = 'enemy';
+        actionDetail.targetCurrentHp = enemyHealth;
+        actionDetail.targetMaxHp = enemyBaseData.health;
+        actionDetail.description += ` Sebzés: ${abilityDamage}. Az ellenfél új HP-ja: ${enemyHealth}.`;
+      }
+
+      // Ha van stamina költség
+      if (effectMap.has('stamina_cost')) {
+        const staminaCost = parseInt(effectMap.get('stamina_cost') ?? '0', 10);
+
+        if ((character.stamina ?? 0) >= staminaCost) {
+          const newStamina = (character.stamina ?? 0) - staminaCost;
+          // ... (a többi sor)
+        } else {
+          throw new BadRequestException(
+            'Nincs elég staminád a képesség használatához.',
+          );
+        }
+      }
+    }
+
+    // DB frissítése az enemy HP-val
+    await this.knex('active_combats').where({ id: activeCombatId }).update({
+      enemy_current_health: enemyHealth,
+      last_action_time: new Date(),
+    });
+
+    return {
+      actionDetail,
+      updatedEnemyHealth: enemyHealth,
+      updatedCharacter: character,
     };
   }
 }

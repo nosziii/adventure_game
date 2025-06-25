@@ -797,6 +797,31 @@ let CharacterService = CharacterService_1 = class CharacterService {
         this.logger.log(`Character ${characterId} successfully selected archetype ID: ${archetypeId}`);
         return updatedCharacter;
     }
+    async getLearnedActiveCombatAbilities(progressId) {
+        this.logger.debug(`Fetching learned active combat abilities for story progress ID: ${progressId}`);
+        const learnedAbilities = await this.knex('character_story_abilities as csa')
+            .join('abilities as a', 'a.id', 'csa.ability_id')
+            .where('csa.character_story_progress_id', progressId)
+            .andWhere('a.type', dto_1.AbilityType.ACTIVE_COMBAT_ACTION)
+            .select('a.id', 'a.name', 'a.description', 'a.type', 'a.effect_string as effectString', 'a.talent_point_cost as talentPointCost');
+        return learnedAbilities.map((ability) => ({
+            id: ability.id,
+            name: ability.name,
+            description: ability.description,
+            type: ability.type,
+            effectString: ability.effectString,
+            talentPointCost: ability.talentPointCost,
+        }));
+    }
+    async hasLearnedAbility(progressId, abilityId) {
+        const learnedAbility = await this.knex('character_story_abilities')
+            .where({
+            character_story_progress_id: progressId,
+            ability_id: abilityId,
+        })
+            .first();
+        return !!learnedAbility;
+    }
 };
 exports.CharacterService = CharacterService;
 exports.CharacterService = CharacterService = CharacterService_1 = __decorate([

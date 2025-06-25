@@ -5,6 +5,9 @@ class SimpleAbilityInfoDto {
     id;
     name;
     description;
+    type;
+    effectString;
+    talentPointCost;
 }
 exports.SimpleAbilityInfoDto = SimpleAbilityInfoDto;
 class PlayerArchetypeDto {

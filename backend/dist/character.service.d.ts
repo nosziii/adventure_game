@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
 import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
-import { SpendableStatName, PlayerArchetypeDto } from './character/dto';
+import { SpendableStatName, PlayerArchetypeDto, SimpleAbilityInfoDto } from './character/dto';
 export interface Character {
     id: number;
     user_id: number;
@@ -53,4 +53,6 @@ export declare class CharacterService {
     beginNewStoryPlaythrough(characterId: number, storyId: number, archetypeId: number): Promise<CharacterStoryProgressRecord>;
     getSelectableArchetypes(): Promise<PlayerArchetypeDto[]>;
     selectArchetypeForCharacter(characterId: number, archetypeId: number): Promise<Character>;
+    getLearnedActiveCombatAbilities(progressId: number): Promise<SimpleAbilityInfoDto[]>;
+    hasLearnedAbility(progressId: number, abilityId: number): Promise<boolean>;
 }

@@ -101,6 +101,15 @@ export interface CombatActionDetails {
   maxChargeTurns?: number;
 }
 
+export interface SimpleAbilityInfo {
+  id: number;
+  name: string;
+  description: string;
+  type?: string;
+  effectString?: string | null;
+  talentPointCost?: number;
+}
+
 // A teljes GameState válasz szerkezete a backendtől (DTO alapján)
 export interface GameStateResponse {
   node: StoryNodeData | null;
@@ -113,7 +122,7 @@ export interface GameStateResponse {
   equippedWeaponId?: number | null;
   roundActions?: CombatActionDetails[] | null;
   talentPointsAvailable?: number | null;
-  // activeCombatAbilities?: SimpleAbilityInfo[];
+  availableCombatAbilities?: SimpleAbilityInfo[] | null;
 }
 
 export interface StoryInfo {

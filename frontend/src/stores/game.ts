@@ -13,6 +13,7 @@ import type {
   PlayerMapData,
   CombatActionDetails,
   LearnableAbility,
+  SimpleAbilityInfo,
 } from "../types/game.types";
 import { useStoryStore } from "./story";
 import type { SpendableStatName } from "../types/character.dto.types";
@@ -39,6 +40,7 @@ interface GameState {
   learnableAbilities: LearnableAbility[]; // <-- ÚJ
   isLoadingLearnableAbilities: boolean; // <-- ÚJ
   learnAbilityError: string | null;
+  availableCombatAbilities: SimpleAbilityInfo[];
 }
 
 export const useGameStore = defineStore("game", {
@@ -64,6 +66,7 @@ export const useGameStore = defineStore("game", {
     mapEdges: [],
     minimapVisible: false,
     loadingMinimap: false,
+    availableCombatAbilities: [],
   }),
 
   getters: {
@@ -97,6 +100,8 @@ export const useGameStore = defineStore("game", {
     getIsLoadingLearnableAbilities: (state): boolean =>
       state.isLoadingLearnableAbilities,
     getLearnAbilityError: (state): string | null => state.learnAbilityError,
+    getAvailableCombatAbilities: (state): SimpleAbilityInfo[] =>
+      state.availableCombatAbilities,
   },
 
   actions: {
@@ -123,6 +128,7 @@ export const useGameStore = defineStore("game", {
       this.equippedArmorId = data.equippedArmorId ?? null;
       this.currentRoundDetailedActions = data.roundActions ?? [];
       this.messages = data.messages ?? [];
+      this.availableCombatAbilities = data.availableCombatAbilities ?? [];
     },
 
     async fetchGameState() {
@@ -620,6 +626,40 @@ export const useGameStore = defineStore("game", {
         this.learnAbilityError = errorMessage;
         this.error = errorMessage;
         return false;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async useCombatAbility(abilityId: number) {
+      if (!this.combatState) {
+        console.error("useCombatAbility action called but not in combat!");
+        this.error = "Nem vagy harcban, nem tudsz képességet használni.";
+        return;
+      }
+
+      this.loading = true; // Jelezzük a feldolgozás kezdetét
+      this.error = null;
+      console.log(
+        `[GameStore] Attempting to use ability ID: ${abilityId} in combat...`
+      );
+      try {
+        const response = await apiClient.post<GameStateResponse>(
+          "/game/combat/action",
+          {
+            action: "use_ability", // Az új action type
+            abilityId: abilityId, // A használni kívánt képesség ID-ja
+          }
+        );
+
+        this._updateStateFromResponse(response.data); // Frissítjük a játékállapotot a válasszal
+        console.log(
+          `[GameStore] Ability ${abilityId} used, new game state received.`
+        );
+      } catch (err: any) {
+        console.error(`Failed to use ability ${abilityId}:`, err);
+        this.error =
+          err.response?.data?.message ||
+          `A(z) ${abilityId} ID-jú képesség használata sikertelen.`;
       } finally {
         this.loading = false;
       }

@@ -44,6 +44,20 @@
             </button>
           </div>
 
+          <div class="ability-actions" v-if="gameStore.getAvailableCombatAbilities.length > 0">
+            <h4 class="actions-title">Képességek</h4>
+            <button
+                v-for="ability in gameStore.getAvailableCombatAbilities"
+                :key="ability.id"
+                @click="handleUseAbility(ability.id)"
+                class="action-button ability-button"
+                :title="ability.description"
+                :disabled="gameStore.isLoading || isDisplayingActions"
+            >
+              {{ ability.name }}
+            </button>
+        </div>
+
           <div class="combat-log">
             <h4>Harc Napló:</h4>
             <div v-if="displayedLogEntries.length === 0 && !gameStore.isLoadingMinimap && !isDisplayingActions">
@@ -148,6 +162,12 @@ const toggleMinimapHandler = () => {
 // Új reaktív változók a harci napló késleltetett megjelenítéséhez
 const displayedLogEntries = ref<CombatActionDetails[]>([]);
 const isDisplayingActions = ref(false); // Jelzi, hogy éppen fut-e az eseménymegjelenítő sorozat
+
+const handleUseAbility = async (abilityId: number) => {
+    console.log(`[GameView] Use ability button clicked for ID: ${abilityId}`);
+    await gameStore.useCombatAbility(abilityId);
+    // Az UI automatikusan frissül a store változása miatt
+};
 
 // Figyeljük a store-ban lévő teljes körös akciókat
 watch(() => gameStore.getRoundActions, (newActions, oldActions) => {
@@ -367,6 +387,33 @@ hr {
 
 .minimap-toggle-button:hover:not(:disabled) {
     background-color: #5a2d9e;
+}
+
+.actions-title { /* A "Képességek" és később a "Tárgyak" címhez */
+    font-family: 'Cinzel', serif;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 1em;
+    margin-top: 25px;
+    margin-bottom: 10px;
+    font-weight: normal;
+}
+.ability-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--panel-border);
+}
+.ability-button {
+    background-color: #6f42c1; /* Lila gomb */
+    color: white;
+    border: 1px solid #5a2d9e;
+}
+.ability-button:hover:not(:disabled) {
+    background-color: #8555c9;
 }
 
 </style>

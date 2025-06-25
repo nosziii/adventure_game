@@ -14,7 +14,8 @@ export class CombatActionDetailsDto {
     | 'special_attack_execute'
     | 'info'
     | 'victory'
-    | 'defeat';
+    | 'defeat'
+    | 'use_ability';
   description: string;
   attackerRollDetails?: CombatActionRollDetailsDto;
   defenderRollDetails?: CombatActionRollDetailsDto;
@@ -31,7 +32,8 @@ export class CombatActionDetailsDto {
     | 'no_effect'
     | 'info'
     | 'victory'
-    | 'defeat';
+    | 'defeat'
+    | 'ability_used_successfully';
   damageDealt?: number;
   healthHealed?: number;
   targetActor?: 'player' | 'enemy';

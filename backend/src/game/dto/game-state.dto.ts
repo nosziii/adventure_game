@@ -3,6 +3,7 @@ import { EnemyDataDto } from './enemy-data.dto';
 import { CharacterStatsDto } from './character-stats.dto';
 import { InventoryItemDto } from './inventory-item.dto';
 import { CombatActionDetailsDto } from '../../combat/dto/combat-action-details.dto';
+import { SimpleAbilityInfoDto } from '../../character/dto/player-archetype.dto';
 
 interface StoryNodeData {
   id: number;
@@ -21,4 +22,5 @@ export class GameStateDto {
   equippedWeaponId?: number | null;
   equippedArmorId?: number | null;
   messages?: string[];
+  availableCombatAbilities?: SimpleAbilityInfoDto[] | null;
 }

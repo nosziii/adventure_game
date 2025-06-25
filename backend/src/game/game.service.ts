@@ -32,6 +32,7 @@ import { EnemyRecord } from './interfaces/enemy-record.interface';
 import { CharacterStoryProgressRecord } from './interfaces/character-story-progres-record.interface';
 import { PlayerProgressRecord } from './interfaces/player-progress.interface';
 import { CombatService, CombatResult } from '../combat.service';
+import { SimpleAbilityInfoDto } from '../character/dto';
 
 const STARTING_NODE_ID = 1;
 
@@ -238,10 +239,17 @@ export class GameService {
       .where({ character_id: baseCharacter.id })
       .first();
 
-    if (activeCombatDbRecord) {
+    let availableAbilitiesForCombat: SimpleAbilityInfoDto[] | null = null;
+
+    if (activeCombatDbRecord && activeStoryProgress) {
+      // Csak akkor kérdezzük le, ha harcban van ÉS van aktív progresszió
       this.logger.log(
-        `User ${userId} is in active combat (Combat ID: ${activeCombatDbRecord.id})`,
+        `User ${userId} is in active combat... fetching combat abilities.`,
       );
+      availableAbilitiesForCombat =
+        await this.characterService.getLearnedActiveCombatAbilities(
+          activeStoryProgress.id,
+        );
       const enemyBaseData = await this.knex<EnemyRecord>('enemies')
         .where({ id: activeCombatDbRecord.enemy_id })
         .first();
@@ -279,6 +287,7 @@ export class GameService {
         roundActions: null, // Általános állapotlekéréskor nincs specifikus kör akció
         equippedWeaponId: characterForState.equipped_weapon_id,
         equippedArmorId: characterForState.equipped_armor_id,
+        availableCombatAbilities: availableAbilitiesForCombat,
       };
     } else {
       // NINCS HARCBAN
@@ -299,6 +308,7 @@ export class GameService {
           roundActions: null,
           equippedWeaponId: characterForState.equipped_weapon_id,
           equippedArmorId: characterForState.equipped_armor_id,
+          availableCombatAbilities: null,
           messages: [
             'Hiba: Nincs aktuális pozíció a sztoriban. Válassz sztorit a kezdőpanelen!',
           ], // Extra üzenet

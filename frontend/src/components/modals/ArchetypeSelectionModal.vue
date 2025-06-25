@@ -28,7 +28,15 @@
           <h3>{{ archetype.name }}</h3>
           <p class="archetype-description-modal">{{ truncateText(archetype.description, 80) }}</p>
           </div>
-      </div>
+          <div class="archetype-stats-modal">
+            <h4>Kulcsjellemzők:</h4>
+            <ul>
+                <li>Erő: <strong>15</strong></li>
+                <li>Intelligencia: <strong>8</strong></li>
+                <li>Képesség: <strong>Pajzstörés</strong></li>
+            </ul>
+          </div>
+        </div>
 
       <div class="selection-footer-modal" v-if="archetypesToDisplay.length > 0">
         <button 
@@ -114,6 +122,7 @@ const onImageError = (event: Event) => {
   justify-content: center;
   padding: 1rem;
   backdrop-filter: blur(2px);
+  transition: opacity 0.3s ease;
 }
 
 .modal-content.archetype-selection-modal {
@@ -127,6 +136,12 @@ const onImageError = (event: Event) => {
   overflow-y: auto;
   padding: 2rem;
   position: relative;
+  transform: scale(0.95);
+  transition: transform 0.3s ease;
+}
+
+.modal-overlay.show .modal-content.archetype-selection-modal {
+    transform: scale(1);
 }
 
 .close-button-modal {
@@ -171,28 +186,33 @@ const onImageError = (event: Event) => {
 }
 
 .archetype-card-modal {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(18, 11, 25, 0.6); /* Sötétebb, tematikusabb háttér */
   border: 1px solid var(--panel-border);
-  padding: 1rem;
+  padding: 1.5rem; /* Több belső tér */
   border-radius: 0.75rem;
   text-align: center;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  display: flex; /* Flexbox a jobb belső elrendezésért */
+  flex-direction: column;
 }
 
 .archetype-card-modal:hover {
-  transform: scale(1.02);
+  transform: translateY(-5px) scale(1.02); /* Lebegő hatás */
   border-color: var(--accent-primary);
+  box-shadow: 0 0 15px rgba(128, 70, 255, 0.3);
 }
 
 .archetype-card-modal.selected {
-  outline: 3px solid var(--accent-primary);
-  outline-offset: 2px;
+  border-color: var(--accent-primary-light, #c5a8ff); /* Világosabb keret */
+  /* A régi outline helyett egy belső ragyogás */
+  box-shadow: 0 0 20px rgba(128, 70, 255, 0.7), inset 0 0 15px rgba(18, 11, 25, 0.5);
+  transform: translateY(-5px) scale(1.05); /* Kicsit jobban kiemeli */
 }
 
 .archetype-icon-modal img {
-  width: 70px;
-  height: 70px;
+  width: 80px;
+  height: 80px;
   object-fit: cover;
   border-radius: 50%;
   margin-bottom: 1rem;
@@ -206,9 +226,43 @@ const onImageError = (event: Event) => {
   margin-top: 0.5rem;
 }
 
+/* ÚJ: Statisztikák szekció stílusa */
+.archetype-stats-modal {
+    margin-top: auto; /* Letolja a kártya aljára */
+    padding-top: 1rem;
+    font-size: 0.8rem;
+    text-align: left;
+    color: var(--text-secondary);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.archetype-stats-modal h4 {
+    font-family: 'Cinzel', serif; /* Tematikusabb font */
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: var(--accent-primary);
+}
+.archetype-stats-modal ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.archetype-stats-modal li {
+    margin-bottom: 0.25rem;
+}
+.archetype-stats-modal li strong {
+    color: var(--text-primary);
+    float: right; /* Értékek jobbra igazítása */
+}
+
 .selection-footer-modal {
   margin-top: 2rem;
   text-align: center;
+}
+
+.confirm-button:not(:disabled) {
+  opacity: 1;
+  background: linear-gradient(145deg, var(--accent-primary), #5a2c9e); /* Látványosabb háttér */
+  box-shadow: 0 0 15px rgba(128, 70, 255, 0.4);
 }
 
 .confirm-button {
@@ -222,8 +276,17 @@ const onImageError = (event: Event) => {
   cursor: pointer;
 }
 
+.confirm-button:not(:disabled):hover {
+  background: linear-gradient(145deg, #a584e3, var(--accent-primary));
+  box-shadow: 0 0 25px rgba(128, 70, 255, 0.7);
+  transform: scale(1.05);
+}
+
 .confirm-button:hover {
   background: var(--button-hover-bg);
+}
+.confirm-button:disabled {
+  cursor: not-allowed;
 }
 
 .loading-message,

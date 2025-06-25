@@ -10,8 +10,14 @@
       </p>
     </section>
 
-     <section v-if="storyStore.stories.length > 0" class="stories-grid" id="stories-section">
-      <h2 class="section-title">Választható Kalandok</h2>
+    <section v-if="storyStore.stories.length > 0" class="stories-grid" id="stories-section">
+    <h2 class="section-title">Választható Kalandok</h2>
+
+    <p v-if="resetStatusMessage" :class="isResetError ? 'error-message' : 'success-message'" class="reset-status">
+      {{ resetStatusMessage }}
+    </p>
+
+    <div class="story-card-grid">
       <div
         v-for="story in storyStore.stories"
         :key="story.id"
@@ -19,6 +25,20 @@
         :class="{ 'active-story-card': story.isActive }"
         tabindex="0"
       >
+        <div class="story-card-image">
+          <img :src="getStoryImagePath(story.id)" :alt="story.title" @error="onImageError" />
+        </div>
+        
+        <div class="story-card-content">
+          <h3 :id="`story-title-${story.id}`">
+            {{ story.title }}
+            <span v-if="story.isActive" class="active-marker">(Aktív)</span>
+          </h3>
+          <p class="story-description">
+            {{ story.description ? truncateText(story.description, 80) : 'Nincs részletes leírás.' }}
+          </p>
+        </div>
+
         <div class="story-actions">
           <button 
             @click="handleStartOrContinueStory(story.id, story.currentNodeIdInStory)" 
@@ -37,7 +57,8 @@
           </button>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
     <ArchetypeSelectionModal 
         v-if="showArchetypeSelectionModal && storyIdForArchetypeSelection !== null"
         :story-id="storyIdForArchetypeSelection"
@@ -99,6 +120,8 @@ const successMessage = ref<string | null>(null); // Ha lenne itt üzenet
 
 const showArchetypeSelectionModal = ref(false);
 const storyIdForArchetypeSelection = ref<number | null>(null);
+const resetStatusMessage = ref<string | null>(null); // <--- EZT ADD HOZZÁ
+const isResetError = ref(false);
 
 onMounted(() => {
   storyStore.fetchAvailableStories();
@@ -134,18 +157,50 @@ const handleResetStory = async (storyId: number, storyTitle: string) => {
     if (confirm(`Biztosan újra akarod kezdeni a "${storyTitle}" kalandot? Minden eddigi haladásod ebben a sztoriban elveszik!`)) {
         console.log(`[DashboardView] User confirmed reset for story ID: ${storyId}`);
         
-        const success = await gameStore.resetStoryProgress(storyId); // Hívjuk a gameStore akcióját
+        const success = await gameStore.resetStoryProgress(storyId);
         
         if (success) {
-            alert(`A "${storyTitle}" kaland sikeresen újrakezdve!`); // Vagy egy szebb notification
+            isResetError.value = false;
+            resetStatusMessage.value = `A "${storyTitle}" kaland sikeresen újrakezdve!`;
+            // A sikeres újrakezdés után frissítsük a sztorik listáját, hogy a "Folytatás" gomb eltűnjön
+            await storyStore.fetchAvailableStories(); 
         } else {
-            if (gameStore.getError) {
-                alert(`Hiba történt az újrakezdés során: ${gameStore.getError}`);
-            }
+            isResetError.value = true;
+            resetStatusMessage.value = `Hiba történt az újrakezdés során: ${gameStore.getError || 'Ismeretlen hiba.'}`;
         }
+
+        // Üzenet eltüntetése pár másodperc után
+        setTimeout(() => {
+            resetStatusMessage.value = null;
+        }, 5000);
+
     } else {
         console.log(`[DashboardView] User cancelled reset for story ID: ${storyId}`);
     }
+};
+
+const truncateText = (text: string | null, length: number): string => {
+    if (!text) return '';
+    return text.length > length ? text.substring(0, length) + '...' : text;
+};
+
+const onImageError = (event: Event) => {
+    const imgElement = event.target as HTMLImageElement;
+    // Megakadályozzuk a végtelen ciklust azzal, hogy eltávolítjuk az eseménykezelőt
+    imgElement.onerror = null; 
+    imgElement.src = '/images/stories/default_story.png';
+};
+
+// Új segédfüggvény a sztori képekhez
+const getStoryImagePath = (storyId: number): string => {
+    // Később ezt lehetne a story objektumból is venni, ha lenne 'imagePath' mezője
+    if (storyId === 1) {
+        return '/images/stories/kaland_kezdet.jpg'; // Az 1-es ID-jú sztorihoz ("Az Elveszett Kaland Kezdete")
+    }
+    if (storyId === 2) {
+        return '/images/stories/arnyak_varosa.png'; // A 2-es ID-jú sztorihoz ("Az Árnyak Városa")
+    }
+    return '/images/stories/default_story.jpg'; // Alapértelmezett kép
 };
 
 const goToAdmin = () => { router.push({ name: 'admin-dashboard' }); };
@@ -281,48 +336,59 @@ const showContact = () => alert('Kapcsolat funkció fejlesztés alatt!');
   margin: 0 auto;
 }
 
-.stories-grid {
+.stories-grid { /* Ez most a rács konténere lett */
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 40px auto;
+}
+
+.story-card-grid { /* Maga a rács */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
 }
 
 .story-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--panel-border);
-  border-radius: 0.75rem;
-  padding: 1rem;
+  background: var(--panel-bg, rgba(20, 20, 45, 0.75));
+  border: 1px solid var(--panel-border, rgba(255, 215, 0, 0.2));
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease, border-color 0.3s ease;
+  overflow: hidden; /* Fontos, hogy a kép ne lógjon ki a border-radius miatt */
+  transition: all 0.3s ease-out;
 }
 
 .story-card:hover {
-  transform: scale(1.02);
-  border-color: var(--accent-primary);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), 0 0 20px rgba(var(--accent-rgb, 255, 215, 0), 0.15);
 }
 
 .story-card.active-story-card {
-  outline: 3px solid var(--accent-primary);
-  outline-offset: 2px;
+  border-color: var(--accent-primary, #ffd700);
 }
 
-.story-card-icon img {
-  display: block;
-  width: 60px;
-  height: 60px;
-  margin: 0 auto 15px auto;
-  border-radius: 4px;
+.story-card-image {
+  width: 100%;
+  aspect-ratio: 16 / 9; /* Képarány tartása */
+  background-color: #111; /* Háttér, amíg a kép töltődik */
+}
+
+.story-card-image img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
 .story-card-content {
-  flex-grow: 1;
+  padding: 1rem 1.25rem;
+  flex-grow: 1; /* Kitölti a rendelkezésre álló helyet */
+  display: flex;
+  flex-direction: column;
 }
 
 .story-card-content h3 {
   font-family: 'Cinzel', serif;
-  color: var(--accent-primary);
+  color: var(--text-primary, #e0e0e0);
   font-size: 1.5em;
   margin-top: 0;
   margin-bottom: 0.5rem;
@@ -330,33 +396,33 @@ const showContact = () => alert('Kapcsolat funkció fejlesztés alatt!');
 
 .active-marker {
   font-size: 0.7em;
-  color: var(--accent-secondary);
+  color: var(--accent-primary, #ffd700);
   font-style: italic;
-  margin-left: 5px;
+  margin-left: 8px;
 }
 
 .story-description {
   font-size: 0.95em;
-  color: var(--text-secondary);
-  line-height: 1.6;
+  color: var(--text-secondary, #b0a8c0);
+  line-height: 1.5;
   margin-bottom: 1rem;
-  min-height: 50px;
+  flex-grow: 1; /* Kitölti a helyet, hogy az actions alulra kerüljön */
 }
-
 .last-played-info {
   font-size: 0.8em;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #b0a8c0);
   opacity: 0.7;
   text-align: right;
+  margin-top: auto; /* Alulra tolja a leíráson belül */
 }
 
 .story-actions {
-  margin-top: auto;
+  padding: 1rem 1.25rem;
+  padding-top: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 1rem;
-  border-top: 1px solid var(--panel-border);
+  gap: 10px;
 }
 
 .action-button {
