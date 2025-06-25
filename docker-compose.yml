@@ -48,28 +48,20 @@ services:
     networks:
       - kalandjatek-network
     command: npm run start:dev # Fejlesztői indítás
-
-  # Frontend (Vue.js SPA)
+  # Frontend (Vue.js SPA) - ÉLES (PRODUCTION) VERZIÓ
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_frontend
     restart: unless-stopped
-    depends_on: # Opcionális, de hasznos lehet, ha a frontend induláskor API-t hív
+    depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT_OUT}"
-    environment:
-      - NODE_ENV=${NODE_ENV}
-      # Ha Vite-ot használsz és kell az API URL:.env fájlból:
-      # VITE_API_URL=${VITE_API_URL}
+      # A gép ${FRONTEND_PORT} portját (alapból 5173) a konténer 80-as portjára irányítjuk, ahol az Nginx figyel.
+      - "${FRONTEND_PORT:-5173}:80"
     networks:
       - kalandjatek-network
-    command: npm run dev -- --host # Vite fejlesztői szerver indítása
 
   # Knex Migrációs/Seeder konténer
   migrate:
