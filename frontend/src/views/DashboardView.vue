@@ -100,7 +100,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useStoryStore } from '../stores/story';
 import { useGameStore } from '../stores/game';
