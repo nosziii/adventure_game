@@ -12,3 +12,4 @@ node_modules/
 # Ignore all test files
 *.test.js
 # Ignore all coverage reports
+/backend/dist
