@@ -1,6 +1,23 @@
 # docker-compose.yml
 
 services:
+  nginx_proxy:
+    image: nginx:1.27-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # A konfigurációs fájl csatolása
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      # Az SSL tanúsítványok csatolása
+      - ./nginx/ssl:/etc/nginx/ssl
+    networks:
+      - kalandjatek-network
+    depends_on:
+      - backend
+      - frontend
   # Adatbázis (PostgreSQL)
   db:
     image: postgres:16-alpine
@@ -36,8 +53,8 @@ services:
     volumes:
       - ./backend:/usr/src/app # Kód csatolása a hot-reloadhoz
       - /usr/src/app/node_modules # Ne csatolja a helyi node_modules-t
-    ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}" # Port mapping a host és konténer között
+    # ports:
+    #   - "${BACKEND_PORT}:${BACKEND_PORT}" # Port mapping a host és konténer között
     environment:
       - NODE_ENV=${NODE_ENV}
       - DATABASE_URL=${DATABASE_URL}
@@ -57,9 +74,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      # A gép ${FRONTEND_PORT} portját (alapból 5173) a konténer 80-as portjára irányítjuk, ahol az Nginx figyel.
-      - "${FRONTEND_PORT:-5173}:80"
+    # ports:
+    #   # A gép ${FRONTEND_PORT} portját (alapból 5173) a konténer 80-as portjára irányítjuk, ahol az Nginx figyel.
+    #   - "${FRONTEND_PORT:-5173}:80"
     networks:
       - kalandjatek-network
 
