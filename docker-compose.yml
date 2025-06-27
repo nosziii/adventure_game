@@ -19,6 +19,9 @@ services:
     depends_on:
       - backend
       - frontend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # Adatbázis (PostgreSQL)
   db:
     image: postgres:16-alpine
