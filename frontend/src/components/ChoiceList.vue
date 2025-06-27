@@ -42,31 +42,30 @@
   .choices h3 {
     margin-bottom: 10px;
   }
+
   .choice-button {
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    margin-bottom: 10px;
-    font-size: 1em;
-    text-align: left;
-    cursor: pointer;
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-  }
-  .choice-button:hover:not(:disabled) {
-    background-color: #e0e0e0;
-  }
-  .choice-button:disabled {
-      background-color: #e9ecef;
-      color: #6c757d;
-      cursor: not-allowed;
-      opacity: 0.65;
-  }
-  .no-choices {
-    margin-top: 20px;
-    font-style: italic;
-    color: #666;
-  }
+  background: var(--accent-secondary); /* Sötétebb narancs/bronz */
+  display: block;
+  width: 100%;
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 8px 15px;
+  border-radius: 5px;
+  padding: 12px 15px;
+  font-size: 1em;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+  transition: background-color 0.3s ease, transform 0.1s ease;
+}
+.choice-button:hover:not(:disabled) {
+  background-color: var(--accent-primary); /* Világosabb arany hoverre */
+  color: var(--button-text); /* Sötét szöveg, ha az accent világos */
+  transform: translateY(-1px);
+}
+.choice-button:disabled {
+  background-color: #555;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
   </style>

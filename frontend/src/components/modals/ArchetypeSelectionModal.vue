@@ -15,28 +15,42 @@
       </div>
 
       <div v-else class="archetypes-grid-modal">
-        <div
-          v-for="archetype in archetypesToDisplay"
-          :key="archetype.id"
-          class="archetype-card-modal"
-          :class="{ selected: selectedArchetypeId === archetype.id }"
-          @click="selectArchetype(archetype.id)"
-        >
-          <div class="archetype-icon-modal">
-            <img :src="archetype.iconPath || '/images/archetypes/default_icon.png'" :alt="archetype.name" @error="onImageError" />
-          </div>
-          <h3>{{ archetype.name }}</h3>
-          <p class="archetype-description-modal">{{ truncateText(archetype.description, 80) }}</p>
-          </div>
-          <div class="archetype-stats-modal">
-            <h4>Kulcsjellemzők:</h4>
-            <ul>
-                <li>Erő: <strong>15</strong></li>
-                <li>Intelligencia: <strong>8</strong></li>
-                <li>Képesség: <strong>Pajzstörés</strong></li>
-            </ul>
-          </div>
-        </div>
+  <div
+    v-for="archetype in archetypesToDisplay"
+    :key="archetype.id"
+    class="archetype-card-modal"
+    :class="{ selected: selectedArchetypeId === archetype.id }"
+    @click="selectArchetype(archetype.id)"
+  >
+    <div class="archetype-icon-modal">
+      <img :src="archetype.iconPath || '/images/archetypes/default_icon.png'" :alt="archetype.name" @error="onImageError" />
+    </div>
+
+    <h3>{{ archetype.name }}</h3>
+
+    <p class="archetype-description-modal">{{ truncateText(archetype.description, 80) }}</p>
+
+    <div class="archetype-stats-modal">
+      <h4>Kezdő Bónuszok:</h4>
+      <ul>
+        <li v-if="archetype.baseHealthBonus > 0">Életerő: <strong>+{{ archetype.baseHealthBonus }}</strong></li>
+        <li v-if="archetype.baseStaminaBonus > 0">Állóképesség: <strong>+{{ archetype.baseStaminaBonus }}</strong></li>
+        <li v-if="archetype.baseSkillBonus > 0">Ügyesség: <strong>+{{ archetype.baseSkillBonus }}</strong></li>
+        <li v-if="archetype.baseDefenseBonus > 0">Védekezés: <strong>+{{ archetype.baseDefenseBonus }}</strong></li>
+        <li v-if="archetype.baseLuckBonus > 0">Szerencse: <strong>+{{ archetype.baseLuckBonus }}</strong></li>
+      </ul>
+      
+      <div v-if="archetype.startingAbilities && archetype.startingAbilities.length > 0" class="starting-abilities">
+        <h5>Kezdő Képesség:</h5>
+        <ul>
+          <li v-for="ability in archetype.startingAbilities" :key="ability.id">
+            {{ ability.name }}
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 
       <div class="selection-footer-modal" v-if="archetypesToDisplay.length > 0">
         <button 
@@ -181,19 +195,21 @@ const onImageError = (event: Event) => {
   gap: 1.5rem;
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  padding: 1rem;
 }
 
 .archetype-card-modal {
-  background: rgba(18, 11, 25, 0.6); /* Sötétebb, tematikusabb háttér */
+  background: rgba(18, 11, 25, 0.6); 
   border: 1px solid var(--panel-border);
-  padding: 1.5rem; /* Több belső tér */
+  padding: 1.5rem; 
   border-radius: 0.75rem;
   text-align: center;
   cursor: pointer;
   transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-  display: flex; /* Flexbox a jobb belső elrendezésért */
+  display: flex; 
   flex-direction: column;
+  justify-content: center; /* Függőlegesen középre igazít */
+  align-items: center;     /* Vízszintesen középre igazít */
 }
 
 .archetype-card-modal:hover {

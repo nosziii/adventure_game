@@ -56,7 +56,7 @@ const characters = ref<CharacterShowcase[]>([
     id: 1,
     name: 'Eldrin Fényhozó',
     titleOrClass: 'Az Erdő Szelleme',
-    image: '/images/characters/eldrin_placeholder.jpg', // Helyezz ide képet!
+    image: '/images/characters/eldrin_placeholder.jpg',
     description: 'Évezredek óta őrzi a Varázserdő határait, nyila csalhatatlan, és suttog a fákkal. Csak a legtisztább szívűeknek fedi fel magát.',
     quote: 'A természet türelmes, de haragja elsöprő.'
   },
@@ -64,7 +64,7 @@ const characters = ref<CharacterShowcase[]>([
     id: 2,
     name: 'Lyra Holdfény',
     titleOrClass: 'A Csillagok Jósnője',
-    image: '/images/characters/lyra_placeholder.jpg', // Helyezz ide képet!
+    image: '/images/characters/lyra_placeholder.jpg', 
     description: 'Az éjszakai égbolt titkait kutatja, jövőt és múltat lát a csillagok állásában. Varázslatai a kozmosz erejéből táplálkoznak.',
     quote: 'A sors fonala néha kuszának tűnik, de minden szálnak megvan a helye.'
   },
@@ -72,14 +72,14 @@ const characters = ref<CharacterShowcase[]>([
     id: 3,
     name: 'Grom Vaskéz',
     titleOrClass: 'A Törzsek Bajnoka',
-    image: '/images/characters/grom_placeholder.jpg', // Helyezz ide képet!
+    image: '/images/characters/grom_placeholder.jpg',
     description: 'A hegyek fia, ki erejével és kitartásával vívta ki népe tiszteletét. Csatabárdja legendás, és szíve bátor.',
     quote: 'Az erő nem minden, de nélküle mit sem érsz a csatában!'
   }
 ]);
 
 const currentIndex = ref(0);
-const transitionName = ref('slide-next'); // Animáció iránya
+const transitionName = ref('slide-next');
 
 const currentCharacter = computed(() => characters.value[currentIndex.value]);
 

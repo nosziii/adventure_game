@@ -1,17 +1,16 @@
 <template>
   <div class="gallery-teaser-wrapper">
-    <!-- <h2 class="section-title">Pillantás a Világokba</h2> -->
     <div class="image-gallery-grid">
       <div
-        v-for="n in 6"
-        :key="n"
+        v-for="image in galleryImages"
+        :key="image.id"
         class="gallery-item"
-        @click="imageClicked(n)"
+        @click="imageClicked(image.id)"
         role="link"
         tabindex="0"
-        :aria-label="`Galéria kép ${n}`"
+        :aria-label="image.alt"
       >
-        <img :src="`/images/gallery/teaser-${n}.jpg`" :alt="`Hangulatkép ${n}`" class="gallery-image" />
+        <img :src="image.src" :alt="image.alt" class="gallery-image" />
         <div class="item-overlay">
           <span class="overlay-text">Felfedezés...</span>
         </div>
@@ -21,10 +20,20 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 const imageClicked = (imageNumber: number) => {
   alert(`Kattintottál a(z) ${imageNumber}. képre! Ide jöhet majd a továbblépés.`);
   // Pl. router.push(...) vagy esemény kibocsátása
 };
+
+const galleryImages = ref([
+  { id: 1, src: '/images/teaser/elveszett_kaland_1.jpg', alt: 'Kép az Elveszett Kalandból' },
+  { id: 2, src: '/images/teaser/arnyak_varosa_1.jpg', alt: 'Kép az Árnyak Városából' },
+  { id: 3, src: '/images/teaser/elveszett_kaland_2.jpg', alt: 'Kép az Elveszett Kalandból' },
+  { id: 4, src: '/images/teaser/arnyak_varosa_2.jpg', alt: 'Kép az Árnyak Városából' },
+  { id: 5, src: '/images/teaser/elveszett_kaland_3.jpg', alt: 'Kép az Elveszett Kalandból' },
+  { id: 6, src: '/images/teaser/arnyak_varosa_3.jpg', alt: 'Kép az Árnyak Városából' },
+]);
 </script>
 
 <style scoped>
