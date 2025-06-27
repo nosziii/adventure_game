@@ -13,6 +13,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       # Az SSL tanúsítványok csatolása
       - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/ssl_bleesound:/etc/nginx/ssl_bleesound
     networks:
       - kalandjatek-network
     depends_on:
