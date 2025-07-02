@@ -5,7 +5,6 @@ import {
   Logger,
   ForbiddenException,
   InternalServerErrorException,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { Knex } from 'knex';
@@ -13,13 +12,10 @@ import { KNEX_CONNECTION } from './database/database.module'; // Igazítsd az ú
 import { CharacterService, Character } from './character.service';
 import { EnemyRecord } from './game/interfaces/enemy-record.interface'; // Igazítsd az útvonalat
 import { CombatActionDto } from './game/dto/combat-action.dto'; // Igazítsd az útvonalat
-import { GameStateDto, CharacterStatsDto, EnemyDataDto } from './game/dto'; // Ezek a DTO-k kellenek a válaszhoz
+import { EnemyDataDto } from './game/dto'; // Ezek a DTO-k kellenek a válaszhoz
 import { ItemRecord } from './game/interfaces/item-record.interface';
 import { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
-import {
-  CombatActionDetailsDto,
-  CombatActionRollDetailsDto,
-} from './combat/dto/combat-action-details.dto';
+import { CombatActionDetailsDto } from './combat/dto/combat-action-details.dto';
 
 import { AbilityRecord } from './game/interfaces/ability-record.interface';
 
@@ -332,7 +328,6 @@ export class CombatService {
         outcome: 'miss', // Alapból
       };
 
-      const baseEnemySkillForSpecial = enemyBaseData.skill ?? 0; // Vagy egyedi skill a spec támadáshoz
       // Itt most nem dobunk kockát a speciális támadáshoz, feltételezzük, hogy "mindig talál", de a védekezés számít
       // Vagy lehetne egy támadó dobás itt is.
       const enemySkill = enemyBaseData.skill ?? 0;
@@ -564,8 +559,14 @@ export class CombatService {
       throw new ForbiddenException('No active story progress for character.');
     }
 
-    const activeCombat = await this.knex('active_combats')
-      .where({ character_id: baseCharacter.id })
+    const activeCombat = await this.knex<{
+      id: number;
+      enemy_id: number;
+      enemy_current_health: number;
+      enemy_charge_turns_current: number;
+      character_is_defending: boolean;
+    }>('active_combats')
+      .where('character_id', baseCharacter.id)
       .first();
 
     if (!activeCombat) {
@@ -692,14 +693,14 @@ export class CombatService {
             enemyBaseData.item_drop_id,
             1,
           );
-          const droppedItem = await this.knex('items')
+          const droppedItem = await this.knex<ItemRecord>('items')
             .where({ id: enemyBaseData.item_drop_id })
             .first();
           roundActions.push({
             actor: 'player',
             actionType: 'info',
             outcome: 'info',
-            description: `Az ellenfél eldobta: ${droppedItem?.name ?? `Tárgy ID: ${enemyBaseData.item_drop_id}`}`,
+            description: `Az ellenfél eldobta: ${droppedItem ? droppedItem.name : `Tárgy ID: ${enemyBaseData.item_drop_id}`}`,
           });
         }
 
@@ -721,17 +722,23 @@ export class CombatService {
       } catch (e) {
         this.logger.error(
           `[VICTORY BLOCK] CRITICAL ERROR during victory processing: ${e}`,
-          e.stack,
+          (e as Error).stack,
         );
         throw new InternalServerErrorException(
-          `Error processing victory: ${e.message}`,
+          `Error processing victory: ${(e as Error).message}`,
         );
       }
     }
 
     // 3. Enemy Turn
     if (playerActionTookTurn) {
-      const currentCombat = await this.knex('active_combats')
+      const currentCombat = await this.knex<{
+        id: number;
+        enemy_id: number;
+        enemy_current_health: number;
+        enemy_charge_turns_current: number;
+        character_is_defending: boolean;
+      }>('active_combats')
         .where({ id: activeCombat.id })
         .first();
       if (!currentCombat) {
@@ -793,7 +800,13 @@ export class CombatService {
       baseCharacter.id,
       activeStoryProgress.id,
     );
-    const finalActiveCombatState = await this.knex('active_combats')
+    const finalActiveCombatState = await this.knex<{
+      id: number;
+      enemy_id: number;
+      enemy_current_health: number;
+      enemy_charge_turns_current: number;
+      character_is_defending: boolean;
+    }>('active_combats')
       .where({ id: activeCombat.id })
       .first();
 
@@ -925,7 +938,6 @@ export class CombatService {
         const staminaCost = parseInt(effectMap.get('stamina_cost') ?? '0', 10);
 
         if ((character.stamina ?? 0) >= staminaCost) {
-          const newStamina = (character.stamina ?? 0) - staminaCost;
           // ... (a többi sor)
         } else {
           throw new BadRequestException(

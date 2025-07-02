@@ -7,7 +7,6 @@ import {
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { CharacterService, Character } from '../character.service';
 import { UsersService } from '../users/users.service';
 
 // Payload a tokenben
@@ -29,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly characterService: CharacterService,
+
     private readonly usersService: UsersService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');

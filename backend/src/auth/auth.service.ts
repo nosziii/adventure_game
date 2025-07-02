@@ -42,13 +42,14 @@ export class AuthService {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password_hash, ...result } = newUser;
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof ConflictException) {
         throw error;
       }
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
       this.logger.error(
-        `Unhandled error during registration for ${email}: ${error}`,
-        error.stack,
+        `Unhandled error during registration for ${email}: ${String(error)}`,
+        stack,
       );
       throw new InternalServerErrorException(
         'Registration failed due to an internal error.',

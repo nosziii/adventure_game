@@ -9,12 +9,8 @@ import {
   ParseIntPipe,
   UseGuards,
   Logger,
-  NotFoundException,
-  ConflictException,
   HttpCode,
   HttpStatus, // HttpCode, HttpStatus, ConflictException import
-  InternalServerErrorException,
-  BadRequestException,
 } from '@nestjs/common';
 import { AdminEnemiesService } from './enemies.service';
 import { EnemyAdminDto, CreateEnemyDto, UpdateEnemyDto } from './dto'; // Használjuk az index exportot
@@ -75,10 +71,8 @@ export class AdminEnemiesController {
     try {
       const newEnemy = await this.adminEnemiesService.create(createEnemyDto);
       return mapEnemyRecordToDto(newEnemy);
-    } catch (error) {
-      this.logger.error(
-        `Error during enemy creation: ${error?.message || error}`,
-      );
+    } catch (error: unknown) {
+      this.logger.error(`Error during enemy creation: ${String(error)}`);
       throw error;
     }
   }
@@ -99,9 +93,9 @@ export class AdminEnemiesController {
         updateEnemyDto,
       );
       return mapEnemyRecordToDto(updatedEnemy);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
-        `Error during enemy update for ID ${id}: ${error?.message || error}`,
+        `Error during enemy update for ID ${id}: ${String(error)}`,
       );
       throw error;
     }
@@ -114,9 +108,9 @@ export class AdminEnemiesController {
     this.logger.log(`Request received to remove enemy with ID: ${id}`);
     try {
       await this.adminEnemiesService.remove(id);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
-        `Error during enemy removal for ID ${id}: ${error?.message || error}`,
+        `Error during enemy removal for ID ${id}: ${String(error)}`,
       );
       throw error;
     }

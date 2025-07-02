@@ -70,11 +70,9 @@ export class AdminItemsController {
     try {
       const newItem = await this.adminItemsService.create(createItemDto);
       return mapItemRecordToDto(newItem);
-    } catch (error) {
+    } catch (error: unknown) {
       // A Service már kezeli a specifikus hibákat (Conflict, InternalServer)
-      this.logger.error(
-        `Error during item creation: ${error?.message || error}`,
-      );
+      this.logger.error(`Error during item creation: ${String(error)}`);
       throw error; // Dobjuk tovább a service által adott hibát
     }
   }
@@ -96,10 +94,10 @@ export class AdminItemsController {
         updateItemDto,
       );
       return mapItemRecordToDto(updatedItem);
-    } catch (error) {
+    } catch (error: unknown) {
       // A Service már kezeli a specifikus hibákat
       this.logger.error(
-        `Error during item update for ID ${id}: ${error?.message || error}`,
+        `Error during item update for ID ${id}: ${String(error)}`,
       );
       throw error;
     }
@@ -114,10 +112,10 @@ export class AdminItemsController {
     try {
       await this.adminItemsService.remove(id);
       // Sikeres törléskor nem adunk vissza tartalmat
-    } catch (error) {
+    } catch (error: unknown) {
       // A Service már kezeli a specifikus hibákat
       this.logger.error(
-        `Error during item removal for ID ${id}: ${error?.message || error}`,
+        `Error during item removal for ID ${id}: ${String(error)}`,
       );
       throw error;
     }

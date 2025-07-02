@@ -1,6 +1,5 @@
 // src/game.service.ts - JAVÍTOTT
 import {
-  Injectable,
   Inject,
   NotFoundException,
   Logger,
@@ -13,16 +12,12 @@ import { KNEX_CONNECTION } from '../database/database.module';
 import { CharacterService, Character } from '../character.service';
 import {
   GameStateDto,
-  ChoiceDto,
   EnemyDataDto,
   CharacterStatsDto,
   CombatActionDto,
-  InventoryItemDto,
-  PlayerProgressStepDto,
   PlayerMapDataDto,
   PlayerMapNodeDto,
   PlayerMapEdgeDto,
-  StoryInfoDto,
   PlayerStoryListItemDto,
 } from './dto';
 import { StoryNode } from './interfaces/story-node.interface';
@@ -34,11 +29,9 @@ import { PlayerProgressRecord } from './interfaces/player-progress.interface';
 import { CombatService, CombatResult } from '../combat.service';
 import { SimpleAbilityInfoDto } from '../character/dto';
 
-const STARTING_NODE_ID = 1;
-
-@Injectable()
 export class GameService {
   private readonly logger = new Logger(GameService.name);
+  private readonly STARTING_NODE_ID = 1;
 
   constructor(
     @Inject(KNEX_CONNECTION) private readonly knex: Knex, // Knex közvetlen injektálása
@@ -235,8 +228,14 @@ export class GameService {
 
     // TODO: Active_combats táblának is character_story_progress_id-t kellene használnia.
     // Egyelőre a character_id-t használjuk.
-    const activeCombatDbRecord = await this.knex('active_combats')
-      .where({ character_id: baseCharacter.id })
+    const activeCombatDbRecord = await this.knex<{
+      id: number;
+      enemy_id: number;
+      enemy_current_health: number;
+      enemy_charge_turns_current: number;
+      character_is_defending: boolean;
+    }>('active_combats')
+      .where('character_id', baseCharacter.id)
       .first();
 
     let availableAbilitiesForCombat: SimpleAbilityInfoDto[] | null = null;
@@ -682,8 +681,14 @@ export class GameService {
 
     // Ellenőrizzük, hogy nincs-e harcban (ez a logika maradhat a baseCharacter.id alapján,
     // mivel az active_combats még character_id-t használ)
-    const existingCombat = await this.knex('active_combats')
-      .where({ character_id: baseCharacter.id })
+    const existingCombat = await this.knex<{
+      id: number;
+      enemy_id: number;
+      enemy_current_health: number;
+      enemy_charge_turns_current: number;
+      character_is_defending: boolean;
+    }>('active_combats')
+      .where('character_id', baseCharacter.id)
       .first();
     if (existingCombat) {
       throw new ForbiddenException(
@@ -714,7 +719,6 @@ export class GameService {
     if (!item.usable)
       throw new BadRequestException(`This item (${item.name}) cannot be used.`);
 
-    let characterStatsUpdated = false;
     let newPlayerHealth = activeStoryProgress.health; // A sztori progresszió HP-jából indulunk
 
     if (item.effect && item.effect.startsWith('heal+')) {
@@ -743,7 +747,7 @@ export class GameService {
             this.logger.error(
               `Failed to remove item ${itemId} after use for StoryProgress ${progressId}!`,
             );
-          characterStatsUpdated = true;
+          // characterStatsUpdated = true;
         } else {
           this.logger.log(
             `StoryProgress ${progressId} health already full, item ${itemId} not consumed.`,
@@ -885,7 +889,14 @@ export class GameService {
     );
     const character = await this.characterService.findOrCreateByUserId(userId);
 
-    const stories = await this.knex('stories')
+    const stories = await this.knex<{
+      storyId: number;
+      title: string;
+      description: string;
+      currentNodeIdInStory: number | null;
+      lastPlayedAt: Date | null;
+      isActive: boolean;
+    }>('stories')
       .select(
         'stories.id as storyId',
         'stories.title',
@@ -903,14 +914,23 @@ export class GameService {
       .where('stories.is_published', true)
       .orderBy('stories.id', 'asc');
 
-    return stories.map((s) => ({
-      id: s.storyId,
-      title: s.title,
-      description: s.description,
-      // Ha nincs progresszió (csp mezők null-ok), akkor azok null-ok maradnak a DTO-ban
-      lastPlayedAt: s.lastPlayedAt ? new Date(s.lastPlayedAt) : null,
-      currentNodeIdInStory: s.currentNodeIdInStory,
-      isActive: s.isActive ?? false,
-    }));
+    return stories.map(
+      (s: {
+        storyId: number;
+        title: string;
+        description: string;
+        currentNodeIdInStory: number | null;
+        lastPlayedAt: Date | null;
+        isActive: boolean;
+      }) => ({
+        id: s.storyId,
+        title: s.title,
+        description: s.description,
+        // Ha nincs progresszió (csp mezők null-ok), akkor azok null-ok maradnak a DTO-ban
+        lastPlayedAt: s.lastPlayedAt ? new Date(s.lastPlayedAt) : null,
+        currentNodeIdInStory: s.currentNodeIdInStory,
+        isActive: s.isActive ?? false,
+      }),
+    );
   }
 } // GameService vége

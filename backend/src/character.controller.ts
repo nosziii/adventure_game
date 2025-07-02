@@ -13,20 +13,26 @@ import {
   HttpStatus,
   NotFoundException,
   Get,
-} from '@nestjs/common'; // Szükséges importok
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { CharacterService, Character } from './character.service';
-import { CharacterStatsDto } from './game/dto/character-stats.dto'; // Használjuk a meglévő DTO-t a válaszhoz
-import { IsInt, IsNotEmpty, IsIn } from 'class-validator'; // Validációhoz
+import { CharacterStatsDto } from './game/dto/character-stats.dto';
+import { IsInt, IsNotEmpty, IsIn } from 'class-validator';
 import { GameService } from './game/game.service';
 import { GameStateDto } from './game/dto';
+import { Request as ExpressRequest } from 'express';
 import {
   SelectArchetypeDto,
   PlayerArchetypeDto,
   SpendTalentPointDto,
   BeginStoryWithArchetypeDto,
-} from './character/dto'; // DTO az archetípus kiválasztásához
-import { UserDto } from './auth/dto/user.dto'; // DTO a felhasználó adatokhoz
+} from './character/dto';
+import { UserDto } from './auth/dto/user.dto';
+import { RequestUser } from './auth/jwt.strategy';
+
+interface RequestWithUser extends ExpressRequest {
+  user: RequestUser;
+}
 
 // DTO az equip kéréshez
 class EquipItemDto {
@@ -55,8 +61,7 @@ export class CharacterController {
   // --- Felszerelés Végpont ---
   @Post('equip')
   async equipItem(
-    // Átneveztem, hogy ne legyen equip az osztályban és a metódus neve is
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body(ValidationPipe) body: EquipItemDto,
   ): Promise<CharacterStatsDto> {
     const userId = req.user.id;
@@ -108,8 +113,7 @@ export class CharacterController {
 
   @Post('unequip')
   async unequip(
-    // Átneveztem
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body(ValidationPipe) body: UnequipItemDto,
   ): Promise<CharacterStatsDto> {
     const userId = req.user.id;
@@ -157,7 +161,7 @@ export class CharacterController {
 
   @Post('story/:storyId/begin') // POST /api/character/story/:storyId/begin
   async beginNewPlaythrough(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Param('storyId', ParseIntPipe) storyId: number,
     @Body(ValidationPipe) body: BeginStoryWithArchetypeDto, // Új DTO a body-hoz
   ): Promise<GameStateDto> {
@@ -189,7 +193,7 @@ export class CharacterController {
   @UseGuards(AuthGuard('jwt'))
   @Post('story/:storyId/start') // POST /api/character/story/1/start
   async startStory(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Param('storyId', ParseIntPipe) storyId: number,
   ): Promise<GameStateDto> {
     // Visszaadjuk a teljes új játékállapotot
@@ -222,7 +226,7 @@ export class CharacterController {
   @Post('story/:storyId/reset') // POST /api/character/story/1/reset
   @HttpCode(HttpStatus.NO_CONTENT) // 204 No Content sikeres esetben
   async resetStory(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Param('storyId', ParseIntPipe) storyId: number,
   ): Promise<void> {
     // Nem adunk vissza tartalmat
@@ -242,7 +246,7 @@ export class CharacterController {
 
   @Post('spend-talent-point')
   async spendTalentPoint(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body(ValidationPipe) spendTalentPointDto: SpendTalentPointDto,
   ): Promise<GameStateDto> {
     // <-- VISSZATÉRÉSI TÍPUS GameStateDto!
@@ -281,7 +285,7 @@ export class CharacterController {
 
   @Post('select-archetype') // POST /api/character/select-archetype
   async selectArchetype(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body(ValidationPipe) selectArchetypeDto: SelectArchetypeDto,
   ): Promise<UserDto> {
     // Visszaadjuk a frissített UserDto-t az authStore számára

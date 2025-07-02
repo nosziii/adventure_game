@@ -68,10 +68,8 @@ export class AdminStoriesController {
     try {
       const newStory = await this.adminStoriesService.create(createStoryDto);
       return mapStoryRecordToDto(newStory);
-    } catch (error) {
-      this.logger.error(
-        `Error during story creation: ${error?.message || error}`,
-      );
+    } catch (error: unknown) {
+      this.logger.error(`Error during story creation: ${String(error)}`);
       throw error; // A service már a megfelelő HTTP hibát dobja
     }
   }
@@ -93,9 +91,9 @@ export class AdminStoriesController {
         updateStoryDto,
       );
       return mapStoryRecordToDto(updatedStory);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
-        `Error during story update for ID ${id}: ${error?.message || error}`,
+        `Error during story update for ID ${id}: ${String(error)}`,
       );
       throw error;
     }
@@ -109,9 +107,9 @@ export class AdminStoriesController {
     this.logger.log(`Request received to remove story with ID: ${id}`);
     try {
       await this.adminStoriesService.remove(id);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
-        `Error during story removal for ID ${id}: ${error?.message || error}`,
+        `Error during story removal for ID ${id}: ${String(error)}`,
       );
       throw error;
     }

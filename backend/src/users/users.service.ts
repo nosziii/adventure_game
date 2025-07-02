@@ -24,29 +24,27 @@ export class UsersService {
     // Használjuk a Knex insert metódusát
     // A returning('*') visszaadja az összes oszlopot a beszúrt sorból
     // A first() csak az első (és egyetlen) eredményt adja vissza
-    const [newUser] = await this.knex('users')
+    const [newUser]: User[] = await this.knex('users')
       .insert({
         email: email,
         password_hash: passwordHash, // snake_case a DB-ben, ha nincs mapper
         // Ha használsz snakeCaseMappert: password_hash: passwordHash
       })
-      .returning('*'); // Visszaadja a beszúrt sort
+      .returning<User[]>('*'); // Visszaadja a beszúrt sort
 
     // Fontos: A DB 'password_hash'-t ad vissza, a mapper átalakítja 'passwordHash'-re
     // Ha nincs mapper, manuálisan kell kezelni vagy a User interfészt módosítani
     return newUser;
   }
 
-  async findOneByEmail(email: string): Promise<User | undefined> {
-    // Használjuk a Knex select és where metódusát
-    const user = await this.knex('users').where({ email: email }).first(); // Csak az első találatot adja vissza, vagy undefined
-
-    return user;
+  findOneByEmail(email: string): Promise<User | undefined> {
+    const user = this.knex<User>('users').where({ email: email }).first();
+    return Promise.resolve(user);
   }
 
   // Később lehet findOneById metódus is
   async findOneById(id: number): Promise<User | undefined> {
-    const user = await this.knex('users').where({ id: id }).first();
+    const user = await this.knex<User>('users').where({ id: id }).first();
     return user;
   }
 }

@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Logger,
-  Request,
-  UseGuards,
-  Post,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Logger, UseGuards, Post, Body } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { GameService } from './game.service';
 import {
@@ -16,9 +8,16 @@ import {
   CharacterStatsDto,
   CombatActionDto,
   PlayerMapDataDto,
-  StoryInfoDto,
   PlayerStoryListItemDto,
 } from './dto';
+
+import { RequestUser } from '../auth/jwt.strategy';
+import { Request as ExpressRequest } from 'express';
+import { Request as Req } from '@nestjs/common';
+
+interface RequestWithUser extends ExpressRequest {
+  user: RequestUser;
+}
 
 @Controller('game')
 export class GameController {
@@ -28,7 +27,7 @@ export class GameController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get('state')
-  async getGameState(@Request() req): Promise<GameStateDto> {
+  async getGameState(@Req() req: RequestWithUser): Promise<GameStateDto> {
     // Ha a globális guard lefutott, a req.user-nek itt léteznie kell
     if (!req.user || !req.user.id) {
       this.logger.error('User not found on request after global guard!');
@@ -45,7 +44,7 @@ export class GameController {
   @UseGuards(AuthGuard('jwt'))
   @Post('choice')
   async makeChoice(
-    @Request() req,
+    @Req() req: RequestWithUser,
     @Body() makeChoiceDto: MakeChoiceDto,
   ): Promise<GameStateDto> {
     const userId = req.user.id;
@@ -59,7 +58,7 @@ export class GameController {
   @UseGuards(AuthGuard('jwt'))
   @Post('combat/action')
   async handleCombatAction(
-    @Request() req,
+    @Req() req: RequestWithUser,
     @Body() combatActionDto: CombatActionDto, // Fogadjuk az akció DTO-t
   ): Promise<GameStateDto> {
     // Vagy egy specifikus CombatResultDto? Maradjunk GameStateDto-nál.
@@ -74,7 +73,7 @@ export class GameController {
   @UseGuards(AuthGuard('jwt'))
   @Post('use-item') // POST /api/game/use-item
   async useItem(
-    @Request() req,
+    @Req() req: RequestWithUser,
     @Body() useItemDto: UseItemDto, // Fogadjuk az itemId-t
   ): Promise<CharacterStatsDto> {
     // Csak a frissített statokat adjuk vissza
@@ -89,7 +88,9 @@ export class GameController {
 
   @UseGuards(AuthGuard('jwt')) // Védett végpont
   @Get('map-progress') // GET /api/game/map-progress
-  async getPlayerMapProgress(@Request() req): Promise<PlayerMapDataDto> {
+  async getPlayerMapProgress(
+    @Req() req: RequestWithUser,
+  ): Promise<PlayerMapDataDto> {
     const userId = req.user.id; // A user ID-t a JWT payloadból kapjuk
     this.logger.log(
       `Received request for player map progress from user ID: ${userId}`,
@@ -100,7 +101,7 @@ export class GameController {
   @Get('stories')
   @UseGuards(AuthGuard('jwt'))
   async listPublishedStories(
-    @Request() req,
+    @Req() req: RequestWithUser,
   ): Promise<PlayerStoryListItemDto[]> {
     const userId = req.user.id;
     this.logger.log(

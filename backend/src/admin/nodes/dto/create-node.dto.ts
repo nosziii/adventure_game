@@ -5,7 +5,6 @@ import {
   IsBoolean,
   IsInt,
   Min,
-  Max,
   IsUrl,
 } from 'class-validator';
 

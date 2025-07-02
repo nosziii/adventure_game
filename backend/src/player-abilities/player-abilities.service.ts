@@ -50,7 +50,7 @@ export class PlayerAbilitiesService {
       .where({ character_story_progress_id: activeProgress.id })
       .select('ability_id');
     const learnedAbilityIds = new Set(
-      learnedAbilitiesResult.map((la) => la.ability_id),
+      learnedAbilitiesResult.map((la: { ability_id: number }) => la.ability_id),
     );
 
     const learnableDtos: LearnableAbilityDto[] = [];
@@ -209,11 +209,11 @@ export class PlayerAbilitiesService {
     //   }
     // }
 
-    const alreadyLearned = await this.knex('character_story_abilities')
-      .where({
-        character_story_progress_id: activeProgress.id,
-        ability_id: abilityIdToLearn,
-      })
+    const alreadyLearned = await this.knex<{ id: number }>(
+      'character_story_abilities',
+    )
+      .where('character_story_progress_id', activeProgress.id)
+      .andWhere('ability_id', abilityIdToLearn)
       .first();
     if (alreadyLearned)
       throw new BadRequestException('Ezt a képességet már megtanultad.');

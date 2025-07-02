@@ -7,7 +7,7 @@ export const KNEX_CONNECTION = 'KNEX_CONNECTION';
 
 const kenxProvider = {
   provide: KNEX_CONNECTION,
-  useFactory: async (): Promise<Knex> => {
+  useFactory: (): Promise<Knex> => {
     const dbUrl = process.env.DATABASE_URL;
 
     if (!dbUrl) {
@@ -19,7 +19,7 @@ const kenxProvider = {
       pool: { min: 2, max: 10 },
       ...knexSnakeCaseMappers,
     };
-    return knex(knexConfig);
+    return Promise.resolve(knex(knexConfig));
   },
 };
 

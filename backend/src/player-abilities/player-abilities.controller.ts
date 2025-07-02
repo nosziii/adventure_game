@@ -4,7 +4,6 @@ import {
   Get,
   Post,
   Body,
-  Request,
   UseGuards,
   Logger,
   ValidationPipe,
@@ -14,6 +13,14 @@ import { PlayerAbilitiesService } from './player-abilities.service';
 import { LearnableAbilityDto, LearnAbilityRequestDto } from './dto';
 import { GameService } from '../game/game.service'; // GameStateDto visszaadásához
 import { GameStateDto } from '../game/dto/game-state.dto';
+
+import { RequestUser } from '../auth/jwt.strategy';
+import { Request as ExpressRequest } from 'express';
+import { Request as Req } from '@nestjs/common';
+
+interface RequestWithUser extends ExpressRequest {
+  user: RequestUser;
+}
 
 @Controller('player-abilities') // Alap útvonal: /api/player-abilities
 @UseGuards(AuthGuard('jwt'))
@@ -26,7 +33,9 @@ export class PlayerAbilitiesController {
   ) {}
 
   @Get('learnable') // GET /api/player-abilities/learnable
-  async listLearnableAbilities(@Request() req): Promise<LearnableAbilityDto[]> {
+  async listLearnableAbilities(
+    @Req() req: RequestWithUser,
+  ): Promise<LearnableAbilityDto[]> {
     const userId = req.user.id;
     this.logger.log(`User ${userId} requesting their learnable abilities.`);
     return this.playerAbilitiesService.getLearnableAbilities(userId);
@@ -34,7 +43,7 @@ export class PlayerAbilitiesController {
 
   @Post('learn') // POST /api/player-abilities/learn
   async learnNewAbility(
-    @Request() req,
+    @Req() req: RequestWithUser,
     @Body(ValidationPipe) learnAbilityDto: LearnAbilityRequestDto,
   ): Promise<GameStateDto> {
     // Visszaadjuk a teljes játékállapotot

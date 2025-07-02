@@ -24,19 +24,27 @@ export class AdminChoicesService {
   private dtoToDbChoice(
     dto: CreateChoiceDto | UpdateChoiceDto,
   ): Partial<Omit<ChoiceRecord, 'id' | 'created_at' | 'updated_at'>> {
-    const dbData: any = {}; // Használjunk any-t itt az egyszerűbb hozzárendeléshez
-    if (dto.sourceNodeId !== undefined)
+    const dbData: Partial<
+      Omit<ChoiceRecord, 'id' | 'created_at' | 'updated_at'>
+    > = {};
+    if (dto.sourceNodeId !== undefined) {
       dbData.source_node_id = dto.sourceNodeId;
-    if (dto.targetNodeId !== undefined)
+    }
+    if (dto.targetNodeId !== undefined) {
       dbData.target_node_id = dto.targetNodeId;
-    if (dto.text !== undefined) dbData.text = dto.text;
-    if (dto.requiredItemId !== undefined)
+    }
+    if (dto.text !== undefined) {
+      dbData.text = dto.text;
+    }
+    if (dto.requiredItemId !== undefined) {
       dbData.required_item_id = dto.requiredItemId;
-    if (dto.itemCostId !== undefined) dbData.item_cost_id = dto.itemCostId;
-    if (dto.requiredStatCheck !== undefined)
+    }
+    if (dto.itemCostId !== undefined) {
+      dbData.item_cost_id = dto.itemCostId;
+    }
+    if (dto.requiredStatCheck !== undefined) {
       dbData.required_stat_check = dto.requiredStatCheck;
-    // visible_only_if, ha hozzáadtuk a DTO-hoz
-    // if (dto.visible_only_if !== undefined) dbData.visible_only_if = dto.visible_only_if;
+    }
     return dbData;
   }
 
@@ -72,13 +80,19 @@ export class AdminChoicesService {
     try {
       const [newChoice] = await this.knex('choices')
         .insert(dbChoiceData)
-        .returning('*');
+        .returning<ChoiceRecord[]>('*');
       this.logger.log(`Choice created with ID: ${newChoice.id}`);
       return newChoice; // Visszaadjuk a DB objektumot (snake_case)
-    } catch (error: any) {
-      this.logger.error(`Failed to create choice: ${error}`, error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to create choice: ${String(error)}`, stack);
       // Ellenőrizzük, hogy a hiba Foreign Key sértés miatt volt-e (pl. nem létező node ID)
-      if (error.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // PostgreSQL foreign key violation
         throw new BadRequestException(
           'Invalid source_node_id or target_node_id (node does not exist).',
@@ -105,16 +119,25 @@ export class AdminChoicesService {
       const [updatedChoice] = await this.knex('choices')
         .where({ id })
         .update(dbChoiceUpdates)
-        .returning('*');
+        .returning<ChoiceRecord[]>('*');
       if (!updatedChoice) {
         this.logger.warn(`Choice with ID ${id} not found for update.`);
         throw new NotFoundException(`Choice with ID ${id} not found.`);
       }
       this.logger.log(`Choice ${id} updated successfully.`);
       return updatedChoice; // Visszaadjuk a DB objektumot (snake_case)
-    } catch (error: any) {
-      this.logger.error(`Failed to update choice ${id}: ${error}`, error.stack);
-      if (error.code === '23503') {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(
+        `Failed to update choice ${id}: ${String(error)}`,
+        stack,
+      );
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // PostgreSQL foreign key violation
         throw new BadRequestException(
           'Invalid source_node_id or target_node_id for update.',
@@ -134,8 +157,12 @@ export class AdminChoicesService {
         throw new NotFoundException(`Choice with ID ${id} not found.`);
       }
       this.logger.log(`Choice ${id} removed successfully.`);
-    } catch (error: any) {
-      this.logger.error(`Failed to remove choice ${id}: ${error}`, error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(
+        `Failed to remove choice ${id}: ${String(error)}`,
+        stack,
+      );
       // A Choice törlésének általában nincs FK constraintje, ami megakadályozná,
       // de ha lenne (pl. egy choice_effects tábla), akkor itt ConflictException-t dobhatnánk.
       throw new InternalServerErrorException('Failed to remove choice.');

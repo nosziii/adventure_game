@@ -43,12 +43,18 @@ export class AdminItemsService {
       // Ha nem, akkor itt kellene egy dtoToDbItem mapper. Tegyük fel, egyeznek.
       const [newItem] = await this.knex('items')
         .insert(createItemDto) // Közvetlenül átadjuk a DTO-t
-        .returning('*');
+        .returning<ItemRecord[]>('*');
       this.logger.log(`Item created with ID: ${newItem.id}`);
       return newItem;
-    } catch (error: any) {
-      this.logger.error(`Failed to create item: ${error}`, error.stack);
-      if (error.code === '23505') {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to create item: ${String(error)}`, stack);
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23505'
+      ) {
         // PostgreSQL unique violation (pl. name)
         throw new ConflictException(
           `Item with name '${createItemDto.name}' already exists.`,
@@ -72,16 +78,22 @@ export class AdminItemsService {
       const [updatedItem] = await this.knex('items')
         .where({ id })
         .update(updateItemDto)
-        .returning('*');
+        .returning<ItemRecord[]>('*');
       if (!updatedItem) {
         this.logger.warn(`Item with ID ${id} not found for update.`);
         throw new NotFoundException(`Item with ID ${id} not found.`);
       }
       this.logger.log(`Item ${id} updated successfully.`);
       return updatedItem;
-    } catch (error: any) {
-      this.logger.error(`Failed to update item ${id}: ${error}`, error.stack);
-      if (error.code === '23505') {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to update item ${id}: ${String(error)}`, stack);
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23505'
+      ) {
         // PostgreSQL unique violation (pl. name)
         throw new ConflictException(
           `An item with the new name might already exist.`,
@@ -101,10 +113,16 @@ export class AdminItemsService {
         throw new NotFoundException(`Item with ID ${id} not found.`);
       }
       this.logger.log(`Item ${id} removed successfully.`);
-    } catch (error: any) {
-      this.logger.error(`Failed to remove item ${id}: ${error}`, error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to remove item ${id}: ${String(error)}`, stack);
       // Ellenőrizzük, hogy a hiba Foreign Key sértés miatt volt-e
-      if (error.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // PostgreSQL foreign key violation
         throw new ConflictException(
           `Cannot delete item ${id} because other records (e.g., choices, enemies, inventory) depend on it.`,

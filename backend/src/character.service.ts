@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from './database/database.module'; // Ellenőrizd az útvonalat!
-import { InventoryItem } from './types/character.interfaces';
 import { InventoryItemDto } from './game/dto/inventory-item.dto';
 import type { CharacterStoryProgressRecord } from './game/interfaces/character-story-progres-record.interface';
 import { StoryRecord } from './game/interfaces/story-record.interface';
@@ -144,15 +143,9 @@ export class CharacterService {
       .join('items', 'items.id', 'csi.item_id')
       .where('csi.character_story_progress_id', progressId)
       .andWhere('csi.quantity', '>', 0)
-      .select(
-        'items.id as itemId',
-        'items.name',
-        'items.description',
-        'items.type',
-        'items.effect',
-        'items.usable',
-        'csi.quantity',
-      );
+      .select<
+        InventoryItemDto[]
+      >('items.id as itemId', 'items.name', 'items.description', 'items.type', 'items.effect', 'items.usable', 'csi.quantity');
   }
 
   async hasStoryItem(
@@ -163,11 +156,11 @@ export class CharacterService {
     this.logger.debug(
       `Checking if story progress ID ${progressId} has item ${itemId} (quantity: ${quantity})`,
     );
-    const itemEntry = await this.knex('character_story_inventory')
-      .where({
-        character_story_progress_id: progressId,
-        item_id: itemId,
-      })
+    const itemEntry = await this.knex<{ quantity: number }>(
+      'character_story_inventory',
+    )
+      .where('character_story_progress_id', progressId)
+      .andWhere('item_id', itemId)
       .andWhere('quantity', '>=', quantity)
       .first();
     return !!itemEntry; // Igaz, ha van ilyen bejegyzés elegendő mennyiséggel
@@ -183,8 +176,11 @@ export class CharacterService {
       `Adding item ${itemId} (quantity ${quantity}) to story progress ID: ${progressId}`,
     );
 
-    const existingEntry = await this.knex('character_story_inventory')
-      .where({ character_story_progress_id: progressId, item_id: itemId })
+    const existingEntry = await this.knex<{ id: number; quantity: number }>(
+      'character_story_inventory',
+    )
+      .where('character_story_progress_id', progressId)
+      .andWhere('item_id', itemId)
       .first();
 
     if (existingEntry) {
@@ -217,8 +213,11 @@ export class CharacterService {
       `Removing item ${itemId} (quantity ${quantity}) from story progress ID: ${progressId}`,
     );
 
-    const existingEntry = await this.knex('character_story_inventory')
-      .where({ character_story_progress_id: progressId, item_id: itemId })
+    const existingEntry = await this.knex<{ id: number; quantity: number }>(
+      'character_story_inventory',
+    )
+      .where('character_story_progress_id', progressId)
+      .andWhere('item_id', itemId)
       .first();
 
     if (existingEntry && existingEntry.quantity >= quantity) {
@@ -272,7 +271,7 @@ export class CharacterService {
 
     const [updatedRecord] = await queryBuilder
       .update(finalUpdates)
-      .returning('*');
+      .returning<CharacterStoryProgressRecord[]>('*');
 
     if (!updatedRecord) {
       this.logger.error(
@@ -298,7 +297,7 @@ export class CharacterService {
     const defaultXpToNextLevel = 100;
 
     try {
-      const [newCharacter] = await this.knex('characters')
+      const [newCharacter]: Character[] = await this.knex('characters')
         .insert({
           user_id: userId,
           current_node_id: STARTING_NODE_ID,
@@ -311,7 +310,7 @@ export class CharacterService {
           xp_to_next_level: defaultXpToNextLevel,
           name: 'Kalandor', // Alap név
         })
-        .returning('*'); // Visszakérjük az új karakter minden adatát
+        .returning<Character[]>('*'); // Visszakérjük az új karakter minden adatát
 
       this.logger.log(
         `New character created with ID: ${newCharacter.id} for user ID: ${userId}`,
@@ -325,10 +324,11 @@ export class CharacterService {
       });
 
       return newCharacter;
-    } catch (error) {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
       this.logger.error(
-        `Failed to create character for user ${userId}: ${error}`,
-        error.stack,
+        `Failed to create character for user ${userId}: ${String(error)}`,
+        stack,
       );
       throw new InternalServerErrorException('Could not create character.');
     }
@@ -348,7 +348,7 @@ export class CharacterService {
     const [updatedCharacter] = await this.knex('characters')
       .where({ id: characterId })
       .update(updates)
-      .returning('*');
+      .returning<Character[]>('*');
 
     if (!updatedCharacter) {
       this.logger.error(
@@ -452,7 +452,7 @@ export class CharacterService {
     } else {
       // Ezt a DTO validációnak kellene elkapnia, de itt is jó egy ellenőrzés
       throw new BadRequestException(
-        `Invalid item type "${itemType}" for unequipping.`,
+        `Invalid item type "${itemType as string}" for unequipping.`,
       );
     }
 
@@ -494,7 +494,7 @@ export class CharacterService {
     ].filter((id): id is number => id !== null && id !== undefined);
 
     if (equippedItemIds.length > 0) {
-      const equippedItems = await this.knex('items').whereIn(
+      const equippedItems = await this.knex<ItemRecord>('items').whereIn(
         'id',
         equippedItemIds,
       );
@@ -570,13 +570,15 @@ export class CharacterService {
       (await this.getActiveStoryProgress(characterWithEffects.id))?.id;
 
     if (progressIdToUse) {
-      const learnedAbilitiesLinks = await this.knex('character_story_abilities')
+      const learnedAbilitiesLinks: { ability_id: number }[] = await this.knex(
+        'character_story_abilities',
+      )
         .where({ character_story_progress_id: progressIdToUse })
         .select('ability_id');
 
       if (learnedAbilitiesLinks.length > 0) {
         const learnedAbilityIds = learnedAbilitiesLinks.map(
-          (link) => link.ability_id,
+          (link: { ability_id: number }) => link.ability_id,
         );
         const abilitiesData = await this.knex<AbilityRecord>(
           'abilities',
@@ -584,14 +586,15 @@ export class CharacterService {
 
         for (const ability of abilitiesData) {
           if (
-            (ability.type === AbilityType.PASSIVE_STAT ||
-              ability.type === AbilityType.PASSIVE_COMBAT_MODIFIER) &&
-            ability.effect_string
+            (ability.type as AbilityType) === AbilityType.PASSIVE_STAT ||
+            ((ability.type as AbilityType) ===
+              AbilityType.PASSIVE_COMBAT_MODIFIER &&
+              ability.effect_string)
           ) {
             this.logger.debug(
               `Applying passive ability: ${ability.name} (${ability.effect_string})`,
             );
-            const effects = ability.effect_string.split(';');
+            const effects = (ability.effect_string as string).split(';');
             for (const effectPart of effects) {
               const effectRegex = /(\w+)\s*([+-])\s*(\d+)/; // "stat+érték" vagy "stat-érték"
               const match = effectPart.trim().match(effectRegex);
@@ -638,8 +641,10 @@ export class CharacterService {
     }
     // Ha a stamina (maxHP) változott, az aktuális HP-t is korrigálni kell, hogy ne legyen több a maximumnál
     // (és szintlépéskor/gyógyuláskor már kezeltük a feltöltést)
-    if (characterWithEffects.health > characterWithEffects.stamina) {
-      characterWithEffects.health = characterWithEffects.stamina;
+    if (
+      (characterWithEffects.health ?? 0) > (characterWithEffects.stamina ?? 0)
+    ) {
+      characterWithEffects.health = characterWithEffects.stamina ?? 0;
     }
 
     this.logger.log(
@@ -667,7 +672,7 @@ export class CharacterService {
         })
         .first('id'); // Csak az ID-ra van szükségünk a további törlésekhez
 
-      if (progressToReset && progressToReset.id) {
+      if (progressToReset && typeof progressToReset.id === 'number') {
         const progressId = progressToReset.id;
         this.logger.debug(
           `Found story progress record ID: ${progressId} for character ${characterId}, story ${storyId}. Proceeding with reset.`,
@@ -896,7 +901,7 @@ export class CharacterService {
                 last_played_at: new Date(),
                 updated_at: new Date(),
               })
-              .returning('*');
+              .returning<CharacterStoryProgressRecord[]>('*');
 
             if (!updatedRows?.[0]) {
               this.logger.error(
@@ -912,8 +917,10 @@ export class CharacterService {
               `Creating new progress for story ${storyId} for character ${characterId}`,
             );
 
-            const baseCharData = await trx<Character>('characters')
-              .where({ id: characterId })
+            const baseCharData = await trx<
+              Pick<Character, 'selected_archetype_id'>
+            >('characters')
+              .where('id', characterId)
               .select('selected_archetype_id')
               .first();
 
@@ -941,7 +948,7 @@ export class CharacterService {
                 xp_to_next_level: DEFAULT_XP_TO_NEXT_LEVEL,
                 is_active: true,
               })
-              .returning('*');
+              .returning<CharacterStoryProgressRecord[]>('*');
 
             if (!insertedRows?.[0]) {
               this.logger.error(
@@ -1070,7 +1077,7 @@ export class CharacterService {
       );
       const [newCharacter] = await this.knex('characters')
         .insert({ user_id: userId, name: 'Kalandor', role: 'player' })
-        .returning('*');
+        .returning<Character[]>('*');
       character = newCharacter;
     }
     if (!character)
@@ -1098,7 +1105,7 @@ export class CharacterService {
       const [updatedRow] = await trx('character_story_progress')
         .where({ character_id: characterId, story_id: storyId })
         .update({ is_active: true, last_played_at: new Date() })
-        .returning('*');
+        .returning<CharacterStoryProgressRecord[]>('*');
 
       if (!updatedRow) {
         // Nem volt mit aktiválni, tehát új playthrough kell majd archetype választással
@@ -1175,7 +1182,7 @@ export class CharacterService {
         is_active: true,
         last_played_at: new Date(),
       })
-      .returning('*');
+      .returning<CharacterStoryProgressRecord[]>('*');
     if (!newProgress)
       throw new InternalServerErrorException(
         'Failed to create new story progress.',
@@ -1247,10 +1254,11 @@ export class CharacterService {
         });
       }
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
       this.logger.error(
         'Failed to fetch selectable archetypes with abilities',
-        error.stack,
+        stack,
       );
       throw new InternalServerErrorException(
         'Could not retrieve character archetypes.',
@@ -1267,7 +1275,9 @@ export class CharacterService {
     );
 
     // Ellenőrizzük, hogy létezik-e ilyen archetípus (opcionális, de ajánlott)
-    const archetypeExists = await this.knex('character_archetypes')
+    const archetypeExists = await this.knex<CharacterArchetypeRecord>(
+      'character_archetypes',
+    )
       .where({ id: archetypeId })
       .first();
     if (!archetypeExists) {
@@ -1285,7 +1295,7 @@ export class CharacterService {
         selected_archetype_id: archetypeId,
         updated_at: new Date(),
       })
-      .returning('*'); // Visszaadjuk a teljes frissített karakter sort
+      .returning<Character[]>('*'); // Visszaadjuk a teljes frissített karakter sort
 
     if (!updatedCharacter) {
       // Ennek nem szabadna előfordulnia, ha a characterId valid
@@ -1325,25 +1335,34 @@ export class CharacterService {
         'a.talent_point_cost as talentPointCost',
       );
 
-    return learnedAbilities.map((ability) => ({
-      id: ability.id,
-      name: ability.name,
-      description: ability.description,
-      type: ability.type,
-      effectString: ability.effectString,
-      talentPointCost: ability.talentPointCost,
-    }));
+    return learnedAbilities.map(
+      (ability: {
+        id: number;
+        name: string;
+        description: string;
+        type: AbilityType;
+        effectString: string;
+        talentPointCost: number;
+      }) => ({
+        id: ability.id,
+        name: ability.name,
+        description: ability.description,
+        type: ability.type,
+        effectString: ability.effectString,
+        talentPointCost: ability.talentPointCost,
+      }),
+    );
   }
 
   async hasLearnedAbility(
     progressId: number,
     abilityId: number,
   ): Promise<boolean> {
-    const learnedAbility = await this.knex('character_story_abilities')
-      .where({
-        character_story_progress_id: progressId,
-        ability_id: abilityId,
-      })
+    const learnedAbility = await this.knex<{ id: number }>(
+      'character_story_abilities',
+    )
+      .where('character_story_progress_id', progressId)
+      .andWhere('ability_id', abilityId)
       .first();
     return !!learnedAbility;
   }

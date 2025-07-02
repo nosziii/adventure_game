@@ -23,12 +23,21 @@ export class AdminStoriesService {
   private dtoToDbStory(
     dto: CreateStoryDto | UpdateStoryDto,
   ): Partial<Omit<StoryRecord, 'id' | 'created_at' | 'updated_at'>> {
-    const dbData: any = {};
-    if (dto.title !== undefined) dbData.title = dto.title;
-    if (dto.description !== undefined) dbData.description = dto.description;
-    if (dto.startingNodeId !== undefined)
+    const dbData: Partial<
+      Omit<StoryRecord, 'id' | 'created_at' | 'updated_at'>
+    > = {};
+    if (dto.title !== undefined) {
+      dbData.title = dto.title;
+    }
+    if (dto.description !== undefined) {
+      dbData.description = dto.description;
+    }
+    if (dto.startingNodeId !== undefined) {
       dbData.starting_node_id = dto.startingNodeId;
-    if (dto.isPublished !== undefined) dbData.is_published = dto.isPublished;
+    }
+    if (dto.isPublished !== undefined) {
+      dbData.is_published = dto.isPublished;
+    }
     return dbData;
   }
 
@@ -56,28 +65,32 @@ export class AdminStoriesService {
     try {
       const [newStory] = await this.knex('stories')
         .insert(dbStoryData)
-        .returning('*');
+        .returning<StoryRecord[]>('*');
       this.logger.log(`Story created with ID: ${newStory.id}`);
       return newStory;
-    } catch (error: any) {
-      this.logger.error(`Failed to create story: ${error}`, error.stack);
-      if (
-        error.code === '23505' &&
-        error.constraint === 'stories_title_unique'
-      ) {
-        // PostgreSQL unique violation on title
-        throw new ConflictException(
-          `Story with title '${createStoryDto.title}' already exists.`,
-        );
-      }
-      if (
-        error.code === '23503' &&
-        error.constraint === 'stories_starting_node_id_fkey'
-      ) {
-        // PostgreSQL foreign key violation for starting_node_id
-        throw new BadRequestException(
-          'Invalid starting_node_id (node does not exist).',
-        );
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to create story: ${String(error)}`, stack);
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        const pgError = error as { code: string; constraint: string };
+        if (
+          pgError.code === '23505' &&
+          pgError.constraint === 'stories_title_unique'
+        ) {
+          // PostgreSQL unique violation on title
+          throw new ConflictException(
+            `Story with title '${createStoryDto.title}' already exists.`,
+          );
+        }
+        if (
+          pgError.code === '23503' &&
+          pgError.constraint === 'stories_starting_node_id_fkey'
+        ) {
+          // PostgreSQL foreign key violation for starting_node_id
+          throw new BadRequestException(
+            'Invalid starting_node_id (node does not exist).',
+          );
+        }
       }
       throw new InternalServerErrorException('Failed to create story.');
     }
@@ -100,30 +113,37 @@ export class AdminStoriesService {
       const [updatedStory] = await this.knex('stories')
         .where({ id })
         .update(dbStoryUpdates)
-        .returning('*');
+        .returning<StoryRecord[]>('*');
       if (!updatedStory) {
         this.logger.warn(`Story with ID ${id} not found for update.`);
         throw new NotFoundException(`Story with ID ${id} not found.`);
       }
       this.logger.log(`Story ${id} updated successfully.`);
       return updatedStory;
-    } catch (error: any) {
-      this.logger.error(`Failed to update story ${id}: ${error}`, error.stack);
-      if (
-        error.code === '23505' &&
-        error.constraint === 'stories_title_unique'
-      ) {
-        throw new ConflictException(
-          `A story with the new title might already exist.`,
-        );
-      }
-      if (
-        error.code === '23503' &&
-        error.constraint === 'stories_starting_node_id_fkey'
-      ) {
-        throw new BadRequestException(
-          'Invalid starting_node_id for update (node does not exist).',
-        );
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(
+        `Failed to update story ${id}: ${String(error)}`,
+        stack,
+      );
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        const pgError = error as { code: string; constraint: string };
+        if (
+          pgError.code === '23505' &&
+          pgError.constraint === 'stories_title_unique'
+        ) {
+          throw new ConflictException(
+            `A story with the new title might already exist.`,
+          );
+        }
+        if (
+          pgError.code === '23503' &&
+          pgError.constraint === 'stories_starting_node_id_fkey'
+        ) {
+          throw new BadRequestException(
+            'Invalid starting_node_id for update (node does not exist).',
+          );
+        }
       }
       throw new InternalServerErrorException('Failed to update story.');
     }
@@ -144,8 +164,12 @@ export class AdminStoriesService {
         throw new NotFoundException(`Story with ID ${id} not found.`);
       }
       this.logger.log(`Story ${id} removed successfully.`);
-    } catch (error: any) {
-      this.logger.error(`Failed to remove story ${id}: ${error}`, error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(
+        `Failed to remove story ${id}: ${String(error)}`,
+        stack,
+      );
       // Ha a jövőben más tábla hivatkozna a stories.id-ra FK-val, itt lehetne ConflictException
       throw new InternalServerErrorException('Failed to remove story.');
     }

@@ -10,7 +10,7 @@ import {
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from '../../database/database.module'; // Igazítsd az útvonalat!
 import { StoryNode } from '../../game/interfaces/story-node.interface'; // Használjuk a meglévő interfészt
-import { CreateNodeDto, UpdateNodeDto, NodeDto } from './dto'; // DTO-k importálása
+import { CreateNodeDto, UpdateNodeDto } from './dto'; // DTO-k importálása
 import { ChoiceRecord } from '../../game/interfaces/choice-record.interface';
 
 @Injectable()
@@ -71,13 +71,19 @@ export class AdminNodesService {
     try {
       const [newNode] = await this.knex('story_nodes')
         .insert(dbNodeData)
-        .returning('*');
+        .returning<StoryNode[]>('*');
       this.logger.log(`Story node created with ID: ${newNode.id}`);
       return newNode;
-    } catch (error: any) {
-      this.logger.error(`Failed to create story node: ${error}`, error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error(`Failed to create story node: ${String(error)}`, stack);
       // Itt lehetne specifikusabb hibakezelés FK sértésekre (item_reward_id, enemy_id, victory/defeat_node_id)
-      if (error.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // Foreign key violation
         throw new BadRequestException(
           'Invalid reference ID provided (e.g., item, enemy, or target node does not exist).',
@@ -100,18 +106,24 @@ export class AdminNodesService {
       const [updatedNode] = await this.knex('story_nodes')
         .where({ id })
         .update(dbNodeUpdates)
-        .returning('*');
+        .returning<StoryNode[]>('*');
       if (!updatedNode) {
         throw new NotFoundException(`Story node with ID ${id} not found.`);
       }
       this.logger.log(`Story node ${id} updated successfully.`);
       return updatedNode;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
       this.logger.error(
-        `Failed to update story node ${id}: ${error}`,
-        error.stack,
+        `Failed to update story node ${id}: ${String(error)}`,
+        stack,
       );
-      if (error.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // Foreign key violation
         throw new BadRequestException(
           'Invalid reference ID provided for update (e.g., item, enemy, or target node does not exist).',
@@ -134,13 +146,19 @@ export class AdminNodesService {
       }
       this.logger.log(`Story node ${id} removed successfully.`);
       // Nem adunk vissza semmit sikeres törléskor (void)
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
       this.logger.error(
-        `Failed to remove story node ${id}: ${error}`,
-        error.stack,
+        `Failed to remove story node ${id}: ${String(error)}`,
+        stack,
       );
       // Ellenőrizzük, hogy a hiba Foreign Key sértés miatt volt-e (pl. egy Choice hivatkozik rá)
-      if (error.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === '23503'
+      ) {
         // PostgreSQL foreign key violation error code
         throw new ConflictException(
           `Cannot delete node ${id} because other records (e.g., choices) depend on it.`,
@@ -164,8 +182,9 @@ export class AdminNodesService {
         .select('*')
         .orderBy('id');
       return { nodes, choices };
-    } catch (error) {
-      this.logger.error('Failed to fetch story graph data', error.stack);
+    } catch (error: unknown) {
+      const stack = error instanceof Error ? error.stack : 'No stack trace';
+      this.logger.error('Failed to fetch story graph data', stack);
       throw new InternalServerErrorException(
         'Could not retrieve story graph data.',
       );

@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Patch,
   Delete, // Új metódusok
   Param,
@@ -15,7 +14,6 @@ import {
   HttpCode,
   HttpStatus, // HttpStatus és HttpCode
   ConflictException,
-  InternalServerErrorException, // Hibakezeléshez
 } from '@nestjs/common';
 import { AdminNodesService } from './nodes.service';
 import { NodeDto, CreateNodeDto, UpdateNodeDto } from './dto'; // Használjuk a válasz DTO-t
@@ -97,9 +95,9 @@ export class AdminNodesController {
     try {
       const newNode = await this.adminNodesService.create(createNodeDto);
       return mapStoryNodeToNodeDto(newNode); // Mappolás DTO-ra
-    } catch (error) {
+    } catch (error: unknown) {
       // Service már dob InternalServerErrorException-t
-      this.logger.error(`Error during node creation: ${error}`);
+      this.logger.error(`Error during node creation: ${String(error)}`);
       throw error;
     }
   }
@@ -119,9 +117,11 @@ export class AdminNodesController {
         updateNodeDto,
       );
       return mapStoryNodeToNodeDto(updatedNode); // Mappolás DTO-ra
-    } catch (error) {
+    } catch (error: unknown) {
       // Service dob NotFoundException-t vagy InternalServerErrorException-t
-      this.logger.error(`Error during node update for ID ${id}: ${error}`);
+      this.logger.error(
+        `Error during node update for ID ${id}: ${String(error)}`,
+      );
       if (error instanceof NotFoundException) {
         throw new NotFoundException(error.message);
       }
@@ -138,9 +138,11 @@ export class AdminNodesController {
     try {
       await this.adminNodesService.remove(id);
       // Sikeres törléskor nem adunk vissza tartalmat
-    } catch (error) {
+    } catch (error: unknown) {
       // Service dob NotFoundException-t, ConflictException-t vagy InternalServerErrorException-t
-      this.logger.error(`Error during node removal for ID ${id}: ${error}`);
+      this.logger.error(
+        `Error during node removal for ID ${id}: ${String(error)}`,
+      );
       if (
         error instanceof NotFoundException ||
         error instanceof ConflictException
