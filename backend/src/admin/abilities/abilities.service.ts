@@ -10,7 +10,22 @@ import {
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from '../../database/database.module';
 import { AbilityRecord } from '../../game/interfaces/ability-record.interface'; // Import
-import { CreateAbilityDto, UpdateAbilityDto, AbilityType } from './dto';
+import { CreateAbilityDto, UpdateAbilityDto } from './dto';
+
+function isDatabaseError(error: unknown): error is {
+  code: string;
+  constraint: string;
+  message: string;
+  stack?: string;
+} {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    'constraint' in error &&
+    'message' in error
+  );
+}
 
 @Injectable()
 export class AdminAbilitiesService {
@@ -20,8 +35,8 @@ export class AdminAbilitiesService {
 
   private dtoToDbAbility(
     dto: CreateAbilityDto | UpdateAbilityDto,
-  ): Partial<Omit<AbilityRecord, 'id' | 'created_at' | 'updated_at'>> {
-    const dbData: any = {};
+  ): Partial<AbilityRecord> {
+    const dbData: Partial<AbilityRecord> = {};
     if (dto.name !== undefined) dbData.name = dto.name;
     if (dto.description !== undefined) dbData.description = dto.description;
     if (dto.type !== undefined) dbData.type = dto.type;
@@ -30,16 +45,11 @@ export class AdminAbilitiesService {
       dbData.talent_point_cost = dto.talentPointCost;
     if (dto.levelRequirement !== undefined)
       dbData.level_requirement = dto.levelRequirement;
-    // A prerequisites JSONB, ha a DTO stringként küldi a JSON-t, a DB driver kezeli. Ha objektum, akkor is.
     if (dto.prerequisites !== undefined) {
-      dbData.prerequisites =
-        dto.prerequisites === null ? null : JSON.stringify(dto.prerequisites);
+      dbData.prerequisites = dto.prerequisites;
     }
     if (dto.allowedArchetypeIds !== undefined) {
-      dbData.allowed_archetype_ids =
-        dto.allowedArchetypeIds === null
-          ? null
-          : JSON.stringify(dto.allowedArchetypeIds);
+      dbData.allowed_archetype_ids = dto.allowedArchetypeIds;
     }
     return dbData;
   }
@@ -50,7 +60,7 @@ export class AdminAbilitiesService {
   }
 
   async findOne(id: number): Promise<AbilityRecord> {
-    this.logger.log(`Workspaceing ability with ID: ${id}`);
+    this.logger.log(`Finding ability with ID: ${id}`);
     const ability = await this.knex<AbilityRecord>('abilities')
       .where({ id })
       .first();
@@ -70,18 +80,27 @@ export class AdminAbilitiesService {
     try {
       const [newAbility] = await this.knex('abilities')
         .insert(dbAbilityData)
-        .returning('*');
+        .returning<AbilityRecord[]>('*');
+      if (!newAbility) {
+        throw new InternalServerErrorException('Failed to create ability.');
+      }
       this.logger.log(`Ability created with ID: ${newAbility.id}`);
       return newAbility;
-    } catch (error: any) {
-      this.logger.error(`Failed to create ability: ${error}`, error.stack);
-      if (error.code === '23505' && error.constraint === 'abilities_name_key') {
-        // PostgreSQL unique violation on name
-        throw new ConflictException(
-          `Ability with name '${createAbilityDto.name}' already exists.`,
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to create ability: ${error.message}`,
+          error.stack,
         );
+        if (
+          error.code === '23505' &&
+          error.constraint === 'abilities_name_key'
+        ) {
+          throw new ConflictException(
+            `Ability with name '${createAbilityDto.name}' already exists.`,
+          );
+        }
       }
-      // Itt lehetne más FK hibákat is ellenőrizni, ha lennének (pl. prerequisites ability ID-k létezése)
       throw new InternalServerErrorException('Failed to create ability.');
     }
   }
@@ -96,29 +115,34 @@ export class AdminAbilitiesService {
 
     if (Object.keys(dbAbilityUpdates).length === 0) {
       this.logger.warn(`Update called for ability ${id} with empty data.`);
-      return this.findOne(id); // Visszaadjuk a meglévőt
+      return this.findOne(id);
     }
 
     try {
       const [updatedAbility] = await this.knex('abilities')
         .where({ id })
         .update(dbAbilityUpdates)
-        .returning('*');
+        .returning<AbilityRecord[]>('*');
       if (!updatedAbility) {
         this.logger.warn(`Ability with ID ${id} not found for update.`);
         throw new NotFoundException(`Ability with ID ${id} not found.`);
       }
       this.logger.log(`Ability ${id} updated successfully.`);
       return updatedAbility;
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to update ability ${id}: ${error}`,
-        error.stack,
-      );
-      if (error.code === '23505' && error.constraint === 'abilities_name_key') {
-        throw new ConflictException(
-          `An ability with the new name might already exist.`,
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to update ability ${id}: ${error.message}`,
+          error.stack,
         );
+        if (
+          error.code === '23505' &&
+          error.constraint === 'abilities_name_key'
+        ) {
+          throw new ConflictException(
+            `An ability with the new name might already exist.`,
+          );
+        }
       }
       throw new InternalServerErrorException('Failed to update ability.');
     }
@@ -128,19 +152,19 @@ export class AdminAbilitiesService {
   async remove(id: number): Promise<void> {
     this.logger.log(`Attempting to remove ability with ID: ${id}`);
     try {
-      // Az ON DELETE CASCADE miatt a character_story_abilities táblából a hivatkozások törlődni fognak.
       const numDeleted = await this.knex('abilities').where({ id }).del();
       if (numDeleted === 0) {
         this.logger.warn(`Ability with ID ${id} not found for removal.`);
         throw new NotFoundException(`Ability with ID ${id} not found.`);
       }
       this.logger.log(`Ability ${id} removed successfully.`);
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to remove ability ${id}: ${error}`,
-        error.stack,
-      );
-      // Ha a jövőben más tábla hivatkozna az abilities.id-ra RESTRICT-tel, itt lehetne ConflictException
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to remove ability ${id}: ${error.message}`,
+          error.stack,
+        );
+      }
       throw new InternalServerErrorException('Failed to remove ability.');
     }
   }

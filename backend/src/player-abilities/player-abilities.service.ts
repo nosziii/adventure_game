@@ -108,7 +108,7 @@ export class PlayerAbilitiesService {
           ability.prerequisites.length > 0
         ) {
           const missingPrereqs = ability.prerequisites.filter(
-            (prereqId) => !learnedAbilityIds.has(prereqId as number),
+            (prereqId) => !learnedAbilityIds.has(prereqId),
           );
           if (missingPrereqs.length > 0) {
             canLearnThisAbility = false;

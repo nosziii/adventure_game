@@ -9,7 +9,9 @@ describe('PlayerAbilitiesController', () => {
       controllers: [PlayerAbilitiesController],
     }).compile();
 
-    controller = module.get<PlayerAbilitiesController>(PlayerAbilitiesController);
+    controller = module.get<PlayerAbilitiesController>(
+      PlayerAbilitiesController,
+    );
   });
 
   it('should be defined', () => {

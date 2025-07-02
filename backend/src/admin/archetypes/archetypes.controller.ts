@@ -12,9 +12,6 @@ import {
   HttpCode,
   HttpStatus, // HttpCode, HttpStatus import
   NotFoundException,
-  ConflictException,
-  InternalServerErrorException,
-  BadRequestException, // Szükséges exceptionök
 } from '@nestjs/common';
 import { AdminArchetypesService } from './archetypes.service';
 import {
@@ -63,8 +60,12 @@ export class AdminArchetypesController {
   @Roles('admin')
   async findAll(): Promise<ArchetypeAdminDto[]> {
     this.logger.log('Request received for finding all archetypes');
-    const archetypes = await this.adminArchetypesService.findAll();
-    return archetypes.map(mapArchetypeRecordToDto);
+    const archetypes: CharacterArchetypeRecord[] =
+      await this.adminArchetypesService.findAll();
+    return archetypes.map(
+      (archetype: CharacterArchetypeRecord): ArchetypeAdminDto =>
+        mapArchetypeRecordToDto(archetype),
+    );
   }
 
   @Get(':id')
@@ -73,7 +74,8 @@ export class AdminArchetypesController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ArchetypeAdminDto> {
     this.logger.log(`Request received for finding archetype with ID: ${id}`);
-    const archetype = await this.adminArchetypesService.findOne(id);
+    const archetype: CharacterArchetypeRecord =
+      await this.adminArchetypesService.findOne(id);
     return mapArchetypeRecordToDto(archetype);
   }
 
@@ -89,12 +91,12 @@ export class AdminArchetypesController {
       createArchetypeDto,
     );
     try {
-      const newArchetype =
+      const newArchetype: CharacterArchetypeRecord =
         await this.adminArchetypesService.create(createArchetypeDto);
       return mapArchetypeRecordToDto(newArchetype);
     } catch (error) {
       this.logger.error(
-        `Error during archetype creation: ${error?.message || error}`,
+        `Error during archetype creation: ${error instanceof Error ? error.message : error}`,
       );
       throw error;
     }
@@ -112,14 +114,12 @@ export class AdminArchetypesController {
       updateArchetypeDto,
     );
     try {
-      const updatedArchetype = await this.adminArchetypesService.update(
-        id,
-        updateArchetypeDto,
-      );
+      const updatedArchetype: CharacterArchetypeRecord =
+        await this.adminArchetypesService.update(id, updateArchetypeDto);
       return mapArchetypeRecordToDto(updatedArchetype);
     } catch (error) {
       this.logger.error(
-        `Error during archetype update for ID ${id}: ${error?.message || error}`,
+        `Error during archetype update for ID ${id}: ${error instanceof Error ? error.message : error}`,
       );
       throw error;
     }
@@ -135,7 +135,7 @@ export class AdminArchetypesController {
       await this.adminArchetypesService.remove(id);
     } catch (error) {
       this.logger.error(
-        `Error during archetype removal for ID ${id}: ${error?.message || error}`,
+        `Error during archetype removal for ID ${id}: ${error instanceof Error ? error.message : error}`,
       );
       throw error;
     }

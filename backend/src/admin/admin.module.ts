@@ -1,9 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminNodesController } from './nodes/nodes.controller';
 import { AdminNodesService } from './nodes/nodes.service';
-import { AuthModule } from '../auth/auth.module';
 
-import { CharacterModule } from '../character.module';
 import { AdminChoicesController } from './choices/choices.controller';
 import { AdminChoicesService } from './choices/choices.service';
 

@@ -6,7 +6,7 @@ export class AbilityAdminDto {
   effectString: string | null;
   talentPointCost: number;
   levelRequirement: number;
-  prerequisites: any | null; // JSONB, lehet string[] vagy number[] vagy komplexebb
+  prerequisites: number[] | null; // JSONB, lehet string[] vagy number[] vagy komplexebb
   allowedArchetypeIds: number[] | null;
   createdAt: Date;
   updatedAt: Date;

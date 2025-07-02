@@ -7,7 +7,7 @@ export interface AbilityRecord {
   effect_string: string | null;
   talent_point_cost: number;
   level_requirement: number;
-  prerequisites: any | null; // JSONB-ként tárolva
+  prerequisites: number[] | null; // JSONB-ként tárolva
   allowed_archetype_ids: number[] | null;
   created_at: Date;
   updated_at: Date;

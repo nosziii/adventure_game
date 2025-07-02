@@ -7,12 +7,12 @@ import { KNEX_CONNECTION } from '../database/database.module'; // Importáld a t
 
 // Definiáljuk a User interfészt (vagy osztályt), hogy típusbiztos legyen
 export interface User {
-  id: number
-  email: string
-  password_hash: string
-  role: string
-  createdAt: Date
-  updatedAt: Date
+  id: number;
+  email: string;
+  password_hash: string;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
@@ -39,18 +39,14 @@ export class UsersService {
 
   async findOneByEmail(email: string): Promise<User | undefined> {
     // Használjuk a Knex select és where metódusát
-    const user = await this.knex('users')
-      .where({ email: email })
-      .first(); // Csak az első találatot adja vissza, vagy undefined
+    const user = await this.knex('users').where({ email: email }).first(); // Csak az első találatot adja vissza, vagy undefined
 
     return user;
   }
 
   // Később lehet findOneById metódus is
   async findOneById(id: number): Promise<User | undefined> {
-     const user = await this.knex('users')
-      .where({ id: id })
-      .first();
-     return user;
+    const user = await this.knex('users').where({ id: id }).first();
+    return user;
   }
 }

@@ -83,7 +83,7 @@ export class CharacterService {
       return null;
     }
 
-    let progressToUse = activeStoryProgressId
+    const progressToUse = activeStoryProgressId
       ? await this.knex<CharacterStoryProgressRecord>(
           'character_story_progress',
         )
@@ -98,7 +98,7 @@ export class CharacterService {
       return null;
     }
 
-    let hydratedCharacter: Character = {
+    const hydratedCharacter: Character = {
       ...baseChar, // id, user_id, name, role, created_at, updated_at, selected_archetype_id
       health: progressToUse.health,
       skill: progressToUse.skill,
@@ -402,7 +402,7 @@ export class CharacterService {
     }
 
     let equipSlotColumn: keyof CharacterStoryProgressRecord | null = null;
-    let updates: Partial<CharacterStoryProgressRecord> = {};
+    const updates: Partial<CharacterStoryProgressRecord> = {};
 
     if (item.type === 'weapon') {
       equipSlotColumn = 'equipped_weapon_id';
@@ -441,7 +441,7 @@ export class CharacterService {
     const progressId = activeStoryProgress.id;
 
     let equipSlotColumn: keyof CharacterStoryProgressRecord | null = null;
-    let updates: Partial<CharacterStoryProgressRecord> = {};
+    const updates: Partial<CharacterStoryProgressRecord> = {};
 
     if (itemType === 'weapon') {
       equipSlotColumn = 'equipped_weapon_id';
@@ -877,7 +877,7 @@ export class CharacterService {
             .andWhereNot({ story_id: storyId })
             .update({ is_active: false, updated_at: new Date() });
 
-          let existingProgress = await trx<CharacterStoryProgressRecord>(
+          const existingProgress = await trx<CharacterStoryProgressRecord>(
             'character_story_progress',
           )
             .where({ character_id: characterId, story_id: storyId })
@@ -917,8 +917,8 @@ export class CharacterService {
               .select('selected_archetype_id')
               .first();
 
-            let archetypeBonuses: Partial<CharacterArchetypeRecord> = {};
-            let startingAbilities: number[] = [];
+            const archetypeBonuses: Partial<CharacterArchetypeRecord> = {};
+            const startingAbilities: number[] = [];
             if (baseCharData?.selected_archetype_id) {
               // ... (archetype adatok lekérése és bónuszok/képességek beállítása, ahogy volt)
             }

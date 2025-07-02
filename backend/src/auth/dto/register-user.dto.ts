@@ -7,7 +7,9 @@ export class RegisterUserDto {
 
   @IsNotEmpty({ message: 'A jelszó megadása kötelező.' })
   @IsString()
-  @MinLength(6, { message: 'A jelszónak legalább 6 karakter hosszúnak kell lennie.' }) // Regisztrációnál legyen erősebb ellenőrzés
+  @MinLength(6, {
+    message: 'A jelszónak legalább 6 karakter hosszúnak kell lennie.',
+  }) // Regisztrációnál legyen erősebb ellenőrzés
   password: string;
 
   // Ide jöhetne pl. passwordConfirm mező is validációval

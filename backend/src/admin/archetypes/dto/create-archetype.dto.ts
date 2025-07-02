@@ -6,10 +6,7 @@ import {
   Min,
   MaxLength,
   IsArray,
-  ArrayMinSize,
-  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer'; // Szükséges a ValidateNested-hez, ha objektumokat validálunk
 
 export class CreateArchetypeDto {
   @IsNotEmpty({ message: 'A név megadása kötelező.' })

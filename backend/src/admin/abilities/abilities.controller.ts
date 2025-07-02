@@ -22,18 +22,19 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { AbilityRecord } from '../../game/interfaces/ability-record.interface';
 
 const mapAbilityRecordToDto = (ability: AbilityRecord): AbilityAdminDto => {
-  if (!ability)
+  if (!ability) {
     throw new NotFoundException('Ability record not found for mapping.');
+  }
   return {
     id: ability.id,
     name: ability.name,
     description: ability.description,
     type: ability.type,
-    effectString: ability.effect_string, // snake_case -> camelCase
-    talentPointCost: ability.talent_point_cost, // snake_case -> camelCase
-    levelRequirement: ability.level_requirement, // snake_case -> camelCase
+    effectString: ability.effect_string,
+    talentPointCost: ability.talent_point_cost,
+    levelRequirement: ability.level_requirement,
     prerequisites: ability.prerequisites,
-    allowedArchetypeIds: ability.allowed_archetype_ids, // JSONB-ként tárolva, Knex általában tömbként adja vissza
+    allowedArchetypeIds: ability.allowed_archetype_ids,
     createdAt: ability.created_at,
     updatedAt: ability.updated_at,
   };
@@ -50,8 +51,12 @@ export class AdminAbilitiesController {
   @Roles('admin')
   async findAll(): Promise<AbilityAdminDto[]> {
     this.logger.log('Request received for finding all abilities');
-    const abilities = await this.adminAbilitiesService.findAll();
-    return abilities.map(mapAbilityRecordToDto);
+    const abilities: AbilityRecord[] =
+      await this.adminAbilitiesService.findAll();
+    return abilities.map(
+      (ability: AbilityRecord): AbilityAdminDto =>
+        mapAbilityRecordToDto(ability),
+    );
   }
 
   @Get(':id')
@@ -60,7 +65,7 @@ export class AdminAbilitiesController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<AbilityAdminDto> {
     this.logger.log(`Request received for finding ability with ID: ${id}`);
-    const ability = await this.adminAbilitiesService.findOne(id);
+    const ability: AbilityRecord = await this.adminAbilitiesService.findOne(id);
     return mapAbilityRecordToDto(ability);
   }
 
@@ -76,14 +81,14 @@ export class AdminAbilitiesController {
       createAbilityDto,
     );
     try {
-      const newAbility =
+      const newAbility: AbilityRecord =
         await this.adminAbilitiesService.create(createAbilityDto);
       return mapAbilityRecordToDto(newAbility);
     } catch (error) {
       this.logger.error(
-        `Error during ability creation: ${error?.message || error}`,
+        `Error during ability creation: ${error instanceof Error ? error.message : error}`,
       );
-      throw error; // A service már a megfelelő HTTP hibát dobja
+      throw error;
     }
   }
 
@@ -99,14 +104,12 @@ export class AdminAbilitiesController {
       updateAbilityDto,
     );
     try {
-      const updatedAbility = await this.adminAbilitiesService.update(
-        id,
-        updateAbilityDto,
-      );
+      const updatedAbility: AbilityRecord =
+        await this.adminAbilitiesService.update(id, updateAbilityDto);
       return mapAbilityRecordToDto(updatedAbility);
     } catch (error) {
       this.logger.error(
-        `Error during ability update for ID ${id}: ${error?.message || error}`,
+        `Error during ability update for ID ${id}: ${error instanceof Error ? error.message : error}`,
       );
       throw error;
     }
@@ -122,7 +125,7 @@ export class AdminAbilitiesController {
       await this.adminAbilitiesService.remove(id);
     } catch (error) {
       this.logger.error(
-        `Error during ability removal for ID ${id}: ${error?.message || error}`,
+        `Error during ability removal for ID ${id}: ${error instanceof Error ? error.message : error}`,
       );
       throw error;
     }

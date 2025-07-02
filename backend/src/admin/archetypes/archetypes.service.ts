@@ -5,12 +5,26 @@ import {
   Logger,
   InternalServerErrorException,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { Knex } from 'knex';
 import { KNEX_CONNECTION } from '../../database/database.module';
 import { CharacterArchetypeRecord } from '../../game/interfaces/character-archetype-record.interface';
 import { CreateArchetypeDto, UpdateArchetypeDto } from './dto';
+
+function isDatabaseError(error: unknown): error is {
+  code: string;
+  constraint: string;
+  message: string;
+  stack?: string;
+} {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    'constraint' in error &&
+    'message' in error
+  );
+}
 
 @Injectable()
 export class AdminArchetypesService {
@@ -21,14 +35,9 @@ export class AdminArchetypesService {
   // --- MAPPER SEGÉDFÜGGVÉNY: DTO (camelCase) -> DB (snake_case like) ---
   private dtoToDbArchetype(
     dto: CreateArchetypeDto | UpdateArchetypeDto,
-  ): Partial<
-    Omit<CharacterArchetypeRecord, 'id' | 'created_at' | 'updated_at'>
-  > {
-    const dbData: any = {
-      // Alapértelmezett null értékek, ha kellenek, vagy a DB séma kezeli
-    };
+  ): Partial<CharacterArchetypeRecord> {
+    const dbData: Partial<CharacterArchetypeRecord> = {};
 
-    // Name, description, iconPath, és a base...Bonus mezők
     if (dto.name !== undefined) dbData.name = dto.name;
     if (dto.description !== undefined) dbData.description = dto.description;
     if (dto.iconPath !== undefined) dbData.icon_path = dto.iconPath;
@@ -43,22 +52,12 @@ export class AdminArchetypesService {
     if (dto.baseDefenseBonus !== undefined)
       dbData.base_defense_bonus = dto.baseDefenseBonus;
 
-    // startingAbilityIds
     if (dto.startingAbilityIds !== undefined) {
-      // Az UpdateArchetypeDto-ban is léteznie kell opcionálisként
-      dbData.starting_ability_ids =
-        dto.startingAbilityIds === null
-          ? null
-          : JSON.stringify(dto.startingAbilityIds);
+      dbData.starting_ability_ids = dto.startingAbilityIds;
     }
 
-    // learnableAbilityIds
     if (dto.learnableAbilityIds !== undefined) {
-      // Az UpdateArchetypeDto-ban is léteznie kell opcionálisként
-      dbData.learnable_ability_ids =
-        dto.learnableAbilityIds === null
-          ? null
-          : JSON.stringify(dto.learnableAbilityIds);
+      dbData.learnable_ability_ids = dto.learnableAbilityIds;
     }
     return dbData;
   }
@@ -71,7 +70,7 @@ export class AdminArchetypesService {
   }
 
   async findOne(id: number): Promise<CharacterArchetypeRecord> {
-    this.logger.log(`Workspaceing character archetype with ID: ${id}`);
+    this.logger.log(`Finding character archetype with ID: ${id}`);
     const archetype = await this.knex<CharacterArchetypeRecord>(
       'character_archetypes',
     )
@@ -97,22 +96,27 @@ export class AdminArchetypesService {
     try {
       const [newArchetype] = await this.knex('character_archetypes')
         .insert(dbArchetypeData)
-        .returning('*');
+        .returning<CharacterArchetypeRecord[]>('*');
+      if (!newArchetype) {
+        throw new InternalServerErrorException('Failed to create archetype.');
+      }
       this.logger.log(`Archetype created with ID: ${newArchetype.id}`);
       return newArchetype;
-    } catch (error: any) {
-      this.logger.error(`Failed to create archetype: ${error}`, error.stack);
-      if (
-        error.code === '23505' &&
-        error.constraint === 'character_archetypes_name_key'
-      ) {
-        // PostgreSQL unique violation on name
-        throw new ConflictException(
-          `Archetype with name '${createArchetypeDto.name}' already exists.`,
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to create archetype: ${error.message}`,
+          error.stack || '',
         );
+        if (
+          error.code === '23505' &&
+          error.constraint === 'character_archetypes_name_key'
+        ) {
+          throw new ConflictException(
+            `Archetype with name '${createArchetypeDto.name}' already exists.`,
+          );
+        }
       }
-      // TODO: Ellenőrizni, hogy a starting_ability_ids-ben lévő ID-k léteznek-e az abilities táblában, ha szükséges.
-      // Ezt a DTO validációban vagy itt lehetne megtenni.
       throw new InternalServerErrorException('Failed to create archetype.');
     }
   }
@@ -140,25 +144,27 @@ export class AdminArchetypesService {
       const [updatedArchetype] = await this.knex('character_archetypes')
         .where({ id })
         .update(dbArchetypeUpdates)
-        .returning('*');
+        .returning<CharacterArchetypeRecord[]>('*');
       if (!updatedArchetype) {
         this.logger.warn(`Archetype with ID ${id} not found for update.`);
         throw new NotFoundException(`Archetype with ID ${id} not found.`);
       }
       this.logger.log(`Archetype ${id} updated successfully.`);
       return updatedArchetype;
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to update archetype ${id}: ${error}`,
-        error.stack,
-      );
-      if (
-        error.code === '23505' &&
-        error.constraint === 'character_archetypes_name_key'
-      ) {
-        throw new ConflictException(
-          `An archetype with the new name might already exist.`,
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to update archetype ${id}: ${error.message}`,
+          error.stack as string,
         );
+        if (
+          error.code === '23505' &&
+          error.constraint === 'character_archetypes_name_key'
+        ) {
+          throw new ConflictException(
+            `An archetype with the new name might already exist.`,
+          );
+        }
       }
       throw new InternalServerErrorException('Failed to update archetype.');
     }
@@ -179,11 +185,13 @@ export class AdminArchetypesService {
         throw new NotFoundException(`Archetype with ID ${id} not found.`);
       }
       this.logger.log(`Archetype ${id} removed successfully.`);
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to remove archetype ${id}: ${error}`,
-        error.stack,
-      );
+    } catch (error: unknown) {
+      if (isDatabaseError(error)) {
+        this.logger.error(
+          `Failed to remove archetype ${id}: ${error.message}`,
+          error.stack as string,
+        );
+      }
       throw new InternalServerErrorException('Failed to remove archetype.');
     }
   }

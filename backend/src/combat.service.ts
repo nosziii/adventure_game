@@ -301,7 +301,7 @@ export class CombatService {
     updatedCharacter: Character; // A játékos karakterének frissített állapota
     updatedEnemyChargeTurns: number; // Az ellenfél töltési köreinek új értéke
   }> {
-    let character = { ...characterInput }; // Munkamásolat a karakterről
+    const character = { ...characterInput }; // Munkamásolat a karakterről
     const roundActions: CombatActionDetailsDto[] = [];
     let currentCharge =
       activeCombatCurrentState.enemy_charge_turns_current ?? 0;
@@ -530,7 +530,7 @@ export class CombatService {
       );
     }
 
-    let hydratedCharacter: Character = {
+    const hydratedCharacter: Character = {
       ...baseChar,
       health: progress.health,
       skill: progress.skill,
@@ -842,7 +842,7 @@ export class CombatService {
     updatedEnemyHealth: number;
     updatedCharacter: Character;
   }> {
-    let character = { ...characterForCombat };
+    const character = { ...characterForCombat };
     let enemyHealth = currentEnemyHealth;
 
     const hasAbility = await this.characterService.hasLearnedAbility(

@@ -1,5 +1,4 @@
-
-// todo késöbb kiszervezni ide 
+// todo késöbb kiszervezni ide
 // export interface Character {
 //     id: number
 //     user_id: number
@@ -14,11 +13,11 @@
 // }
 
 export interface InventoryItem {
-     itemId: number
-    quantity: number
-    name?: string
-    description?: string
-    type?: string
-    effect?: string | null
-    usable?: boolean
+  itemId: number;
+  quantity: number;
+  name?: string;
+  description?: string;
+  type?: string;
+  effect?: string | null;
+  usable?: boolean;
 }

@@ -6,7 +6,6 @@ import {
   IsInt,
   Min,
   MaxLength,
-  IsJSON,
   IsEnum,
   IsArray,
 } from 'class-validator';
@@ -46,9 +45,9 @@ export class CreateAbilityDto {
   levelRequirement: number = 1; // Alapértelmezett érték
 
   @IsOptional()
-  // @IsJSON() // Ha a JSONB stringként érkezik és validálni akarjuk
-  // Vagy @IsArray() és @IsInt({ each: true }) ha pl. number[] tömböt várunk
-  prerequisites?: any | null; // Lehet pl. number[] az ability ID-khoz
+  @IsArray()
+  @IsInt({ each: true })
+  prerequisites?: number[] | null;
 
   @IsOptional()
   @IsArray({
